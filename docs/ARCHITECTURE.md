@@ -45,7 +45,7 @@ global shortcut (HotKeyManager, Carbon)
 | `HistoryStore.swift` | The history as `history.json` in Application Support, written atomically and read back before a write counts as saved. No Keychain and no encryption of its own. Unit tested. |
 | `HistoryDeletion.swift` | When saved captures are deleted, and which question is asked first: the switch-off and clear alerts. |
 | `HistoryRotation.swift` | Pure logic: which capture comes next when cycling the clipboard. |
-| `ClipboardWriter.swift` | The one place Nictate writes the clipboard. A copy counts only after its text reads back, and the previous clipboard is never read. |
+| `ClipboardWriter.swift` | The one place Nictate writes the clipboard. A copy counts only after its text reads back. Only Append mode reads the current clipboard, and it skips text other apps mark as concealed or transient. |
 | `Pasteboard.swift` | `NSPasteboard.replaceContents`: replaces the clipboard with a string, marked transient when the setting asks, and returns the change count. Used by `ClipboardWriter`. |
 | `LegacyHistoryMigration.swift` / `ImportPreviousHistory.swift` | The one explicit import of an earlier encrypted `history.sealed`, the only code that reads the old Keychain key. Merged with current captures; the old file is never changed. Unit tested with fixtures. |
 | `PreferencesController.swift` | Settings window: toolbar tabs (`GeneralTab`, `RecognitionTab`, `OutputTab`); the window resizes to each tab, capped at 80% of the screen. |
@@ -98,7 +98,7 @@ global shortcut (HotKeyManager, Carbon)
 - **Pure logic, tested without Xcode:** everything that decides text output lives in `TextProcessing.swift`; `Tests/run_tests.sh` compiles it with a tiny runner and also runs Vision on rendered code.
 - **English keys:** English is the development language, so the English text is the localization key and `en.lproj` maps each key to itself; `es.lproj` holds the Spanish translation. `scripts/check_strings.py` keeps both languages complete, with the same keys and the same `%@` and `%d` placeholders.
 - **Settings UI:** tabs are native grouped Forms (`SettingsForm.swift`), so the system supplies the materials. Rules that faithful mode overrides are dimmed and disabled in the UI, and the engine enforces the same override in `CaptureCoordinator.capture`, so what the screen shows is what runs.
-- **Clipboard privacy:** AppKit has no transient pasteboard type, so the nspasteboard.org convention (`org.nspasteboard.TransientType`) is used. Nictate reads back only its own text and never reads what other apps put on the clipboard.
+- **Clipboard privacy:** AppKit has no transient pasteboard type, so the nspasteboard.org convention (`org.nspasteboard.TransientType`) is used. Nictate confirms each copy by reading back its own text. Append mode is the one place it reads the current clipboard text, and it skips text marked concealed or transient.
 - **Deployment target:** macOS 14. `scripts/build-app.sh` passes `-target` so newer APIs are flagged at compile time.
 - **Build:** `scripts/build-app.sh` compiles with `swiftc` once per architecture (`-warnings-as-errors`, `-strict-concurrency=complete`) and joins the results with `lipo`. The app is signed with the hardened runtime and `Sources/Nictate/Resources/Nictate.entitlements`.
 - **Sandbox:** the entitlements enable the App Sandbox and the network client entitlement, which only Check for Updates uses (one request to GitHub's release API when the user asks).

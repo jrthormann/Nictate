@@ -12,7 +12,7 @@ enum HistoryState: Equatable {
     case loading, available, disabled, unavailable
 }
 
-/// Last captured texts, newest first, each with the time it was captured. Kept in the sealed `HistoryStore`.
+/// Last captured texts, newest first, each with the time it was captured. Kept in `HistoryStore`, a plain JSON file.
 ///
 /// Persist first, publish after success: `items` and `dates` only ever hold entries that the file already holds.
 /// A change is written in full on one serial queue, and it becomes visible only when its write has succeeded.
@@ -25,7 +25,7 @@ final class History: ObservableObject {
     /// that is rewritten on every capture. A screen of text is a few thousand characters.
     static let maxStoredLength = 100_000
 
-    /// What the History interface shows. Each entry is already in the encrypted file.
+    /// What the History interface shows. Each entry is already in history.json.
     @Published private(set) var items: [String]
     /// The capture time of each item, same order and length. `.distantPast` means unknown (captures saved
     /// before times were kept).
@@ -64,10 +64,10 @@ final class History: ObservableObject {
     private var publishedWrite = 0
     /// Writes queued on the I/O queue whose results have not yet reached the main actor.
     private var writesInFlight = 0
-    /// Whether the history is switched on. Read by `refresh`, so a disabled history never touches the Keychain.
+    /// Whether the history is switched on. Read by `refresh`, which records nothing new while it is false.
     private let isEnabled: @MainActor () -> Bool
 
-    /// Every file operation runs here, serially and off the main thread, so a Keychain prompt cannot freeze
+    /// Every file operation runs here, serially and off the main thread, so a slow disk cannot freeze
     /// the menu bar and writes happen in the order they were made.
     private static let io = DispatchQueue(label: "app.nictate.history.io", qos: .utility)
 
@@ -85,8 +85,8 @@ final class History: ObservableObject {
         if loadsNow { apply(store.load()) }
     }
 
-    /// Starts or retries loading. Called at launch, when the panel opens, and when Keep History is turned on.
-    /// Does nothing while the history is switched off, so no Keychain access happens for it.
+    /// Starts or retries loading. Called at launch, when the panel opens, and when Save Captures is turned on.
+    /// While saving is off it still loads saved captures, so they can be shown and deleted, but records nothing new.
     @discardableResult func refresh() -> Task<Void, Never>? {
         guard !importing, !closed else { return nil }
         guard isEnabled() else {
@@ -126,7 +126,7 @@ final class History: ObservableObject {
         apply(result)
     }
 
-    /// Test variant only: fills an empty history with the fixtures, through the normal encrypted write path, newest
+    /// Test variant only: fills an empty history with the fixtures, through the normal write path, newest
     /// first as listed. Does nothing once the history has anything in it, so a restart does not add them again.
     func seedFixtures(_ texts: [String]) {
         guard state == .available, items.isEmpty else { return }
