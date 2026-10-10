@@ -25,6 +25,7 @@ From beta.2 on, Check for Updates offers newer betas and the stable release.
 - An unreadable history file is never overwritten, at startup or by a capture. Discard Unreadable History appears only when the file is detected as unreadable, behind a confirmation whose default is Cancel.
 - Check for Updates follows the release channel: stable users are offered stable releases, and beta users are also offered newer betas. A version that is not newer is never offered.
 - A copy is confirmed by reading back only the text Nictate wrote. Nictate no longer keeps or restores the previous clipboard.
+- In Append mode, Nictate reads the current clipboard text to add the new capture to it. Text other apps mark as concealed or transient is skipped, and that existing text is not saved to history.
 - The History list keeps the highlighted row in view. Command-F focuses the search field.
 - Importing an earlier encrypted history keeps every capture, even when its stored times do not match the texts.
 
