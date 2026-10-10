@@ -1418,8 +1418,8 @@ do {
     let blocked = History(store: locked, retention: { .never })
     blocked.add("not written")
     History.flushWrites()
-    check(blocked.items == ["not written"] && History(store: store, retention: { .never }).items == ["secret phrase quartz"],
-          "sealed: with the key locked, nothing is written and the file is kept")
+    check(blocked.items.isEmpty && blocked.state == .unavailable && History(store: store, retention: { .never }).items == ["secret phrase quartz"],
+          "sealed: with the key locked, nothing is kept or written and the file is kept")
 
     let wrong = EncryptedHistoryStore(fileURL: store.fileURL, key: { _ in SymmetricKey(data: Data(repeating: 1, count: 32)) })
     check(History(store: wrong, retention: { .never }).items.isEmpty, "sealed: a wrong key shows nothing")
@@ -1476,8 +1476,8 @@ do {
     let deniedHistory = History(store: denied, retention: { .never })
     deniedHistory.add("new", at: Date(timeIntervalSince1970: 2_000))
     History.flushWrites()
-    check(deniedHistory.state == .unavailable && deniedHistory.items == ["new"],
-          "authorization: denied shows unavailable, keeps new captures in memory")
+    check(deniedHistory.state == .unavailable && deniedHistory.items.isEmpty,
+          "authorization: denied shows unavailable and keeps no capture, not even in memory")
     check(denied.saves == 0 && denied.saved == stored, "authorization: denied never writes the file")
 
     // Delayed, then granted: loading, then the stored history merged with what was captured meanwhile.
@@ -1486,10 +1486,10 @@ do {
     delayedHistory.add("while waiting", at: Date(timeIntervalSince1970: 2_000))
     settle { await delayedHistory.reload() }
     History.flushWrites()
-    check(delayedHistory.state == .available && delayedHistory.items == ["while waiting", "old"],
-          "authorization: granted later merges the stored history with the captures made meanwhile",
+    check(delayedHistory.state == .available && delayedHistory.items == ["old"],
+          "authorization: a capture made while locked is not kept, so granting later restores only the stored history",
           "\(delayedHistory.items)")
-    check(delayed.saved?.texts == ["while waiting", "old"], "authorization: the merged history is written once readable")
+    check(delayed.saved == stored, "authorization: nothing is written for captures that were not kept")
 
     // Recovery: after a denial the original history loads again, unchanged.
     let recovered = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
@@ -1656,6 +1656,107 @@ do {
     check(suite.defaults.string(forKey: StorageKeys.historyRetention) == HistoryRetention.week.rawValue,
           "reset: retention becomes a week, so the next launch does not settle it as never")
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
+}
+
+// Locked and unavailable history: the copy still works, nothing is kept in memory or queued, the file is never
+// replaced, and no key is ever created in place of an existing one. Every store here is disposable.
+final class KeyCallLog: @unchecked Sendable {
+    var mayCreateValues: [Bool] = []
+}
+do {
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+    let plain = CapturePlan.Choices(appendMode: false, delimiter: "\n", historyEnabled: true, barcodeAction: "copy")
+
+    // 1. OCR and clipboard still run while the history is locked: the plan copies, and asks the history to keep it.
+    let locked = ScriptedStore(answers: [.locked], saved: stored)
+    let lockedHistory = History(store: locked, retention: { .never })
+    let effects = CapturePlan.effects(mode: .text, result: RecognitionResult(text: "copy me", isBarcode: false), text: "copy me",
+                                      detections: Detections(), choices: plain, existing: nil)
+    let copiedTexts = effects.compactMap { (effect: CaptureEffect) -> String? in if case .copy(let text) = effect { return text } else { return nil } }
+    check(copiedTexts == ["copy me"] && effects.contains(.addToHistory("copy me")),
+          "locked: OCR still produces the copy while the history is locked")
+    lockedHistory.add("copy me")
+    History.flushWrites()
+    check(lockedHistory.state == .locked, "locked: an authorization refusal reports locked, not unavailable")
+
+    // 2. Locked history keeps no plaintext entries and writes nothing.
+    lockedHistory.add("second"); lockedHistory.add("third")
+    History.flushWrites()
+    check(lockedHistory.items.isEmpty && locked.saves == 0, "locked: no capture is kept in memory or written")
+
+    // 3. Unavailable history keeps no plaintext entries either, and says it is not locked.
+    let broken = ScriptedStore(answers: [.unavailable], saved: stored)
+    let brokenHistory = History(store: broken, retention: { .never })
+    brokenHistory.add("lost to a fault")
+    History.flushWrites()
+    check(brokenHistory.items.isEmpty && brokenHistory.state == .unavailable && broken.saves == 0,
+          "unavailable: no plaintext entries, and the state is unavailable rather than locked")
+
+    // 4. Loading does not queue captures: only what the file holds appears once it has loaded.
+    let loading = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let loadingHistory = History(store: loading, retention: { .never }, loadsNow: false)
+    loadingHistory.add("made while loading")
+    check(loadingHistory.items.isEmpty, "loading: a capture made while loading is not queued")
+    settle { await loadingHistory.reload() }
+    History.flushWrites()
+    check(loadingHistory.items == ["old"] && loading.saved == stored, "loading: once loaded, only the stored history is shown")
+
+    // 5. Disabled history does not persist captures and never reads the store.
+    let disabled = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let disabledHistory = History(store: disabled, retention: { .never }, isEnabled: { false }, loadsNow: false)
+    disabledHistory.refresh()
+    disabledHistory.add("not recorded")
+    History.flushWrites()
+    check(disabledHistory.state == .disabled && disabledHistory.items.isEmpty && disabled.saves == 0 && disabled.loads == 0,
+          "disabled: nothing is read, kept or persisted")
+
+    // 6. Available history still saves captures, encrypted, and reads them back.
+    let sealed = sealedStore("locked-available")
+    let available = History(store: sealed, retention: { .never })
+    available.add("saved while available", at: Date(timeIntervalSince1970: 3_000))
+    History.flushWrites()
+    let bytes = (try? Data(contentsOf: sealed.fileURL)) ?? Data()
+    check(bytes.range(of: Data("saved while available".utf8)) == nil
+          && History(store: sealed, retention: { .never }).items == ["saved while available"],
+          "available: a capture is saved encrypted and reads back")
+
+    // 7. A failed access leaves the existing encrypted file exactly as it was.
+    let before = (try? Data(contentsOf: sealed.fileURL)) ?? Data()
+    let refused = EncryptedHistoryStore(fileURL: sealed.fileURL, key: { _ in throw HistoryKeychain.Failure.status(errSecUserCanceled) })
+    let refusedHistory = History(store: refused, retention: { .never })
+    refusedHistory.add("while refused")
+    History.flushWrites()
+    check(refusedHistory.state == .locked && refusedHistory.items.isEmpty
+          && ((try? Data(contentsOf: sealed.fileURL)) ?? Data()) == before,
+          "locked: a cancelled authorization leaves the encrypted file byte for byte unchanged")
+
+    // 8. Unlocking does not restore captures made while locked.
+    let unlock = ScriptedStore(answers: [.locked, .loaded(stored)], saved: stored)
+    let unlockHistory = History(store: unlock, retention: { .never })
+    unlockHistory.add("made while locked")
+    settle { await unlockHistory.reload() }
+    History.flushWrites()
+    check(unlockHistory.items == ["old"], "unlock: captures made while locked do not come back on unlock")
+
+    // 9. A failed persistence never regenerates the key while a file exists.
+    let calls = KeyCallLog()
+    let keyless = EncryptedHistoryStore(fileURL: sealed.fileURL, key: { mayCreate in
+        calls.mayCreateValues.append(mayCreate)
+        throw HistoryKeychain.Failure.status(errSecItemNotFound)
+    })
+    let saved = keyless.save(HistorySnapshot(texts: ["x"], dates: [0]))
+    check(!saved && calls.mayCreateValues == [false],
+          "keys: a save over an existing file asks for no new key, and fails instead", "\(calls.mayCreateValues)")
+
+    // 10. Repeated refreshes while loading start one read and never duplicate entries.
+    let once = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let onceHistory = History(store: once, retention: { .never }, loadsNow: false)
+    let firstRead = onceHistory.refresh()
+    let secondRead = onceHistory.refresh()
+    settle { await firstRead?.value }
+    History.flushWrites()
+    check(secondRead == nil && once.loads == 1 && onceHistory.items == ["old"],
+          "state: a second refresh during a read starts no second read and duplicates nothing", "loads \(once.loads)")
 }
 
 // Whitespace-only text is never kept in the history, but valid text keeps every space, tab and line break.

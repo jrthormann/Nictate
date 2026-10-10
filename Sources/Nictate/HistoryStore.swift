@@ -20,6 +20,9 @@ enum HistoryLoad: Equatable {
     case empty
     case loaded(HistorySnapshot)
     case corrupt
+    /// The key needs the user's authorization and it was not given (cancelled, refused, or not yet asked).
+    case locked
+    /// The key or file could not be read for another reason.
     case unavailable
 }
 
@@ -53,7 +56,7 @@ struct EncryptedHistoryStore: HistoryStore, Sendable {
             symmetric = try key(false)
         } catch {
             Log.app.error("History key unavailable: \(error.localizedDescription, privacy: .public)")
-            return .unavailable
+            return HistoryKeychain.isAuthorizationRefusal(error) ? .locked : .unavailable
         }
         do {
             let plain = try HistoryCipher.open(sealed, key: symmetric)
@@ -100,6 +103,12 @@ enum HistoryKeychain {
 
     /// The stored key. Without `mayCreate` a missing key is an error, never a new key: a new key could not open
     /// the file that exists, and the next save would replace it.
+    /// Cancelled or refused authorization, which the user can resolve by unlocking. Anything else is a fault.
+    static func isAuthorizationRefusal(_ error: any Error) -> Bool {
+        guard case Failure.status(let status) = error else { return false }
+        return status == errSecUserCanceled || status == errSecAuthFailed || status == errSecInteractionNotAllowed
+    }
+
     static func key(mayCreate: Bool) throws -> SymmetricKey {
         let query: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service,
                                       kSecAttrAccount: account, kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]

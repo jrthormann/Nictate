@@ -31,9 +31,13 @@ final class StatusPanelModel: ObservableObject {
         screen = .main
         query = ""
         History.shared.query = ""
-        History.shared.refresh()
+        // Opening the panel never asks for authorization again: a locked history waits for the Unlock button.
+        if History.shared.state != .locked { History.shared.refresh() }
         History.shared.pruneExpired()
     }
+
+    /// The Unlock button: the only way to ask for authorization again once the history is locked.
+    func unlockHistory() { History.shared.refresh() }
 
     // MARK: Main screen
 

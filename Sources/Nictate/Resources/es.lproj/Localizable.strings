@@ -170,5 +170,7 @@
 "No matches" = "Sin coincidencias";
 "Search history" = "Buscar en el historial";
 "Loading history…" = "Cargando historial…";
-"History is unavailable right now. New captures are still copied." = "El historial no está disponible ahora. Las nuevas capturas se siguen copiando.";
 "Couldn't copy text. Try again." = "No se pudo copiar el texto. Inténtalo otra vez.";
+"History is unavailable right now. New captures are still copied but won't be saved." = "El historial no está disponible ahora. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán.";
+"History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked." = "El historial está bloqueado. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán hasta que lo desbloquees.";
+"Unlock History" = "Desbloquear historial";

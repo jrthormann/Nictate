@@ -170,5 +170,7 @@
 "No matches" = "No matches";
 "Search history" = "Search history";
 "Loading history…" = "Loading history…";
-"History is unavailable right now. New captures are still copied." = "History is unavailable right now. New captures are still copied.";
 "Couldn't copy text. Try again." = "Couldn't copy text. Try again.";
+"History is unavailable right now. New captures are still copied but won't be saved." = "History is unavailable right now. New captures are still copied but won't be saved.";
+"History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked." = "History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked.";
+"Unlock History" = "Unlock History";

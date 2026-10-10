@@ -23,7 +23,7 @@ enum HistoryRetention: String, CaseIterable {
 /// `loading` covers the time the key may take to authorize; nothing is written during it.
 /// `unavailable` means the file or key could not be read: captures stay in memory and nothing on disk changes.
 enum HistoryState: Equatable {
-    case loading, available, disabled, unavailable
+    case loading, available, disabled, locked, unavailable
 }
 
 /// Last captured texts, newest first, each with the time it was captured. Kept in the sealed `HistoryStore`.
@@ -128,10 +128,12 @@ final class History: ObservableObject {
             changed = !kept.isEmpty
             items = Array(kept.map(\.0).prefix(limit))
             dates = Array(kept.map(\.1).prefix(limit))
-        case .corrupt, .unavailable:
-            // Keep the captures in memory and the removals pending. Nothing is written over the file.
-            state = .unavailable
-            Log.app.error("History is unavailable; captures stay in memory until it can be read")
+        case .locked, .corrupt, .unavailable:
+            // Nothing is kept in memory and nothing is written: the file is the user's, and an unreadable one is not
+            // empty. Removals stay pending until the file can be read again.
+            state = result == .locked ? .locked : .unavailable
+            items = []
+            dates = []
             return
         }
         pendingRemovals = []
@@ -163,7 +165,10 @@ final class History: ObservableObject {
         return dates[index]
     }
 
+    /// Keeps a capture in the history. Only while the history is available: a locked, loading, disabled or
+    /// unavailable history keeps no plaintext copy and no queue. The clipboard copy happens regardless.
     func add(_ text: String, at date: Date = Date()) {
+        guard state == .available else { return }
         guard text.count <= Self.maxStoredLength else { return }
         // Whitespace-only text is never kept. Valid text is stored exactly as captured, with its spaces.
         guard !text.allSatisfy(\.isWhitespace) else { return }
@@ -209,10 +214,20 @@ final class History: ObservableObject {
         guard state == .available else { return }
         let snapshot = HistorySnapshot(texts: items, dates: dates.map(\.timeIntervalSince1970))
         let store = self.store
-        Self.io.async {
-            if !store.save(snapshot) {
-                Log.app.error("History was not saved; it is kept for this session only")
+        Self.io.async { [weak self] in
+            guard store.save(snapshot) else {
+                Log.app.error("History was not saved; the unsaved captures are dropped and the file is unchanged")
+                Task { @MainActor in self?.persistenceFailed() }
+                return
             }
         }
+    }
+
+    /// A write failed: the captures that were not saved are dropped from memory, not kept as a pending copy,
+    /// and the history reports itself unavailable until it can be read again.
+    private func persistenceFailed() {
+        items = []
+        dates = []
+        state = .unavailable
     }
 }
