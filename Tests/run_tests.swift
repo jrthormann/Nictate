@@ -57,10 +57,45 @@ struct TestSuite {
     func wipe() { defaults.removePersistentDomain(forName: name) }
 }
 var testSuites: [TestSuite] = []
-/// A sealed history file of its own under the test folder, with a fixed key.
-func sealedStore(_ tag: String) -> EncryptedHistoryStore {
-    EncryptedHistoryStore(fileURL: testPreferences.appendingPathComponent("\(tag)-\(UUID().uuidString).sealed"),
-                          key: { SymmetricKey(data: Data(repeating: 9, count: 32)) })
+/// Runs an async History call to completion from the test's main thread.
+@MainActor func settle(_ work: @escaping @MainActor () async -> Void) {
+    var finished = false
+    Task { await work(); finished = true }
+    while !finished { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+}
+
+/// A store whose answers the test scripts: each load returns the next scripted result, and saves are counted.
+/// Only the test's main thread changes it, and only after the I/O queue has been flushed.
+final class ScriptedStore: HistoryStore, @unchecked Sendable {
+    var answers: [HistoryLoad]
+    var saved: HistorySnapshot?
+    var loads = 0
+    var saves = 0
+    /// False makes every write fail, as a full disk would.
+    var writesSucceed = true
+    init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
+        self.answers = answers
+        self.saved = saved
+    }
+    func load() -> HistoryLoad {
+        loads += 1
+        guard answers.count > 1 else { return answers.first ?? .unavailable }
+        return answers.removeFirst()
+    }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        saves += 1
+        guard writesSucceed else { return false }
+        saved = snapshot
+        return true
+    }
+}
+
+/// Saving is on for the history these tests build; the setting itself is not read.
+let alwaysSaving: @Sendable () -> Bool = { true }
+
+/// A history file of its own under the test folder. Each call is a new file, so tests never share one.
+func sealedStore(_ tag: String) -> JSONHistoryStore {
+    JSONHistoryStore(fileURL: testPreferences.appendingPathComponent("\(tag)-\(UUID().uuidString).json"))
 }
 @MainActor
 func freshSuite(_ tag: String) -> TestSuite {
@@ -329,8 +364,8 @@ do {
     let stored = freshSuite("storage").defaults
     let prefs = Settings(defaults: stored)
     stored.set(true, forKey: "codeMode"); stored.set("tab", forKey: "appendSeparator")
-    stored.set(25, forKey: "rotationDepth"); stored.set(["es-ES"], forKey: "languages")
-    check(prefs.codeMode && prefs.appendSeparator == "tab" && prefs.rotationDepth == 25
+    stored.set(["es-ES"], forKey: "languages")
+    check(prefs.codeMode && prefs.appendSeparator == "tab"
           && prefs.languages == ["es-ES"], "storage: values saved under the old key names still load")
     prefs.cleanText = true; prefs.hotKeyLabel = "⌥⌘K"
     check(stored.object(forKey: "dehyphenate") as? Bool == true && stored.string(forKey: "hotKeyLabel") == "⌥⌘K", "storage: writes land under the old key names")
@@ -338,11 +373,10 @@ do {
 do {
     let keys = Set(StorageKeys.settings)
     check(keys.count == StorageKeys.settings.count, "storage: no settings key is listed twice")
-    check(keys.isDisjoint(with: [StorageKeys.didOnboard, StorageKeys.WindowFrame.history]),
+    check(!keys.contains(StorageKeys.didOnboard),
           "storage: settings keys are separate from the history and app-state keys")
 }
-check(StorageKeys.didOnboard == "didOnboard"
-      && StorageKeys.WindowFrame.history == "Nictate.History", "storage: non-settings keys unchanged")
+check(StorageKeys.didOnboard == "didOnboard", "storage: non-settings keys unchanged")
 
 // Defaults: what a new user gets, read over an empty suite. The registered defaults are process-wide
 // (UserDefaults keeps one registration domain), so they apply to the suite as they do to the app.
@@ -353,7 +387,6 @@ do {
         ("rotation shortcut is ⌥⇧⌘2", prefs.rotateHotKeyCode == kVK_ANSI_2 && prefs.rotateHotKeyMods == optionKey | shiftKey | cmdKey
             && prefs.rotateHotKeyLabel == "⌥⇧⌘2"),
         ("the optional shortcut is unset", prefs.shortcut(for: .captureCode) == nil),
-        ("rotation walks ten captures", prefs.rotationDepth == 10),
         ("the visual cue is on", prefs.visualCue),
         ("the notification is the notice only", prefs.notificationStyle == .generic),
         ("languages are detected automatically", prefs.languages.isEmpty),
@@ -369,9 +402,8 @@ do {
         ("a link in a code is copied", prefs.barcodeAction == "copy"),
         ("content detection is on", prefs.detectContent),
         ("captures are offered to clipboard managers", !prefs.hideFromClipboardManagers),
-        ("history is on", prefs.historyEnabled),
+        ("history is off for a new install", !prefs.historyEnabled),
         ("history is kept on quit", !prefs.clearHistoryOnQuit),
-        ("a new install keeps captures for 7 days", prefs.historyRetention == .week),
     ]
     for (name, ok) in table { check(ok, "default: \(name)") }
 }
@@ -384,26 +416,26 @@ do {
     prefs.setShortcut(Shortcut(code: 1, mods: cmdKey), label: "⌘S", for: .capture)
     prefs.setShortcut(Shortcut(code: 3, mods: optionKey), label: "⌥F", for: .rotateHistory)
     prefs.setShortcut(Shortcut(code: 8, mods: cmdKey | controlKey), label: "⌃⌘C", for: .captureCode)
-    prefs.rotationDepth = 3; prefs.visualCue = false; prefs.notificationStyle = .text
+    prefs.visualCue = false; prefs.notificationStyle = .text
     prefs.languages = ["es-ES"]; prefs.languageCorrection = false; prefs.codeMode = true; prefs.keepLineBreaks = false
     prefs.detectColumns = false; prefs.tablesAsTabs = false; prefs.cleanText = true; prefs.codeClean = true
     prefs.appendMode = true; prefs.appendSeparator = "tab"; prefs.barcodeAction = "ask"
     prefs.detectContent = false; prefs.hideFromClipboardManagers = true
-    prefs.historyEnabled = false; prefs.clearHistoryOnQuit = true; prefs.historyRetention = .day
+    prefs.historyEnabled = false; prefs.clearHistoryOnQuit = true
     let written = Set(suite.defaults.persistentDomain(forName: suite.name)?.keys.map { $0 } ?? [])
-    check(written == Set(StorageKeys.settings), "storage: every setting is written under a listed key, and every listed key belongs to a setting",
+    check(written.subtracting([StorageKeys.historyDefaultApplied]) == Set(StorageKeys.settings), "storage: every setting is written under a listed key, and every listed key belongs to a setting",
           "\(written.symmetricDifference(StorageKeys.settings).sorted())")
     let back = Settings(defaults: suite.defaults)
     check(back.shortcut(for: .capture)! == (Shortcut(code: 1, mods: cmdKey), "⌘S")
           && back.shortcut(for: .rotateHistory)! == (Shortcut(code: 3, mods: optionKey), "⌥F")
           && back.shortcut(for: .captureCode)! == (Shortcut(code: 8, mods: cmdKey | controlKey), "⌃⌘C"),
           "storage: every shortcut reads back with its label")
-    check(back.rotationDepth == 3 && !back.visualCue && back.notificationStyle == .text
+    check(!back.visualCue && back.notificationStyle == .text
           && back.languages == ["es-ES"] && !back.languageCorrection && back.codeMode && !back.keepLineBreaks
           && !back.detectColumns && !back.tablesAsTabs && back.cleanText && back.codeClean
           && back.appendMode && back.appendSeparator == "tab" && back.barcodeAction == "ask"
           && !back.detectContent && back.hideFromClipboardManagers
-          && !back.historyEnabled && back.clearHistoryOnQuit && back.historyRetention == .day,
+          && !back.historyEnabled && back.clearHistoryOnQuit,
           "storage: every other setting reads back")
 }
 
@@ -423,19 +455,24 @@ check(ScreenRecordingStep.state(granted: false, returnedFromSettings: true) == .
 // History dates: each capture keeps its time beside its text.
 do {
     let store = sealedStore("dates")
-    let history = History(store: store, retention: { .never })
+    let history = History(store: store, isEnabled: alwaysSaving)
     let t0 = Date(timeIntervalSince1970: 1_000)
     history.add("a", at: t0)
+    History.flushWrites()
     history.add("b", at: t0 + 60)
+    History.flushWrites()
     check(history.items == ["b", "a"] && history.dates == [t0 + 60, t0], "history dates: newest first, each beside its text")
     history.add("a", at: t0 + 120)
+    History.flushWrites()
     check(history.items == ["a", "b"] && history.dates == [t0 + 120, t0 + 60], "history dates: a repeated capture moves to the front with a new time")
     history.remove("b")
+    History.flushWrites()
     check(history.items == ["a"] && history.dates == [t0 + 120], "history dates: removing keeps them aligned")
-    check(history.date(for: "a") == t0 + 120 && history.date(for: "nope") == nil, "history dates: lookup by text")
-    let reloaded = History(store: store, retention: { .never })
+    History.flushWrites()
+    let reloaded = History(store: store, isEnabled: alwaysSaving)
     check(reloaded.items == ["a"] && reloaded.dates == [t0 + 120], "history dates: texts and times are saved and load back")
     history.clear()
+    History.flushWrites()
     check(history.items.isEmpty && history.dates.isEmpty, "history dates: clear empties both")
 
     check(History.alignedDates(count: 2, stored: [5, 9]) == [Date(timeIntervalSince1970: 5), Date(timeIntervalSince1970: 9)], "history dates: stored times load as they are")
@@ -496,30 +533,6 @@ do {
     check(NotificationStyle.generic.body(generic: "Text copied", text: "secret") == "Text copied", "notification: notice only never carries the text")
     check(NotificationStyle.text.body(generic: "Text copied", text: "secret") == "secret", "notification: with the text shows the text")
 
-}
-
-// History retention: old captures expire, and ones with an unknown time are never guessed at.
-do {
-    check(HistoryRetention.never.seconds == nil && HistoryRetention.hour.seconds == 3_600
-          && HistoryRetention.day.seconds == 86_400 && HistoryRetention.week.seconds == 604_800, "retention: choices and their lengths")
-    let suite = freshSuite("retention")
-    let settings = Settings(defaults: suite.defaults)
-    let history = History(store: sealedStore("retention"), retention: { settings.historyRetention })
-    let now = Date(timeIntervalSince1970: 1_000_000)
-    history.add("old", at: now - 7_200)
-    history.add("fresh", at: now - 600)
-    history.add("unknown", at: .distantPast)
-    history.prune(olderThan: nil, now: now)
-    check(history.items.count == 3, "retention: never expires nothing")
-    history.prune(olderThan: 3_600, now: now)
-    check(history.items == ["unknown", "fresh"] && history.dates.count == 2, "retention: entries past the limit go, unknown-time entries stay, dates stay aligned")
-    history.prune(olderThan: 60, now: now)
-    check(history.items == ["unknown"], "retention: a shorter limit removes more")
-    history.clear()
-    settings.historyRetention = .hour
-    history.add("a", at: Date().addingTimeInterval(-7_200))
-    history.pruneExpired()
-    check(history.items.isEmpty, "retention: pruneExpired uses the chosen setting")
 }
 
 // Text pipeline: what a recognized capture becomes before it reaches the clipboard.
@@ -693,10 +706,12 @@ do {
     check(TextLayout.compose(odd, imageSize: CGSize(width: CGFloat.nan, height: 10), keepLineBreaks: true, preserveIndentation: false) == ""
           && TextLayout.compose(odd, imageSize: .zero, keepLineBreaks: true, preserveIndentation: false) == "",
           "robustness: an unusable image size gives no text instead of a crash")
-    let history = History(store: sealedStore("robustness"), retention: { .never })
+    let history = History(store: sealedStore("robustness"), isEnabled: alwaysSaving)
     history.add(String(repeating: "x", count: History.maxStoredLength + 1))
+    History.flushWrites()
     check(history.items.isEmpty, "robustness: a capture too large for the history file is not stored")
     history.add("short")
+    History.flushWrites()
     check(history.items == ["short"], "robustness: normal captures are stored")
 }
 
@@ -1402,56 +1417,242 @@ do {
     check(edge.x == 8, "pill: is kept on screen at the left edge", "\(edge)")
 }
 
-// Sealed history: no readable capture on disk, a wrong key or a changed byte is rejected, a locked key never
-// overwrites the file, and captures from the preferences move into it and the plain copy is removed.
+// History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never
+// overwritten: the history stays unavailable until the file can be read again.
 do {
-    let store = sealedStore("sealed")
-    let history = History(store: store, retention: { .never })
-    history.add("secret phrase quartz", at: Date(timeIntervalSince1970: 1_000))
-    let bytes = (try? Data(contentsOf: store.fileURL)) ?? Data()
-    check(!bytes.isEmpty && bytes.range(of: Data("secret phrase quartz".utf8)) == nil, "sealed: the file holds no readable capture")
-    check(History(store: store, retention: { .never }).items == ["secret phrase quartz"], "sealed: captures open again with the same key")
+    let store = sealedStore("file")
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("kept across restarts", at: Date(timeIntervalSince1970: 1_000))
+    History.flushWrites()
+    check(History(store: store, isEnabled: alwaysSaving).items == ["kept across restarts"], "file: captures are read back after a restart")
 
-    let locked = EncryptedHistoryStore(fileURL: store.fileURL, key: { throw CocoaError(.fileReadNoPermission) })
-    let blocked = History(store: locked, retention: { .never })
-    blocked.add("not written")
-    check(blocked.items == ["not written"] && History(store: store, retention: { .never }).items == ["secret phrase quartz"],
-          "sealed: with the key locked, nothing is written and the file is kept")
-
-    let wrong = EncryptedHistoryStore(fileURL: store.fileURL, key: { SymmetricKey(data: Data(repeating: 1, count: 32)) })
-    check(History(store: wrong, retention: { .never }).items.isEmpty, "sealed: a wrong key shows nothing")
-
-    var tampered = bytes
-    tampered[tampered.count / 2] ^= 0xFF
-    try? tampered.write(to: store.fileURL)
-    let rejected = History(store: store, retention: { .never })
-    check(rejected.items.isEmpty, "sealed: a changed byte is rejected and the history starts empty")
-    rejected.add("after tamper")
-    check(History(store: store, retention: { .never }).items == ["after tamper"], "sealed: the next save replaces the rejected file")
-
+    var broken = (try? Data(contentsOf: store.fileURL)) ?? Data()
+    broken.removeLast(5)
+    try? broken.write(to: store.fileURL)
+    let rejected = History(store: store, isEnabled: alwaysSaving)
+    check(rejected.items.isEmpty && rejected.state == .unavailable, "file: a truncated file is not shown as an empty history")
+    rejected.add("after damage")
+    History.flushWrites()
+    check((try? Data(contentsOf: store.fileURL)) == broken, "file: a damaged file is never overwritten")
 }
 
-// Sealed history waits for a key that is not there yet, then merges what was captured meanwhile with the file.
+// Sealed history: authorization can be denied, delayed or restored, and none of those states writes over the
+// file, shows an empty history by mistake, or blocks the caller. The one thing it may do is read the file again.
 do {
-    final class LaterKeyStore: HistoryStore {
-        var keyReady = false
-        var saved = HistorySnapshot(texts: ["old"], dates: [1_000])
-        func load() -> HistoryLoad { keyReady ? .loaded(saved) : .unavailable }
-        func save(_ snapshot: HistorySnapshot) -> Bool {
-            guard keyReady else { return false }
-            saved = snapshot
-            return true
-        }
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+
+    // Denied: unavailable, captures stay in memory, the file is never written.
+    let denied = ScriptedStore(answers: [.unavailable], saved: stored)
+    let deniedHistory = History(store: denied, isEnabled: alwaysSaving)
+    deniedHistory.add("new", at: Date(timeIntervalSince1970: 2_000))
+    History.flushWrites()
+    check(deniedHistory.state == .unavailable && deniedHistory.items.isEmpty,
+          "authorization: denied shows unavailable and keeps no capture, not even in memory")
+    check(denied.saves == 0 && denied.saved == stored, "authorization: denied never writes the file")
+
+    // Delayed, then granted: loading, then the stored history merged with what was captured meanwhile.
+    let delayed = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let delayedHistory = History(store: delayed, isEnabled: alwaysSaving)
+    delayedHistory.add("while waiting", at: Date(timeIntervalSince1970: 2_000))
+    settle { await delayedHistory.reload() }
+    History.flushWrites()
+    check(delayedHistory.state == .available && delayedHistory.items == ["old"],
+          "authorization: a capture made while locked is not kept, so granting later restores only the stored history",
+          "\(delayedHistory.items)")
+    check(delayed.saved == stored, "authorization: nothing is written for captures that were not kept")
+
+    // Recovery: after a denial the original history loads again, unchanged.
+    let recovered = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let recoveredHistory = History(store: recovered, isEnabled: alwaysSaving)
+    settle { await recoveredHistory.reload() }
+    check(recoveredHistory.items == ["old"] && recoveredHistory.state == .available && recovered.saves == 0,
+          "authorization: recovery shows the original history and writes nothing new")
+
+    // A removal made while unavailable is not undone by the older copy on disk.
+    let removal = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let removalHistory = History(store: removal, isEnabled: alwaysSaving)
+    removalHistory.remove("old")
+    settle { await removalHistory.reload() }
+    History.flushWrites()
+    check(removalHistory.items.isEmpty && removal.saved?.texts == [],
+          "authorization: a removal made while unavailable is applied once the file can be read")
+
+    // Corrupt: the file is kept as it is, and the history is unavailable rather than empty.
+    let corrupt = ScriptedStore(answers: [.corrupt], saved: stored)
+    let corruptHistory = History(store: corrupt, isEnabled: alwaysSaving)
+    corruptHistory.add("kept", at: Date(timeIntervalSince1970: 2_000))
+    History.flushWrites()
+    check(corruptHistory.state == .unavailable && corrupt.saves == 0 && corrupt.saved == stored,
+          "authorization: a corrupt file is never overwritten")
+
+    // Disabled: no load at all, so no Keychain access.
+    let disabled = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let disabledHistory = History(store: disabled, isEnabled: { false }, loadsNow: false)
+    disabledHistory.refresh()
+    check(disabledHistory.state == .disabled && disabled.loads == 0,
+          "authorization: a disabled history never reads the file or the key")
+
+    // Loading from the app's path does not run the read on the main thread, and the caller gets control back.
+    let slow = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let slowHistory = History(store: slow, isEnabled: alwaysSaving, loadsNow: false)
+    check(slowHistory.state == .loading && slowHistory.items.isEmpty && slow.loads == 0,
+          "authorization: the app's history starts loading without reading the file at launch")
+    settle { await slowHistory.reload() }
+    check(slowHistory.items == ["old"] && slowHistory.state == .available, "authorization: the background load shows the history")
+
+    // Launch regression: a history that starts in `loading` must still start its read when the app asks.
+    let launched = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let launchedHistory = History(store: launched, isEnabled: { true }, loadsNow: false)
+    settle { await launchedHistory.refresh()?.value }
+    check(launched.loads == 1 && launchedHistory.items == ["old"] && launchedHistory.state == .available,
+          "authorization: refresh at launch starts the read, which had been skipped while the state was loading",
+          "loads \(launched.loads), state \(launchedHistory.state)")
+}
+
+// Recognized languages: the compact summary shows the names, and says how many more there are.
+do {
+    check(RecognitionTab.summary(of: []) == tr("Automatic"), "languages: nothing chosen is Automatic")
+    check(RecognitionTab.summary(of: ["English"]) == "English", "languages: one name is shown as it is")
+    check(RecognitionTab.summary(of: ["English", "Spanish"]) == "English, Spanish", "languages: two names are both shown")
+    check(RecognitionTab.summary(of: ["English", "Spanish", "French"]) == "English, Spanish +1", "languages: more than two shows the first two and +count")
+}
+
+// The limit: History keeps exactly 15 captures, on disk and on screen, newest first, and the oldest goes when a 16th arrives.
+do {
+    check(HistoryPolicy.maximumHistoryEntries == 15, "limit: the maximum is 15")
+    for count in [0, 1, 14, 15, 16, 100] {
+        let store = sealedStore("limit-\(count)")
+        let history = History(store: store, isEnabled: alwaysSaving)
+        for index in 0..<count { history.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+        History.flushWrites()
+        let expected = min(count, 15)
+        let onDisk = History(store: store, isEnabled: alwaysSaving).items
+        check(history.items.count == expected && onDisk.count == expected,
+              "limit: \(count) captures leave \(expected) on screen and on disk", "\(history.items.count), \(onDisk.count)")
     }
-    let later = LaterKeyStore()
-    let history = History(store: later, retention: { .never })
-    history.add("new", at: Date(timeIntervalSince1970: 2_000))
-    check(later.saved.texts == ["old"], "reopen: nothing is written while the key is unavailable")
-    later.keyReady = true
-    history.add("newer", at: Date(timeIntervalSince1970: 3_000))
-    check(history.items == ["newer", "new", "old"] && later.saved.texts == ["newer", "new", "old"],
-          "reopen: captures from the unavailable period are merged with the stored ones", "\(history.items)")
-    check(history.dates.count == 3 && later.saved.dates.count == 3, "reopen: times stay aligned after the merge")
+    let newest = History(store: sealedStore("limit-order"), isEnabled: alwaysSaving)
+    for index in 0..<16 { newest.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+    History.flushWrites()
+    check(newest.items.first == "capture 15" && newest.items.last == "capture 1" && !newest.items.contains("capture 0"),
+          "limit: the 16th capture is first and the oldest one is gone", "\(newest.items.first ?? "-") … \(newest.items.last ?? "-")")
+
+    let big = sealedStore("limit-load")
+    let many = HistorySnapshot(texts: (0..<40).map { "stored \($0)" }, dates: (0..<40).map { Double(1_000 - $0) })
+    _ = big.save(many)
+    let loaded = History(store: big, isEnabled: alwaysSaving)
+    check(loaded.items.count == 15 && loaded.items.first == "stored 0",
+          "limit: a file with more than 15 entries loads only its newest 15", "\(loaded.items.count)")
+    loaded.remove("stored 0")
+    loaded.add("fresh")
+    History.flushWrites()
+    check(loaded.items.count == 15 && loaded.items.first == "fresh" && !loaded.items.contains("stored 0") && loaded.items.contains("stored 14"),
+          "limit: deleting one and adding another keeps 15, with the newest first")
+    check(History(store: big, isEnabled: alwaysSaving).items.count == 15, "limit: after a restart the file still holds 15")
+
+    let duplicate = History(store: sealedStore("limit-duplicate"), isEnabled: alwaysSaving)
+    duplicate.add("same", at: Date(timeIntervalSince1970: 1))
+    duplicate.add("same", at: Date(timeIntervalSince1970: 2))
+    History.flushWrites()
+    check(duplicate.items == ["same"], "limit: a repeated capture moves to the front rather than duplicating")
+}
+
+// Import of the encrypted history.sealed of earlier versions: explicit, merged with what the new History holds,
+// verified by reading back, and never destructive. Every file here is a disposable fixture.
+do {
+    let fixtureKey = SymmetricKey(data: Data(repeating: 7, count: 32))
+    let legacyURL = testPreferences.appendingPathComponent("legacy-\(UUID().uuidString).sealed")
+    func writeLegacy(_ snapshot: HistorySnapshot) {
+        let plain = (try? JSONEncoder().encode(snapshot)) ?? Data()
+        try? ((try? LegacyHistoryCipher.seal(plain, key: fixtureKey)) ?? Data()).write(to: legacyURL)
+    }
+    func destination() -> JSONHistoryStore { sealedStore("imported") }
+
+    let absent = LegacyHistoryMigration.run(legacy: testPreferences.appendingPathComponent("absent.sealed"),
+                                            destination: destination(), key: { fixtureKey })
+    if case .failed = absent {} else { check(false, "import: a missing legacy file writes nothing") }
+
+    let legacy = HistorySnapshot(texts: ["second", "first"], dates: [2_000, 1_000])
+    writeLegacy(legacy)
+    let legacyBytes = (try? Data(contentsOf: legacyURL)) ?? Data()
+    let fresh = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: fresh, key: { fixtureKey }) == .imported(count: 2, dropped: 0),
+          "import: a valid legacy file is imported")
+    check(fresh.load() == .loaded(legacy), "import: the imported history reads back exactly, newest first")
+    check((try? Data(contentsOf: legacyURL)) == legacyBytes, "import: the encrypted file is left byte for byte unchanged")
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: fresh, key: { fixtureKey }) == .imported(count: 2, dropped: 0)
+          && fresh.load() == .loaded(legacy),
+          "import: importing the same file again adds nothing and duplicates nothing")
+
+    let current = destination()
+    _ = current.save(HistorySnapshot(texts: ["now"], dates: [9_000]))
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: current, key: { fixtureKey }) == .imported(count: 3, dropped: 0)
+          && current.load() == .loaded(HistorySnapshot(texts: ["now", "second", "first"], dates: [9_000, 2_000, 1_000])),
+          "import: captures already in the new History are kept and merged, newest first")
+
+    let big = (0..<20).map { "old \($0)" }
+    writeLegacy(HistorySnapshot(texts: big, dates: (0..<20).map { Double(5_000 - $0) }))
+    let capped = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: capped, key: { fixtureKey }) == .imported(count: 15, dropped: 5),
+          "import: more than 15 legacy captures import only the newest 15")
+    if case .loaded(let got) = capped.load() {
+        check(got.texts == Array(big.prefix(15)), "import: the 15 kept are the newest, in order")
+    }
+
+    let missingKey = destination()
+    let outcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: missingKey, key: { throw LegacyHistoryKeychain.Failure.status(errSecItemNotFound) })
+    check(outcome != .imported(count: 15, dropped: 5) && missingKey.load() == .empty,
+          "import: a missing key writes nothing and the legacy file stays", "\(outcome)")
+    let cancelled = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: cancelled, key: { throw LegacyHistoryKeychain.Failure.status(errSecUserCanceled) }) == .cancelled
+          && cancelled.load() == .empty,
+          "import: a cancelled authorization writes nothing and reports cancelled")
+    let wrongKey = destination()
+    let wrongOutcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: wrongKey, key: { SymmetricKey(data: Data(repeating: 1, count: 32)) })
+    check(wrongOutcome != .imported(count: 15, dropped: 5) && wrongKey.load() == .empty,
+          "import: a decryption failure writes nothing", "\(wrongOutcome)")
+
+    let unreadable = sealedStore("import-unreadable")
+    try? "not json".data(using: .utf8)?.write(to: unreadable.fileURL)
+    writeLegacy(legacy)
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: unreadable, key: { fixtureKey }) != .imported(count: 2, dropped: 0)
+          && ((try? Data(contentsOf: unreadable.fileURL)) ?? Data()) == "not json".data(using: .utf8),
+          "import: an unreadable new History is never replaced")
+
+    let restarted = destination()
+    _ = LegacyHistoryMigration.run(legacy: legacyURL, destination: restarted, key: { fixtureKey })
+    let afterRestart = History(store: restarted, isEnabled: alwaysSaving)
+    check(afterRestart.items == ["second", "first"] && afterRestart.state == .available,
+          "import: after the import the history reads back from history.json on restart")
+}
+
+// Keep History: off for new installs, kept on for an install that already had the app set up, and no new capture
+// is stored while it is off.
+do {
+    let fresh = UserDefaults(suiteName: "nictate-tests-fresh-\(UUID().uuidString)")!
+    _ = Settings(defaults: fresh)
+    check(fresh.bool(forKey: StorageKeys.historyEnabled) == false, "keep history: off for a new install")
+
+    let existing = UserDefaults(suiteName: "nictate-tests-existing-\(UUID().uuidString)")!
+    existing.set(true, forKey: StorageKeys.didOnboard)
+    _ = Settings(defaults: existing)
+    check(existing.bool(forKey: StorageKeys.historyEnabled) == true, "keep history: an existing install keeps it on",
+          "value \(String(describing: existing.object(forKey: StorageKeys.historyEnabled))), applied \(existing.bool(forKey: StorageKeys.historyDefaultApplied)), onboarded \(existing.bool(forKey: StorageKeys.didOnboard))")
+
+    let chosen = UserDefaults(suiteName: "nictate-tests-chosen-\(UUID().uuidString)")!
+    chosen.set(true, forKey: StorageKeys.didOnboard)
+    _ = Settings(defaults: chosen)
+    let chosenSettings = Settings(defaults: chosen)
+    chosenSettings.historyEnabled = false
+    _ = Settings(defaults: chosen)
+    check(chosen.bool(forKey: StorageKeys.historyEnabled) == false, "keep history: an explicit choice survives a restart")
+
+    let off = ScriptedStore(answers: [.loaded(HistorySnapshot(texts: ["kept"], dates: [1]))], saved: nil)
+    let offHistory = History(store: off, isEnabled: { false }, loadsNow: false)
+    offHistory.refresh()
+    offHistory.add("not recorded while off")
+    History.flushWrites()
+    check(offHistory.items == ["kept"] && off.saves == 0,
+          "keep history: while off, the saved entries are shown, and no new capture is recorded or written")
 }
 
 // Rendered corpus: 16 captures (4 per kind) drawn as images, read through Vision, then classified. Written once,
@@ -1548,29 +1749,624 @@ do {
     let release = try? JSONDecoder().decode(ReleaseInfo.self, from: json)
     check(release != nil, "updates: GitHub's release JSON decodes")
     if let release {
-        check(UpdateCheck.outcome(current: "1.0.0", release: release) == .available(version: "1.1.0", page: release.htmlURL),
+        check(UpdateCheck.outcome(current: "1.0.0", releases: [release]) == .available(version: "1.1.0", page: release.htmlURL),
               "updates: a newer release is offered with its page and without the v")
-        check(UpdateCheck.outcome(current: "1.1.0", release: release) == .upToDate, "updates: the current release is up to date")
+        check(UpdateCheck.outcome(current: "1.1.0", releases: [release]) == .upToDate, "updates: the current release is up to date")
     }
     let foreign = ReleaseInfo(tagName: "v9.0.0", htmlURL: URL(string: "https://example.com/release")!)
-    check(UpdateCheck.outcome(current: "1.0.0", release: foreign) == .failed, "updates: a release page off github.com is never offered")
-    check(UpdateCheck.endpoint.scheme == "https" && UpdateCheck.endpoint.host == "api.github.com", "updates: the only request goes to GitHub's API over https")
+    check(UpdateCheck.outcome(current: "1.0.0", releases: [foreign]) == .failed, "updates: a release page off github.com is never offered")
+    check(UpdateCheck.endpoint(for: "1.0.0").scheme == "https" && UpdateCheck.endpoint(for: "1.0.0-beta.1").host == "api.github.com", "updates: the only request goes to GitHub's API over https")
 }
 
-// Reset: stored settings go, retention is written as week so the next launch keeps it, onboarding stays.
+// Reset: stored settings and retired keys go, and each returns to its default. Onboarding stays done. A reset does
+// not touch saved captures: nothing expires by age, so a capture from last month is still there after a relaunch.
 do {
     let suite = freshSuite("reset")
     suite.defaults.set(false, forKey: StorageKeys.visualCue)
     suite.defaults.set(50, forKey: StorageKeys.rotationDepth)
-    suite.defaults.set(HistoryRetention.hour.rawValue, forKey: StorageKeys.historyRetention)
+    suite.defaults.set("hour", forKey: StorageKeys.historyRetention)
     suite.defaults.set(true, forKey: StorageKeys.didOnboard)
     Settings.resetToDefaults(in: suite.defaults)
     let stored = suite.defaults.persistentDomain(forName: suite.name) ?? [:]
-    check(stored[StorageKeys.visualCue] == nil && stored[StorageKeys.rotationDepth] == nil,
-          "reset: stored settings are removed, so each one returns to its default")
-    check(suite.defaults.string(forKey: StorageKeys.historyRetention) == HistoryRetention.week.rawValue,
-          "reset: retention becomes a week, so the next launch does not settle it as never")
+    check(stored[StorageKeys.visualCue] == nil && stored[StorageKeys.rotationDepth] == nil && stored[StorageKeys.historyRetention] == nil,
+          "reset: stored settings and retired keys are removed, so each returns to its default")
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
+    let lastMonth = Date().addingTimeInterval(-30 * 86_400)
+    let saved = HistorySnapshot(texts: ["saved last month"], dates: [lastMonth.timeIntervalSince1970])
+    let relaunched = History(store: ScriptedStore(answers: [.loaded(saved)], saved: saved), isEnabled: alwaysSaving)
+    check(relaunched.items == ["saved last month"], "reset: a capture from last month is still there after a reset and relaunch", "\(relaunched.items)")
+}
+
+// Unavailable history: the copy still works, nothing is kept in memory or queued, and the file is never replaced.
+do {
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+    let plain = CapturePlan.Choices(appendMode: false, delimiter: "\n", historyEnabled: true, barcodeAction: "copy")
+    let broken = ScriptedStore(answers: [.unavailable], saved: stored)
+    let brokenHistory = History(store: broken, isEnabled: alwaysSaving)
+    let effects = CapturePlan.effects(mode: .text, result: RecognitionResult(text: "copy me", isBarcode: false), text: "copy me",
+                                      detections: Detections(), choices: plain, existing: nil)
+    let copiedTexts = effects.compactMap { (effect: CaptureEffect) -> String? in if case .copy(let text) = effect { return text } else { return nil } }
+    check(copiedTexts == ["copy me"] && effects.contains(.addToHistory("copy me")),
+          "unavailable: OCR still produces the copy while the history is unavailable")
+    brokenHistory.add("lost to a fault")
+    brokenHistory.add("second"); brokenHistory.add("third")
+    History.flushWrites()
+    check(brokenHistory.items.isEmpty && brokenHistory.state == .unavailable && broken.saves == 0,
+          "unavailable: no capture is kept in memory or written, and the state is unavailable")
+
+    let loading = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let loadingHistory = History(store: loading, isEnabled: alwaysSaving, loadsNow: false)
+    loadingHistory.add("made while loading")
+    check(loadingHistory.items.isEmpty, "loading: a capture made while loading is not queued")
+    settle { await loadingHistory.reload() }
+    History.flushWrites()
+    check(loadingHistory.items == ["old"] && loading.saved == stored, "loading: once loaded, only the stored history is shown")
+
+    let disabled = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let disabledHistory = History(store: disabled, isEnabled: { false }, loadsNow: false)
+    disabledHistory.refresh()
+    disabledHistory.add("not recorded")
+    History.flushWrites()
+    check(disabledHistory.state == .disabled && disabledHistory.items == ["old"] && disabled.saves == 0,
+          "disabled: saved entries are shown, and no new capture is kept or written")
+    disabledHistory.remove("old")
+    History.flushWrites()
+    check(disabled.saves == 1 && disabled.saved?.texts == [] && disabledHistory.items.isEmpty,
+          "disabled: a deletion is written straight away, even while saving is off")
+
+    let sealed = sealedStore("unavailable-available")
+    let available = History(store: sealed, isEnabled: alwaysSaving)
+    available.add("saved while available", at: Date(timeIntervalSince1970: 3_000))
+    History.flushWrites()
+    check(History(store: sealed, isEnabled: alwaysSaving).items == ["saved while available"], "available: a capture is saved and reads back")
+
+    let before = (try? Data(contentsOf: sealed.fileURL)) ?? Data()
+    try? "not json".data(using: .utf8)?.write(to: sealed.fileURL)
+    let damaged = History(store: sealed, isEnabled: alwaysSaving)
+    damaged.add("while damaged")
+    History.flushWrites()
+    check(damaged.state == .unavailable && damaged.items.isEmpty && before.count > 0,
+          "unavailable: a damaged file leaves the history unavailable and keeps nothing new")
+
+    let unlock = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let unlockHistory = History(store: unlock, isEnabled: alwaysSaving)
+    unlockHistory.add("made while unavailable")
+    settle { await unlockHistory.reload() }
+    History.flushWrites()
+    check(unlockHistory.items == ["old"], "recovery: captures made while unavailable do not come back on recovery")
+}
+
+// Persist first, publish after success: a capture is visible only once its write has succeeded.
+do {
+    // Not visible before the write completes, visible after it succeeds.
+    let store = sealedStore("publish-after")
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("pending capture")
+    check(!history.items.contains("pending capture"), "publish: a capture is not visible before its write completes")
+    History.flushWrites()
+    check(history.items == ["pending capture"] && History(store: store, isEnabled: alwaysSaving).items == ["pending capture"],
+          "publish: a capture is visible once it is written, and it is in the file")
+
+    // An interrupted write (the directory refuses the atomic replacement) never shows the capture and never
+    // changes the file; the next start reads the previous history.
+    let folder = testPreferences.appendingPathComponent("readonly-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let fixed = JSONHistoryStore(fileURL: folder.appendingPathComponent("history.json"))
+    let base = History(store: fixed, isEnabled: alwaysSaving)
+    base.add("kept before")
+    History.flushWrites()
+    let before = (try? Data(contentsOf: fixed.fileURL)) ?? Data()
+    try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+    base.add("interrupted")
+    History.flushWrites()
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+    check(!base.items.contains("interrupted") && base.items == ["kept before"],
+          "publish: an interrupted write never shows the capture", "\(base.items)")
+    check(((try? Data(contentsOf: fixed.fileURL)) ?? Data()) == before
+          && History(store: fixed, isEnabled: alwaysSaving).items == ["kept before"],
+          "publish: an interrupted write leaves the file byte for byte unchanged, and a restart reads the previous history")
+
+    // Rapid captures: each is written in order, the newest is first, nothing duplicates, and the file matches the screen.
+    let rapid = sealedStore("rapid")
+    let fast = History(store: rapid, isEnabled: alwaysSaving)
+    for index in 0..<60 { fast.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+    History.flushWrites()
+    let expected = (0..<60).reversed().prefix(HistoryPolicy.maximumHistoryEntries).map { "capture \($0)" }
+    check(fast.items == Array(expected) && Set(fast.items).count == fast.items.count,
+          "publish: rapid captures keep their order, nothing duplicates, and the newest is first", "\(fast.items.count)")
+    check(History(store: rapid, isEnabled: alwaysSaving).items == Array(expected),
+          "publish: after a restart the file holds exactly what was on screen")
+}
+
+// A failed encrypted write never reports the capture as saved: the file keeps its entries, the new capture is
+// dropped, and the history is read again from the file.
+do {
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+    let failing = ScriptedStore(answers: [.loaded(stored), .loaded(stored)], saved: stored)
+    let failingHistory = History(store: failing, isEnabled: alwaysSaving)
+    failing.writesSucceed = false
+    failingHistory.add("cannot be saved", at: Date(timeIntervalSince1970: 2_000))
+    var settled = false
+    for _ in 0..<400 where !settled {
+        settled = failingHistory.items == ["old"] && failingHistory.state == .available
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    History.flushWrites()
+    check(settled && failingHistory.items == ["old"] && failing.saved == stored,
+          "available: a failed write drops the new capture, restores the saved entries, and leaves the file as it was",
+          "items \(failingHistory.items), state \(failingHistory.state)")
+}
+
+// Whitespace-only text is never kept in the history, but valid text keeps every space, tab and line break.
+do {
+    let store = sealedStore("blank")
+    let history = History(store: store, isEnabled: alwaysSaving)
+    for blank in ["", "   ", "\n", "\t", " \n \t "] {
+        history.add(blank)
+        History.flushWrites()
+    }
+    check(history.items.isEmpty, "blank captures: whitespace-only text is not stored")
+    let indented = "    Hello World"
+    history.add(indented)
+    History.flushWrites()
+    history.add("line one\n\tindented line two\n")
+    History.flushWrites()
+    check(history.items == ["line one\n\tindented line two\n", indented],
+          "blank captures: valid text keeps its leading spaces, tabs and line breaks exactly", "\(history.items)")
+    check(!"x".allSatisfy(\.isWhitespace) && "  x  ".allSatisfy(\.isWhitespace) == false,
+          "blank captures: any visible character makes a capture")
+}
+
+// Clipboard reliability: a history copy is confirmed by reading the text back, and a refused write puts the
+// previous clipboard contents back. A private pasteboard keeps the user's clipboard out of the tests.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let writer = ClipboardWriter(pasteboard: board)
+    board.clearContents()
+    board.setString("previous", forType: .string)
+
+    check(writer.writeVerified("a full capture\nwith two lines", transient: false),
+          "clipboard: a successful copy reports success")
+    check(board.string(forType: .string) == "a full capture\nwith two lines",
+          "clipboard: the complete text is what the clipboard holds")
+
+    board.clearContents()
+    board.setString("previous", forType: .string)
+    let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
+    check(!refusing.writeVerified("never arrives", transient: false),
+          "clipboard: a refused write reports failure instead of success")
+    check(refusing.lastWrite == nil, "clipboard: a refused write is not remembered as ours")
+
+    // Regression: the previous clipboard is never read, so a concealed entry from a password manager is neither
+    // copied aside nor put back. The successful copy holds only the new text.
+    board.clearContents()
+    let concealed = NSPasteboardItem()
+    concealed.setString("hunter2", forType: .string)
+    concealed.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+    board.writeObjects([concealed])
+    check(writer.writeVerified("after a password", transient: false) && board.string(forType: .string) == "after a password",
+          "clipboard: a copy over a concealed entry holds only the new text")
+    check((board.pasteboardItems ?? []).count == 1 && board.types?.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) != true,
+          "clipboard: the concealed entry is not restored or kept")
+}
+
+// Edge cases a history copy must get exactly right: multiline, accented and emoji text, long OCR output, and
+// whitespace. Each is read back byte for byte.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-edge-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let writer = ClipboardWriter(pasteboard: board)
+    let samples: [(String, String)] = [
+        ("multiline", "first line\n\tindented\nlast line"),
+        ("accents", "café naïve Ñandú résumé"),
+        ("emoji and CJK", "🙂 漢字 한국어"),
+        ("combining marks", "e\u{0301}\u{0303} vs é"),
+        ("long capture", String(repeating: "Lorem ipsum dolor sit amet. ", count: 3_000)),
+        ("whitespace only", "   \n\t  "),
+    ]
+    for (name, text) in samples {
+        check(writer.writeVerified(text, transient: false) && board.string(forType: .string) == text,
+              "clipboard edge: \(name) is copied exactly", "\(board.string(forType: .string)?.count ?? -1) of \(text.count)")
+    }
+    // An empty text is written as asked. The history never stores one (see History.add callers), so this is a clipboard check only.
+    board.clearContents()
+    board.setString("keep me", forType: .string)
+    let emptyAccepted = writer.writeVerified("", transient: false)
+    check(emptyAccepted && board.string(forType: .string) == "",
+          "clipboard edge: an empty text is written as asked, and reads back as empty", "accepted \(emptyAccepted)")
+}
+
+// Several representations: a copy replaces them all with the text, and the previous rich representation is not read.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-reps-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+    let item = NSPasteboardItem()
+    item.setString("plain previous", forType: .string)
+    item.setData(Data("{\\rtf1 rich previous}".utf8), forType: NSPasteboard.PasteboardType("public.rtf"))
+    board.writeObjects([item])
+    let writer = ClipboardWriter(pasteboard: board)
+    check(writer.writeVerified("plain copy", transient: false), "clipboard reps: a copy over rich text reports success")
+    let types = board.pasteboardItems?.first?.types ?? []
+    check(board.string(forType: .string) == "plain copy" && !types.contains(NSPasteboard.PasteboardType("public.rtf")),
+          "clipboard reps: the copy holds the text alone, with no previous rich representation", "\(types.map(\.rawValue))")
+}
+
+// Regression: Clear on Quit reaches the file even when the history was still loading at quit. The read is applied
+// first, and only then is the clear written.
+do {
+    let stored = HistorySnapshot(texts: ["one", "two"], dates: [1_000, 2_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    history.clear()
+    history.waitForPendingWrites()
+    History.flushWrites()
+    check(history.items.isEmpty && store.saved?.texts.isEmpty == true,
+          "quit: a clear requested while loading is written before quit", "file \(store.saved?.texts ?? [])")
+}
+
+// Regression: a read that was already in flight when an import began cannot end the import's hold, so a capture
+// made during the import is not written over the merged file.
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let merged = HistorySnapshot(texts: ["kept", "imported"], dates: [1_000, 500])
+    let store = ScriptedStore(answers: [.loaded(stored), .loaded(merged)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving, loadsNow: false)
+    let stale = history.refresh()
+    history.beginImport()
+    settle { await stale?.value }
+    check(history.state == .loading, "import hold: a read that finishes during the import does not end the hold")
+    history.add("during the import")
+    History.flushWrites()
+    check(store.saved?.texts == stored.texts, "import hold: a capture during the import is not written over the file")
+    store.saved = merged
+    history.endImport()
+    settle { while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) } }
+    check(history.items == ["kept", "imported"] && history.state == .available,
+          "import hold: after the import the file's merged captures are shown", "\(history.items)")
+}
+
+// Clear on Quit: stores that stand in for a slow read, a hung disk and a failing disk.
+final class SlowReadStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    let readDelay: Double
+    var saved: HistorySnapshot?
+    init(stored: HistorySnapshot, readDelay: Double) {
+        self.stored = stored
+        self.readDelay = readDelay
+    }
+    func load() -> HistoryLoad {
+        Thread.sleep(forTimeInterval: readDelay)
+        return .loaded(stored)
+    }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        saved = snapshot
+        return true
+    }
+}
+
+final class HungWriteStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    init(stored: HistorySnapshot) { self.stored = stored }
+    func load() -> HistoryLoad { .loaded(stored) }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        Thread.sleep(forTimeInterval: 1.0)
+        return true
+    }
+}
+
+// Regression: a slow read that finishes after Clear on Quit cannot bring the captures back.
+do {
+    let stored = HistorySnapshot(texts: ["one", "two"], dates: [1_000, 2_000])
+    let store = SlowReadStore(stored: stored, readDelay: 0.6)
+    let history = History(store: store, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: a slow load during quit is cleared and the empty file is confirmed", "confirmed \(confirmed), file \(store.saved?.texts ?? [])")
+}
+
+// Regression: writes queued before Clear on Quit land before the empty write, and nothing is written after it.
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("pending one")
+    history.add("pending two")
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: pending writes are followed by the empty write, which is what remains", "file \(store.saved?.texts ?? [])")
+    history.add("after the clear")
+    History.flushWrites()
+    check(store.saved?.texts.isEmpty == true, "quit: a capture made after the clear is not written")
+}
+
+// Regression: a read already queued when Clear on Quit runs does not apply its captures afterwards.
+do {
+    let stored = HistorySnapshot(texts: ["restored?"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: a late read does not restore the captures", "items \(history.items)")
+}
+
+// Corrupt and unreadable files are overwritten by Clear on Quit, which is approved for an explicit choice.
+for (name, answer) in [("corrupt", HistoryLoad.corrupt), ("unreadable", HistoryLoad.unavailable)] {
+    let store = ScriptedStore(answers: [answer])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let confirmed = history.clearForQuit()
+    check(confirmed && store.saved?.texts.isEmpty == true,
+          "quit: a \(name) file is overwritten with an empty history and the write is confirmed", "file \(store.saved?.texts ?? [])")
+}
+
+// A failed write is not claimed: the file and the list keep the captures, and the call reports false.
+do {
+    let stored = HistorySnapshot(texts: ["keep me"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    store.writesSucceed = false
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(!confirmed && history.items == ["keep me"] && store.saved?.texts == ["keep me"],
+          "quit: a failed write is not reported as a deletion", "confirmed \(confirmed), items \(history.items)")
+}
+
+// A write that never finishes is abandoned after the timeout, and nothing is claimed.
+do {
+    let stored = HistorySnapshot(texts: ["stuck"], dates: [1_000])
+    let history = History(store: HungWriteStore(stored: stored), isEnabled: alwaysSaving)
+    let started = Date()
+    let confirmed = history.clearForQuit(timeout: 0.2)
+    let elapsed = Date().timeIntervalSince(started)
+    check(!confirmed && history.items == ["stuck"] && elapsed < 0.9,
+          "quit: a hung disk does not hold quit past its timeout, and nothing is claimed", "elapsed \(elapsed), confirmed \(confirmed)")
+}
+
+// Clear on Quit off: quitting writes what is pending and does not clear anything.
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("kept")
+    history.waitForPendingWrites()
+    check(store.saved?.texts == ["kept"], "quit without Clear on Quit: the pending capture is written before quit")
+    history.add("still saving")
+    History.flushWrites()
+    check(history.items == ["still saving", "kept"] && store.saved?.texts == ["still saving", "kept"],
+          "quit without Clear on Quit: the history keeps working afterwards")
+}
+
+// Regression: captures with unknown times keep their source order in an import; known times stay newest first.
+do {
+    let unknown = Date.distantPast.timeIntervalSince1970
+    let current = HistorySnapshot(texts: ["zebra", "apple"], dates: [unknown, unknown])
+    let imported = HistorySnapshot(texts: ["mango", "banana"], dates: [unknown, unknown])
+    let merged = LegacyHistoryMigration.merge(current: current, imported: imported)
+    check(merged.texts == ["zebra", "apple", "mango", "banana"], "import merge: captures with unknown times keep their source order", "\(merged.texts)")
+    let dated = HistorySnapshot(texts: ["b"], dates: [2_000])
+    let older = HistorySnapshot(texts: ["a", "c"], dates: [1_000, unknown])
+    check(LegacyHistoryMigration.merge(current: dated, imported: older).texts == ["b", "a", "c"],
+          "import merge: known times stay newest first, unknown times come last")
+}
+
+// Update check: a prerelease sits between the release before it and the release it leads to.
+do {
+    check(UpdateCheck.isNewer("1.0.0", than: "1.0.0-beta.1"), "update: the stable 1.0.0 is newer than 1.0.0-beta.1")
+    check(UpdateCheck.isNewer("1.0.0-beta.2", than: "1.0.0-beta.1"), "update: beta 2 is newer than beta 1")
+    check(UpdateCheck.isNewer("1.0.0-beta.10", than: "1.0.0-beta.9"), "update: beta 10 is newer than beta 9, as a number")
+    check(!UpdateCheck.isNewer("1.0.0-beta.1", than: "1.0.0-beta.1"), "update: the same beta is not newer")
+    check(!UpdateCheck.isNewer("1.0.0-beta.1", than: "1.0.0"), "update: a beta is not newer than its release")
+    check(UpdateCheck.isNewer("1.0.1-beta.1", than: "1.0.0"), "update: a beta of a later version is newer")
+}
+
+// Update channels: a stable user is offered stable releases only. A beta user may be offered newer betas and the
+// stable releases. A version that is not newer is never recommended.
+do {
+    func release(_ version: String) -> ReleaseInfo {
+        ReleaseInfo(tagName: "v\(version)", htmlURL: URL(string: "https://github.com/jrthormann/Nictate/releases/tag/v\(version)")!)
+    }
+    let betas = [release("1.0.0-beta.1"), release("1.0.0-beta.2")]
+    let withStable = betas + [release("1.0.0")]
+    check(UpdateCheck.offersPrereleases(to: "1.0.0-beta.1") && !UpdateCheck.offersPrereleases(to: "1.0.0"),
+          "channels: a beta is on the beta channel, a stable version is not")
+    check(UpdateCheck.endpoint(for: "1.0.0-beta.1") != UpdateCheck.endpoint(for: "1.0.0"),
+          "channels: each channel asks GitHub for its own releases")
+    check(UpdateCheck.newest(in: betas, current: "1.0.0") == nil, "channels: a stable user is never offered a beta")
+    check(UpdateCheck.newest(in: betas, current: "1.0.0-beta.1")?.tagName == "v1.0.0-beta.2", "channels: a beta user is offered the newer beta")
+    check(UpdateCheck.newest(in: withStable, current: "1.0.0-beta.1")?.tagName == "v1.0.0", "channels: a beta user is offered the stable release")
+    check(UpdateCheck.newest(in: withStable, current: "1.0.0-beta.2")?.tagName == "v1.0.0", "channels: beta 2 is offered the stable release, not beta 1")
+    check(UpdateCheck.newest(in: [release("1.0.1")], current: "1.0.0")?.tagName == "v1.0.1", "channels: a stable user is offered a newer stable release")
+    check(UpdateCheck.newest(in: [release("1.0.1-beta.1")], current: "1.0.0") == nil, "channels: a stable user is not offered a newer beta")
+    check(UpdateCheck.newest(in: [release("1.0.0-beta.1")], current: "1.0.0-beta.2") == nil, "channels: an older beta is never recommended")
+    check(UpdateCheck.newest(in: [], current: "1.0.0") == nil, "channels: no releases, nothing to offer")
+    check(UpdateCheck.outcome(current: "1.0.0", releases: [release("1.0.0-beta.9")]) == .upToDate,
+          "channels: a stable user who sees only a beta is up to date")
+    check(UpdateCheck.outcome(current: "1.0.0-beta.1", releases: withStable) == .available(version: "1.0.0", page: release("1.0.0").htmlURL),
+          "channels: the offer names the version and its page")
+}
+
+// Regression: deleting captures for a reset is confirmed by the store, and a refused deletion leaves the history saving.
+do {
+    let stored = HistorySnapshot(texts: ["a", "b"], dates: [1_000, 2_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    check(history.clearForReset() && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "reset: deleting captures is confirmed by the store before the reset goes on")
+}
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    store.writesSucceed = false
+    let history = History(store: store, isEnabled: alwaysSaving)
+    check(!history.clearForReset() && history.items == ["keep"], "reset: a refused deletion is reported and nothing is claimed")
+    store.writesSucceed = true
+    history.add("after the refusal")
+    History.flushWrites()
+    check(store.saved?.texts == ["keep"] && history.isClosed, "reset: after a refused deletion the history stays closed and writes nothing", "\(store.saved?.texts ?? [])")
+}
+// Regression: a reset without deletion waits for the pending writes, and reports a write that never finishes.
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("pending")
+    check(history.waitForPendingWrites() && store.saved?.texts == ["pending"], "reset: pending changes are on disk when the wait returns true")
+}
+do {
+    let history = History(store: HungWriteStore(stored: HistorySnapshot(texts: ["x"], dates: [1_000])), isEnabled: alwaysSaving)
+    history.add("y")
+    let started = Date()
+    let finished = history.waitForPendingWrites(timeout: 0.2)
+    check(!finished && Date().timeIntervalSince(started) < 0.9, "reset: a write that never finishes is reported, not waited on forever")
+}
+
+// Regression: the Save Captures question waits for a load in flight, so it counts the saved captures.
+do {
+    let stored = HistorySnapshot(texts: ["one", "two"], dates: [1_000, 2_000])
+    let history = History(store: SlowReadStore(stored: stored, readDelay: 0.3), isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    settle { await history.finishLoading() }
+    check(history.items == ["one", "two"], "save captures: the decision made during a load sees the saved captures", "\(history.items)")
+}
+
+// Regression: times that do not line up with the texts of an earlier history keep every capture, with unknown times.
+do {
+    let fixtureKey = SymmetricKey(data: Data(repeating: 9, count: 32))
+    let legacyURL = testPreferences.appendingPathComponent("legacy-mismatch-\(UUID().uuidString).sealed")
+    let mismatched = HistorySnapshot(texts: ["one", "two", "three"], dates: [1_000])
+    let plain = (try? JSONEncoder().encode(mismatched)) ?? Data()
+    try? ((try? LegacyHistoryCipher.seal(plain, key: fixtureKey)) ?? Data()).write(to: legacyURL)
+    let destination = sealedStore("mismatch-import")
+    let outcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: destination, key: { fixtureKey })
+    check(outcome == .imported(count: 3, dropped: 0), "import: times that do not line up keep every capture", "\(outcome)")
+    if case .loaded(let file) = destination.load() {
+        check(file.texts == ["one", "two", "three"] && file.dates.count == 3, "import: the captures keep their order, with unknown times")
+    }
+}
+
+// Regression: the Save Captures question is dropped when saving is back on before it is asked.
+check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: false), "switch-off: a decision made after saving is back on is dropped")
+check(HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: true), "switch-off: with saving off and captures kept, the question is asked")
+check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 0, stillOff: true), "switch-off: nothing saved, nothing to ask")
+
+// A history whose deletion is not confirmed in time: a late write may still land, but nothing is written after it.
+final class LateSaveStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    var saved: HistorySnapshot?
+    init(stored: HistorySnapshot) { self.stored = stored }
+    func load() -> HistoryLoad { .loaded(stored) }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        Thread.sleep(forTimeInterval: 0.4)
+        saved = snapshot
+        return true
+    }
+}
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = LateSaveStore(stored: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    check(!history.clearForReset(timeout: 0.1) && history.isClosed && history.items == ["keep"],
+          "reset: an unconfirmed deletion is reported, and the history stays closed")
+    history.add("after the timeout")
+    History.flushWrites()
+    check(store.saved?.texts.isEmpty == true && history.items == ["keep"],
+          "reset: a late deletion cannot be followed by a restored or new capture", "\(store.saved?.texts ?? [])")
+}
+
+// An unreadable history file is never overwritten at startup or by a capture. Only an explicit discard replaces it.
+do {
+    let store = ScriptedStore(answers: [.corrupt])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("not saved")
+    History.flushWrites()
+    check(history.fileIsUnreadable && history.state == .unavailable && store.saves == 0,
+          "unreadable history: startup and a capture leave the file alone", "saves \(store.saves)")
+}
+do {
+    let store = ScriptedStore(answers: [.corrupt, .empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle {
+        let discarded = await history.discardUnreadableFile()
+        while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
+        check(discarded && store.saved?.texts.isEmpty == true && history.state == .available && !history.fileIsUnreadable,
+              "unreadable history: an explicit discard replaces the file and starts an empty history")
+    }
+}
+do {
+    let store = ScriptedStore(answers: [.corrupt])
+    store.writesSucceed = false
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle {
+        let discarded = await history.discardUnreadableFile()
+        check(!discarded && history.fileIsUnreadable && store.saved == nil,
+              "unreadable history: a discard that fails leaves the file and the state as they were")
+    }
+}
+
+// Reset touches the stored settings only. App state outside them, such as the legacy import marker, is kept.
+do {
+    let suite = freshSuite("reset-app-state")
+    suite.defaults.set(true, forKey: StorageKeys.legacyHistoryImported)
+    Settings.resetToDefaults(in: suite.defaults)
+    check(suite.defaults.bool(forKey: StorageKeys.legacyHistoryImported), "reset: app state outside the settings is kept")
+}
+
+// Turning saving back on needs no read of a file that is already known, so the next capture is kept at once.
+do {
+    let suite = freshSuite("reenable")
+    let settings = Settings(defaults: suite.defaults)
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: { settings.historyEnabled })
+    settings.historyEnabled = false
+    history.refresh()
+    settings.historyEnabled = true
+    history.refresh()
+    history.add("captured right after")
+    History.flushWrites()
+    check(history.state == .available && store.saved?.texts == ["captured right after", "kept"],
+          "save captures: turning saving back on keeps the next capture at once", "\(store.saved?.texts ?? [])")
+}
+
+// The switch-off decision waits for a queued write, so the capture being written is counted.
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = LateSaveStore(stored: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("x")
+    settle { await history.finishLoading() }
+    check(history.items == ["x", "keep"] && store.saved?.texts == ["x", "keep"],
+          "switch-off: the decision waits for a queued write, so it counts the capture", "\(history.items)")
+}
+
+// Focus: the app the user came from gets focus back only while Nictate is still the active app, and only if it runs.
+check(FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: false),
+      "focus: returns to the app the user came from while Nictate is still active")
+check(!FocusReturn.shouldReturn(nictateIsActive: false, hasTarget: true, targetRunning: true, targetIsNictate: false),
+      "focus: never takes focus from an app the user has since selected")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: false, targetRunning: true, targetIsNictate: false),
+      "focus: nothing remembered, nothing to return to")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: false, targetIsNictate: false),
+      "focus: a terminated app is never activated")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: true),
+      "focus: never returns to Nictate itself")
+
+// Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
+check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),
+      "recovery: an unreadable file keeps the History row, with saving off and nothing listed")
+check(!HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: false),
+      "recovery: with nothing to recover and saving off, the History row is not shown")
+check(HistoryDeletion.showsHistoryRow(historyEnabled: true, savedCount: 0, unreadable: false)
+      && HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 2, unreadable: false),
+      "recovery: the History row is shown while saving is on or captures are kept")
+do {
+    let flags = [ScriptedStore(answers: [.corrupt]), ScriptedStore(answers: [.empty]), ScriptedStore(answers: [.loaded(.empty)])]
+        .map { History(store: $0, isEnabled: alwaysSaving).fileIsUnreadable }
+    check(flags == [true, false, false], "recovery: the discard is offered only when the file was detected unreadable", "\(flags)")
 }
 
 for suite in testSuites { suite.wipe() }

@@ -18,7 +18,21 @@ final class StatusItemController {
         refresh()
     }
 
-    func attach(_ menu: NSMenu) { statusItem.menu = menu }
+    private var panel: StatusPanel?
+
+    /// The icon opens the panel on either click. There is no NSMenu: the panel is the whole menu.
+    func attach(_ panel: StatusPanel) {
+        self.panel = panel
+        guard let button = statusItem.button else { return }
+        button.target = self
+        button.action = #selector(togglePanel)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc private func togglePanel() {
+        guard let button = statusItem.button, let panel else { return }
+        panel.toggle(relativeTo: button)
+    }
 
     /// Keeps the menu bar icon, its tooltip and its VoiceOver label in step with Append mode, so the
     /// mode that joins captures is never invisible.

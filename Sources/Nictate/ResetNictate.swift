@@ -1,38 +1,44 @@
 // Nictate: a macOS menu bar app that copies text from anywhere on your screen.
-// Copyright (C) 2026  jrthormann
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
 import AppKit
 
-/// Reset Nictate: settings back to their defaults, every saved capture deleted, then a restart. Permissions and
-/// open-at-login belong to macOS and stay as they are. Cancel is the default; the reset has no key.
+/// "Reset Settings…". It resets preferences. Saved captures stay unless the user also ticks the box to delete them.
 @MainActor
 enum ResetNictate {
     static func confirm() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = tr("Reset Nictate?")
-        alert.informativeText = tr("Settings go back to their defaults and every saved capture is deleted. Nictate then restarts.")
+        alert.messageText = tr("Reset Settings?")
+        alert.informativeText = tr("Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below.")
+        let deleteCaptures = NSButton(checkboxWithTitle: tr("Also delete saved captures"), target: nil, action: nil)
+        alert.accessoryView = deleteCaptures
         alert.addButton(withTitle: tr("Cancel"))
         let reset = alert.addButton(withTitle: tr("Reset"))
         reset.hasDestructiveAction = true
         reset.keyEquivalent = ""
         guard alert.runModal() == .alertSecondButtonReturn else { return }
+        // The restart ends this process, so the history must be on disk first: the deletion is confirmed by the
+        // store, and pending changes are written. If either fails, nothing is reset and the user is told why.
+        let deletes = deleteCaptures.state == .on
+        let ready = deletes ? History.shared.clearForReset() : History.shared.waitForPendingWrites()
+        guard ready else {
+            stop(deletes ? tr("Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.")
+                         : tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
+            return
+        }
         Settings.resetToDefaults()
-        History.shared.clear()
         AppRestart.now()
+    }
+
+    private static func stop(_ message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Reset stopped")
+        alert.informativeText = message
+        alert.addButton(withTitle: tr("OK"))
+        alert.runModal()
     }
 }

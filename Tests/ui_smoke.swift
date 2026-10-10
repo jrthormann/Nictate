@@ -246,84 +246,6 @@ MainActor.assumeIsolated {
     hotKeys.unregister(.capture)
     check(hotKeys.registeredCount == 0, "hotkeys: unregistering frees the combination")
 
-    // MARK: Main menu: ⌘A, ⌘C and ⌘V work in the History search, and ⌘W closes the window
-    // ⌘C and ⌘V go through the general pasteboard, so what the user had there is put back afterwards.
-    do {
-        let board = NSPasteboard.general
-        let saved: [NSPasteboardItem] = (board.pasteboardItems ?? []).map { item in
-            let copy = NSPasteboardItem()
-            for type in item.types { if let data = item.data(forType: type) { copy.setData(data, forType: type) } }
-            return copy
-        }
-        let mainMenu = MainMenu(showSettings: {}, canFind: { false })
-        mainMenu.install()
-        // Deterministic, whatever has the focus: the menu is installed and each key goes to the action that
-        // text fields and windows answer.
-        check(application.mainMenu === mainMenu.menu && application.windowsMenu === mainMenu.windowMenu,
-              "main menu: installed as the app's main menu, with its Window menu")
-        func allItems(_ menu: NSMenu) -> [NSMenuItem] { menu.items + menu.items.compactMap(\.submenu).flatMap(allItems) }
-        let expected: [(String, Selector)] = [("x", #selector(NSText.cut(_:))), ("c", #selector(NSText.copy(_:))),
-                                              ("v", #selector(NSText.paste(_:))), ("a", #selector(NSResponder.selectAll(_:))),
-                                              ("z", Selector(("undo:"))), ("w", #selector(NSWindow.performClose(_:))),
-                                              ("m", #selector(NSWindow.performMiniaturize(_:)))]
-        for (key, action) in expected {
-            let item = allItems(mainMenu.menu).first { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == .command }
-            check(item?.action == action && item?.target == nil,
-                  "main menu: ⌘\(key.uppercased()) sends \(NSStringFromSelector(action)) along the responder chain",
-                  item.map { "\($0.action.map(NSStringFromSelector) ?? "nil")" } ?? "missing")
-        }
-        let windows = WindowCoordinator()
-        windows.showHistory()
-        let title = tr("Nictate History")
-        waitUntil { application.windows.contains { $0.title == title && $0.isVisible } }
-        guard let window = application.windows.first(where: { $0.title == title }),
-              // .searchable lives in the window's toolbar, which is outside the content view.
-              let field = (window.contentView?.superview.map(descendants(of:)) ?? []).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
-            check(false, "main menu: the History window and its search field open")
-            return
-        }
-        // A process started from a terminal may not take the focus (see the shortcut checks). Then the key
-        // goes to the same menu item AppKit would pick, sent along the field's responder chain.
-        check(application.activationPolicy() == .regular, "dock: an open History window puts Nictate in the Dock")
-        let isKey = waitUntil(2) { window.isKeyWindow }
-        if !isKey { note("main menu: the History window could not become key; each item's action goes along the field's responder chain directly") }
-        @MainActor
-        func press(_ key: String, _ name: String) {
-            if isKey, let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
-                                                   windowNumber: window.windowNumber, context: nil, characters: key,
-                                                   charactersIgnoringModifiers: key, isARepeat: false, keyCode: 0) {
-                check(application.mainMenu?.performKeyEquivalent(with: event) == true, "main menu: ⌘\(key.uppercased()) is handled (\(name))")
-                return
-            }
-            func items(_ menu: NSMenu) -> [NSMenuItem] { menu.items + menu.items.compactMap(\.submenu).flatMap(items) }
-            let item = application.mainMenu.map(items)?.first { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == .command }
-            check(item.flatMap { item in item.action.map { window.firstResponder?.tryToPerform($0, with: item) == true } } ?? false,
-                  "main menu: ⌘\(key.uppercased()) reaches something that acts on it (\(name))")
-        }
-        window.makeFirstResponder(field)
-        guard let editor = field.currentEditor() as? NSTextView else {
-            check(false, "main menu: the search field takes the focus")
-            return
-        }
-        editor.insertText("nictate", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
-        editor.setSelectedRange(NSRange(location: 0, length: 0))
-        press("a", "select all")
-        check(editor.selectedRange() == NSRange(location: 0, length: 7), "main menu: ⌘A selects the whole search", "\(editor.selectedRange())")
-        board.clearContents()
-        press("c", "copy")
-        check(board.string(forType: .string) == "nictate", "main menu: ⌘C copies the search text", board.string(forType: .string) ?? "nil")
-        editor.setSelectedRange(NSRange(location: 7, length: 0))
-        press("v", "paste")
-        check(editor.string == "nictatenictate", "main menu: ⌘V pastes into the search", editor.string)
-        check(waitUntil { History.shared.query == "nictatenictate" }, "main menu: the pasted search filters History", History.shared.query)
-        History.shared.query = ""
-        press("w", "close")
-        check(waitUntil { !window.isVisible }, "main menu: ⌘W closes the History window")
-        check(application.activationPolicy() == .accessory, "dock: closing the last window takes Nictate out of the Dock")
-        board.clearContents()
-        board.writeObjects(saved)
-    }
-
     // MARK: History deletion alerts: Cancel is the default, and every deleting choice needs its own click
     do {
         let off = HistoryClearing.switchOffAlert(savedCount: 3)
@@ -338,35 +260,11 @@ MainActor.assumeIsolated {
         check(clear.buttons[0].keyEquivalent == "\r" && clear.buttons[1].keyEquivalent == "" && clear.buttons[1].hasDestructiveAction,
               "history deletion: Clear History has no key, so Return cannot delete")
         // With nothing saved, neither path shows an alert (a modal here would hang the run until the timeout).
-        let empty = History(store: EncryptedHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).sealed"),
-                                                         key: { SymmetricKey(data: Data(repeating: 3, count: 32)) }),
-                            retention: { .never })
+        let empty = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json")))
         HistoryClearing.confirmClear(empty)
-        HistoryClearing.historyTurnedOff(empty)
-        check(empty.items.isEmpty, "history deletion: an empty history clears without asking")
+        check(!HistoryDeletion.asksOnSwitchOff(savedCount: empty.items.count), "history deletion: an empty history asks nothing when saving is switched off")
     }
 
-    // MARK: Dock: Nictate stays in the Dock until its last window closes, a minimized one included
-    do {
-        let windows = WindowCoordinator()
-        windows.showPreferences()
-        windows.showHistory()
-        let own = { application.windows.filter { $0.isVisible && ($0.title == tr("Nictate History") || $0.contentViewController is PreferencesController) } }
-        waitUntil { own().count == 2 }
-        let history = own().first { $0.title == tr("Nictate History") }
-        let settings = own().first { $0.contentViewController is PreferencesController }
-        check(history != nil && settings != nil && application.activationPolicy() == .regular, "dock: Settings and History open, Nictate is in the Dock")
-        history?.miniaturize(nil)
-        if waitUntil(6, { history?.isMiniaturized == true }) {
-            settings?.close()
-            check(application.activationPolicy() == .regular, "dock: a minimized window keeps Nictate in the Dock, so it can come back")
-        } else {
-            skip("dock: the History window could not be minimized here")
-            settings?.close()
-        }
-        history?.close()
-        check(application.activationPolicy() == .accessory, "dock: closing the minimized window too leaves the Dock")
-    }
 }
 
 if notes > 0 { print("\n\(notes) NOTE\(notes == 1 ? "" : "S") (environment, not failures)") }
@@ -376,27 +274,129 @@ if ciRun && skips > 0 {
     print("FAIL  skipped checks in CI: the suite did not test everything it claims (see the SKIP lines)")
     failures += 1
 }
-// MARK: Status menu structure: separators, groups, symbols and key equivalents
+// MARK: Status panel: the history is a screen of the same panel, and copying closes it
 do {
     let status = StatusItemController()
-    let controller = MenuController(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
-    controller.menuNeedsUpdate(controller.menu)
-    let items = controller.menu.items
-    let titles = items.map { $0.isSeparatorItem ? "—" : $0.title }
-    check(items.first?.isSeparatorItem == false && items.last?.isSeparatorItem == false,
-          "menu: no separator at the start or the end", titles.joined(separator: " | "))
-    let adjacentSeparators = zip(items, items.dropFirst()).contains { $0.0.isSeparatorItem && $0.1.isSeparatorItem }
-    check(!adjacentSeparators, "menu: no two separators in a row")
-    check(items.allSatisfy { $0.isSeparatorItem || !$0.title.isEmpty }, "menu: every item has a title")
-    let settings = items.first { $0.title == tr("Settings…") }
-    check(settings?.keyEquivalent == "," && settings?.keyEquivalentModifierMask == .command && settings?.image == nil,
-          "menu: Settings… is ⌘, and has no symbol")
-    let quit = items.first { $0.title == tr("Quit Nictate") }
-    check(quit?.keyEquivalent == "q" && quit?.keyEquivalentModifierMask == .command, "menu: Quit Nictate is ⌘Q")
-    let capture = items.first { $0.title == tr("Capture Text") }
-    check(capture?.image != nil, "menu: the capture command keeps its symbol")
-    let parents = items.filter { $0.hasSubmenu }
-    check(parents.allSatisfy { $0.image == nil }, "menu: language, mode and history parents are plain text")
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    model.reset()
+    check(model.screen == .main && model.query.isEmpty, "panel: opens on the main screen with an empty search")
+    model.screen = .history
+    model.backToMain()
+    check(model.screen == .main, "panel: Back returns to the main screen without closing the panel")
+}
+
+// MARK: Status panel anchoring: the panel opens below its button and does not rise over the menu bar
+do {
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    let panel = StatusPanel(model: model)
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    // A stand-in for the status item, placed just under the top edge the way the menu bar's icon sits.
+    let anchor = NSWindow(contentRect: NSRect(x: screen.frame.midX, y: screen.frame.maxY - 60, width: 40, height: 40),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+    let button = NSButton(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+    anchor.contentView?.addSubview(button)
+    anchor.orderFrontRegardless()
+    panel.toggle(relativeTo: button)
+    _ = waitUntil { panel.isShown && panel.window != nil }
+    waitPast(0.5)
+    let buttonBottom = anchor.convertToScreen(button.convert(button.bounds, to: nil)).minY
+    let frame = panel.window?.frame ?? .zero
+    check(panel.isShown, "panel: opens from its status button")
+    check(frame.maxY <= buttonBottom + 1 && frame.height > 200,
+          "panel: opens below its button and stays clear of the menu bar",
+          "panel top \(frame.maxY), button bottom \(buttonBottom), height \(frame.height)")
+    panel.close()
+    anchor.orderOut(nil)
+}
+
+// MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight
+do {
+    let store = JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json"))
+    let history = History(store: store, isEnabled: { true })
+    history.add("first")
+    history.add("second")
+    history.add("third")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    check(model.selection == 0, "keyboard: opening History highlights its first match")
+    model.searchChanged("")
+    model.moveSelection(by: 1)
+    model.searchChanged("")
+    check(model.selection == 1, "keyboard: the same search text again keeps the arrow-key highlight where it is")
+    model.searchChanged("i")
+    check(model.entries.map(\.text) == ["third", "first"] && model.selection == 0,
+          "keyboard: a real search change starts again at its first match", "\(model.entries.map(\.text))")
+    model.moveSelection(by: 5)
+    check(model.selection == 1, "keyboard: arrows stop at the last match rather than wrapping")
+    model.moveSelection(by: -9)
+    check(model.selection == 0, "keyboard: arrows stop at the first match")
+    model.backToMain()
+    check(model.selection == nil, "keyboard: leaving History clears the highlight")
+}
+
+// Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a
+// highlighted first match, so Return has a target.
+do {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-late-\(UUID().uuidString).json")
+    let seed = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
+    seed.add("arrived later")
+    History.flushWrites()
+    let history = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true }, loadsNow: false)
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    check(model.selection == nil && model.entries.isEmpty, "late entries: History opens before its read has finished")
+    let highlighted = waitUntil { model.selection == 0 && model.entries.map(\.text) == ["arrived later"] }
+    check(highlighted, "late entries: the first match is highlighted once the read finishes", "\(model.entries.map(\.text))")
+}
+
+// Regression: deleting the highlighted last row moves the highlight to the new last row, so Return keeps a target.
+do {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-delete-\(UUID().uuidString).json")
+    let history = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
+    history.add("first")
+    history.add("second")
+    history.add("third")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    model.moveSelection(by: 5)
+    check(model.selection == 2, "delete: the highlight reaches the last row")
+    model.deleteCapture("first")
+    let moved = waitUntil { model.selection == 1 && model.entries.map(\.text) == ["third", "second"] }
+    check(moved, "delete: the highlight moves to the new last row", "selection \(String(describing: model.selection))")
+}
+
+// Regression: a copy error from an earlier visit does not reappear when the panel opens again.
+do {
+    let history = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-err-\(UUID().uuidString).json")), isEnabled: { true })
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.copyError = "Couldn't copy text. Try again."
+    model.reset()
+    check(model.copyError == nil, "copy error: reopening the panel clears the error from an earlier copy")
+}
+
+// Regression: Command-F asks the History screen for its search field, once per press.
+do {
+    let history = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-find-\(UUID().uuidString).json")), isEnabled: { true })
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    let before = model.searchFocusRequests
+    NotificationCenter.default.post(name: MainMenu.findRequested, object: nil)
+    check(model.searchFocusRequests == before + 1, "find: Command-F asks the History search field for focus")
 }
 
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")

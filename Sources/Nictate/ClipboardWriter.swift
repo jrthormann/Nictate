@@ -3,7 +3,7 @@
 
 import AppKit
 
-/// The one place Nictate writes the clipboard: captures, Cycle History, the History window and the menu all
+/// The one place Nictate writes the clipboard: captures, Cycle History, the History screen and the menu all
 /// go through it. It remembers its latest write, so Cycle History and Append mode know what the clipboard
 /// holds while nothing else has been copied, without reading it back.
 @MainActor
@@ -11,18 +11,32 @@ final class ClipboardWriter {
     static let shared = ClipboardWriter()
 
     private let pasteboard: NSPasteboard
+    /// The write itself. Tests replace it to simulate a clipboard that refuses the text.
+    private let replace: (NSPasteboard, String, Bool) -> Int
     private(set) var lastWrite: ClipboardWrite?
 
-    init(pasteboard: NSPasteboard = .general) {
+    init(pasteboard: NSPasteboard = .general,
+         replace: @escaping (NSPasteboard, String, Bool) -> Int = { $0.replaceContents(with: $1, transient: $2) }) {
         self.pasteboard = pasteboard
+        self.replace = replace
     }
 
     /// Replaces the clipboard with `text` and returns the change count of this write.
     @discardableResult
     func write(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Int {
-        let changeCount = pasteboard.replaceContents(with: text, transient: transient)
+        let changeCount = replace(pasteboard, text, transient)
         lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
         return changeCount
+    }
+
+    /// Writes `text` and reads back only that text before reporting success. The previous clipboard is never read,
+    /// so other apps' contents (including concealed or transient entries) are not touched or kept. A refused write
+    /// reports failure and is not remembered as Nictate's.
+    func writeVerified(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Bool {
+        let changeCount = replace(pasteboard, text, transient)
+        guard pasteboard.string(forType: .string) == text else { return false }
+        lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
+        return true
     }
 
     /// The text of the latest write while it is still on the clipboard, otherwise nil.

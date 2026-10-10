@@ -6,7 +6,7 @@ import AppKit
 /// When saved captures are deleted, and what is asked first. Kept apart from the alerts that ask, so every
 /// rule can be tested without one on screen.
 enum HistoryDeletion {
-    /// The answer to "Delete the saved captures too?" after "Keep history" is turned off. Cancel leaves the
+    /// The answer to "Delete the saved captures too?" after "Save Captures" is turned off. Cancel leaves the
     /// switch on again, as if it had never moved.
     enum Answer: Equatable {
         case delete
@@ -26,6 +26,11 @@ enum HistoryDeletion {
     /// Turning history off asks about what is saved, and only when something is.
     static func asksOnSwitchOff(savedCount: Int) -> Bool { savedCount > 0 }
 
+    /// The question is asked only while saving is still off, and only when something is saved.
+    static func shouldAskOnSwitchOff(savedCount: Int, stillOff: Bool) -> Bool {
+        stillOff && asksOnSwitchOff(savedCount: savedCount)
+    }
+
     /// Captures go only on an explicit Delete; Keep leaves them for a later Clear History.
     static func clearsOnSwitchOff(savedCount: Int, answer: Answer) -> Bool { savedCount > 0 && answer == .delete }
 
@@ -33,10 +38,15 @@ enum HistoryDeletion {
     /// was turned off, so they can always be deleted.
     static func showsClearControl(historyEnabled: Bool, savedCount: Int) -> Bool { historyEnabled || savedCount > 0 }
 
+    /// The History row of the panel: while saving is on, while captures are kept, and whenever the file needs recovery.
+    static func showsHistoryRow(historyEnabled: Bool, savedCount: Int, unreadable: Bool) -> Bool {
+        historyEnabled || savedCount > 0 || unreadable
+    }
+
     /// Clear History asks once, when there is something to delete.
     static func asksBeforeClear(savedCount: Int) -> Bool { savedCount > 0 }
 
-    /// With "Clear history on quit" on, history is cleared at launch too: a crash, a forced quit or a power
+    /// With "Clear on Quit" on, history is cleared at launch too: a crash, a forced quit or a power
     /// loss skips the quit, and the captures would otherwise outlive the choice.
     static func clearsAtLaunch(clearOnQuit: Bool, savedCount: Int) -> Bool { clearOnQuit && savedCount > 0 }
 
@@ -49,7 +59,7 @@ enum HistoryDeletion {
     }
 }
 
-/// The alerts of `HistoryDeletion` and the clearing itself, shared by Settings, the History window and the menu.
+/// The alerts of `HistoryDeletion` and the clearing itself, shared by Settings, the History screen and the menu.
 @MainActor
 enum HistoryClearing {
     /// Deletes every saved capture and the notices that may still show one.
@@ -65,12 +75,41 @@ enum HistoryClearing {
         if run(clearAlert(savedCount: count)) == .alertSecondButtonReturn { clear(history) }
     }
 
-    /// After "Keep history" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
-    static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) {
+    /// "Discard Unreadable History": asks first, and says the deletion cannot be undone. Cancel is the default.
+    static func confirmDiscardUnreadable(_ history: History = .shared) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Discard unreadable history?")
+        alert.informativeText = tr("Nictate can't load the saved captures in this file, so they can't be shown. Discarding the file deletes them permanently. This can't be undone.")
+        alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\r"
+        alert.addButton(withTitle: tr("Discard")).hasDestructiveAction = true
+        guard run(alert) == .alertSecondButtonReturn else { return }
+        Task { @MainActor in
+            guard await history.discardUnreadableFile() else {
+                let failure = NSAlert()
+                failure.alertStyle = .warning
+                failure.messageText = tr("Discard didn't work")
+                failure.informativeText = tr("The file couldn't be replaced, so it was left unchanged.")
+                failure.addButton(withTitle: tr("OK"))
+                _ = run(failure)
+                return
+            }
+        }
+    }
+
+    /// After "Save Captures" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
+    /// It waits for a load in flight first, so a history that is still reading is counted, not shown as empty.
+    static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) async {
+        await history.finishLoading()
         let count = history.items.count
-        guard HistoryDeletion.asksOnSwitchOff(savedCount: count) else { return }
+        // Saving may have been turned back on while the load was in flight: then there is nothing to decide.
+        guard HistoryDeletion.shouldAskOnSwitchOff(savedCount: count, stillOff: !settings.historyEnabled) else { return }
         let answer = HistoryDeletion.Answer(response: run(switchOffAlert(savedCount: count)))
-        if answer == .cancel { settings.historyEnabled = true }
+        if answer == .cancel {
+            settings.historyEnabled = true
+            // The switch went off with refresh; turning it back on must load the history again.
+            history.refresh()
+        }
         if HistoryDeletion.clearsOnSwitchOff(savedCount: count, answer: answer) { clear(history) }
         // Keep Captures stops saving and deletes nothing; the switch stays off.
     }

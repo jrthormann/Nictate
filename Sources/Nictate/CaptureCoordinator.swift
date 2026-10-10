@@ -21,7 +21,7 @@ final class CaptureCoordinator {
     private var isCapturing = false
     /// Colors, links and emails found in the latest capture, offered in the menu.
     private(set) var lastDetections = Detections()
-    /// Shared with the History window, so Cycle History and Append mode know about its copies too.
+    /// Shared with the History screen, so Cycle History and Append mode know about its copies too.
     private let clipboard: ClipboardWriter
 
     init(status: StatusItemController, windows: WindowCoordinator, clipboard: ClipboardWriter = .shared) {
@@ -64,7 +64,10 @@ final class CaptureCoordinator {
                 return
             }
             // Esc or a click without a drag: nothing to copy.
-            guard let region = await SelectionOverlay.select(stills) else { return }
+            guard let region = await SelectionOverlay.select(stills) else {
+                FocusReturn.shared.returnIfStillActive()
+                return
+            }
             // "Reading…" appears only when recognition is slow enough to notice.
             let reading = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
@@ -104,6 +107,7 @@ final class CaptureCoordinator {
         for effect in effects { perform(effect) }
         let copied = effects.contains { if case .copy = $0 { true } else { false } }
         showResult(capture, mode: mode, copied: copied, region: region)
+        if copied { FocusReturn.shared.returnIfStillActive() }
     }
 
     /// The pill beside the selection: the word count when text was copied, otherwise what was missing.
@@ -152,8 +156,8 @@ final class CaptureCoordinator {
 
     /// Puts the next older capture on the clipboard, wrapping around after the oldest in the rotation.
     func rotateHistory() {
-        History.shared.pruneExpired()
-        let items = HistoryRotation.items(History.shared.items, depth: settings.rotationDepth, historyEnabled: settings.historyEnabled)
+        // Cycle History walks through every saved capture: the history itself is the limit.
+        let items = HistoryRotation.items(History.shared.items, depth: HistoryPolicy.maximumHistoryEntries, historyEnabled: settings.historyEnabled)
         guard let index = HistoryRotation.nextIndex(items: items, clipboard: clipboard.ownText) else {
             status.cue(.failure)
             status.announce(tr("History is empty"))
@@ -168,6 +172,19 @@ final class CaptureCoordinator {
 
     func copy(_ text: String) {
         clipboard.write(text)
+    }
+
+    /// Copies a capture chosen from the history, with the same cue and announcement as a fresh capture.
+    /// Returns false, with a spoken message, when the clipboard did not take the text.
+    @discardableResult
+    func copyCapture(_ text: String) -> Bool {
+        guard clipboard.writeVerified(text) else {
+            status.announce(tr("Couldn't copy text. Try again."))
+            return false
+        }
+        // Silent for sighted users: the panel closes and nothing else appears. VoiceOver still hears the result.
+        status.announce(tr("Text copied"))
+        return true
     }
 
     /// Copies a value found in the latest capture, from the menu.

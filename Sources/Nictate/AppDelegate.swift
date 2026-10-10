@@ -12,28 +12,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// was never made.
     private var running: Running?
     private var cancellables = Set<AnyCancellable>()
-    private var expiryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Clearing on quit is skipped by a crash or a forced quit, so the launch after one clears instead.
-        if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
-            HistoryClearing.clear()
+        // The history loads in the background: a Keychain prompt must never hold up the menu bar. Clearing on quit
+        // is skipped by a crash or a forced quit, so the launch after one clears instead, once the history is read.
+        if BuildIdentity.isTestVariant, UserDefaults.standard.object(forKey: StorageKeys.historyEnabled) == nil {
+            // The QA build starts with Save Captures on, so a fresh install gets its fixtures. Only when no choice exists.
+            settings.historyEnabled = true
         }
-        History.shared.pruneExpired()
+        let loading = History.shared.refresh()
+        Task { @MainActor in
+            await loading?.value
+            if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
+                HistoryClearing.clear()
+            }
+            if BuildIdentity.isTestVariant {
+                Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
+                History.shared.seedFixtures(BuildIdentity.historyFixtures)
+            }
+        }
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
-        // Captures expire while the app keeps running, not only at the next launch or menu click.
-        expiryTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in
-            Task { @MainActor in History.shared.pruneExpired() }
-        }
 
+        // Command-F works while the panel shows its History screen, and nowhere else.
         let mainMenu = MainMenu(showSettings: { [weak self] in self?.windows.showPreferences() },
-                                canFind: { [weak self] in self?.windows.isHistoryKey ?? false })
+                                canFind: { [weak self] in
+                                    guard let panel = self?.running?.panel else { return false }
+                                    return panel.isShown && panel.model.screen == .history
+                                })
         mainMenu.install()
         let status = StatusItemController()
         let capture = CaptureCoordinator(status: status, windows: windows)
-        let menu = MenuController(capture: capture, windows: windows)
-        status.attach(menu.menu)
-        running = Running(mainMenu: mainMenu, status: status, capture: capture, menu: menu)
+        let model = StatusPanelModel(capture: capture, windows: windows)
+        let panel = StatusPanel(model: model)
+        status.attach(panel)
+        running = Running(mainMenu: mainMenu, status: status, capture: capture, panel: panel)
 
         settings.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -49,8 +61,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// With Clear on Quit on, the history is cleared and the store's confirmation awaited before the process ends. A
+    /// failure is logged by History and the choice stays on, so the next launch tries again. Without it, queued
+    /// changes are written, waiting at most a few seconds.
     func applicationWillTerminate(_ notification: Notification) {
-        if settings.clearHistoryOnQuit { HistoryClearing.clear() }
+        if settings.clearHistoryOnQuit {
+            // Notices may still show captured text, so they go whatever the outcome of the history write.
+            Notifier.removeAllDelivered()
+            _ = History.shared.clearForQuit()
+        } else {
+            // A failed wait is already logged by History; quit goes on, as it cannot wait longer than a few seconds.
+            _ = History.shared.waitForPendingWrites()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -75,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// What a shortcut does.
     private func perform(_ slot: ShortcutSlot) {
+        FocusReturn.shared.remember()
         guard let capture = running?.capture else { return }
         switch slot {
         case .capture: capture.capture(mode: .text)
@@ -103,5 +126,5 @@ private struct Running {
     let mainMenu: MainMenu
     let status: StatusItemController
     let capture: CaptureCoordinator
-    let menu: MenuController
+    let panel: StatusPanel
 }

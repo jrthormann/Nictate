@@ -17,17 +17,24 @@ final class Settings: ObservableObject {
     /// read or write the user's preferences and parallel runs cannot see each other's values.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Keep History is off for new installs. An install that already had the app set up keeps the behaviour it had
+        // (on), unless the user has chosen otherwise. The marker records that this rule has been applied.
+        if !defaults.bool(forKey: StorageKeys.historyDefaultApplied) {
+            if defaults.object(forKey: StorageKeys.historyEnabled) == nil && defaults.bool(forKey: StorageKeys.didOnboard) {
+                defaults.set(true, forKey: StorageKeys.historyEnabled)
+            }
+            defaults.set(true, forKey: StorageKeys.historyDefaultApplied)
+        }
         defaults.register(defaults: [
             StorageKeys.hotKeyCode: kVK_ANSI_2, StorageKeys.hotKeyMods: cmdKey | shiftKey, StorageKeys.hotKeyLabel: "⇧⌘2",
             StorageKeys.rotateHotKeyCode: kVK_ANSI_2, StorageKeys.rotateHotKeyMods: optionKey | shiftKey | cmdKey, StorageKeys.rotateHotKeyLabel: "⌥⇧⌘2",
-            StorageKeys.rotationDepth: 10,
             StorageKeys.codeClean: false,
             StorageKeys.visualCue: true,
             StorageKeys.languages: [String](), StorageKeys.languageCorrection: true, StorageKeys.codeMode: false,
             StorageKeys.keepLineBreaks: true, StorageKeys.detectColumns: true, StorageKeys.tablesAsTabs: true, StorageKeys.cleanText: false,
             StorageKeys.appendMode: false, StorageKeys.appendSeparator: "newline",
             StorageKeys.barcodeAction: "copy", StorageKeys.detectContent: true, StorageKeys.hideFromClipboardManagers: false,
-            StorageKeys.historyEnabled: true, StorageKeys.clearHistoryOnQuit: false, StorageKeys.historyRetention: HistoryRetention.week.rawValue,
+            StorageKeys.clearHistoryOnQuit: false,
         ])
     }
 
@@ -81,8 +88,6 @@ final class Settings: ObservableObject {
         }
     }
 
-    /// How many recent captures the rotation walks through.
-    var rotationDepth: Int { get { number(StorageKeys.rotationDepth) } set { store(newValue, StorageKeys.rotationDepth) } }
 
     // Feedback
     var visualCue: Bool { get { flag(StorageKeys.visualCue) } set { store(newValue, StorageKeys.visualCue) } }
@@ -132,20 +137,17 @@ final class Settings: ObservableObject {
     var hideFromClipboardManagers: Bool { get { flag(StorageKeys.hideFromClipboardManagers) } set { store(newValue, StorageKeys.hideFromClipboardManagers) } }
 
     // History & system
-    var historyEnabled: Bool { get { flag(StorageKeys.historyEnabled) } set { store(newValue, StorageKeys.historyEnabled) } }
-    var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
-    /// A week by default (the registered default). A stored value that is not a choice reads as never, so a
-    /// damaged preference can never delete captures.
-    var historyRetention: HistoryRetention {
-        get { HistoryRetention(rawValue: text(StorageKeys.historyRetention)) ?? .never }
-        set { store(newValue.rawValue, StorageKeys.historyRetention) }
+    /// Off unless the user (or the upgrade rule in init) has stored a choice. Not registered as a default, so that
+    /// a stored value is always distinguishable from none.
+    var historyEnabled: Bool {
+        get { defaults.object(forKey: StorageKeys.historyEnabled) != nil && flag(StorageKeys.historyEnabled) }
+        set { store(newValue, StorageKeys.historyEnabled) }
     }
-
-    /// Reset Nictate: every stored setting goes, so each returns to its default. The retention is written as
-    /// "week" (the default of a new install), so that the next launch does not settle it again as "never".
+    var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
+    /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
+    /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {
-        for key in StorageKeys.settings { defaults.removeObject(forKey: key) }
-        defaults.set(HistoryRetention.week.rawValue, forKey: StorageKeys.historyRetention)
+        for key in StorageKeys.settings + StorageKeys.retired { defaults.removeObject(forKey: key) }
     }
 
     /// Key equivalent matching a recorded shortcut label, so menus render it natively (e.g. "⇧⌘2").

@@ -49,20 +49,24 @@ enum StorageKeys {
 
     // Stored outside Settings
     static let didOnboard = "didOnboard"
+    /// Set once the Keep History default has been applied (see Settings.init).
+    static let historyDefaultApplied = "historyDefaultApplied"
+    /// Whether Recognition’s Advanced section is open (a UI state, not a recognition setting).
+    static let advancedRecognitionExpanded = "advancedRecognitionExpanded"
+    /// Set once the earlier encrypted history has been imported and read back. Hides the import action.
+    static let legacyHistoryImported = "legacyHistoryImported"
 
     /// Every key of `Settings`.
     static let settings = [
-        hotKeyCode, hotKeyMods, hotKeyLabel, rotateHotKeyCode, rotateHotKeyMods, rotateHotKeyLabel, rotationDepth,
+        hotKeyCode, hotKeyMods, hotKeyLabel, rotateHotKeyCode, rotateHotKeyMods, rotateHotKeyLabel,
         codeHotKey,
         visualCue, notificationStyle,
         languages, languageCorrection, codeMode, keepLineBreaks, detectColumns, tablesAsTabs, cleanText,
         codeClean,
         appendMode, appendSeparator, barcodeAction, detectContent, hideFromClipboardManagers,
-        historyEnabled, clearHistoryOnQuit, historyRetention,
+        historyEnabled, clearHistoryOnQuit,
     ]
 
-    /// Window frame autosave names (AppKit stores each frame in UserDefaults under these).
-    enum WindowFrame {
-        static let history = "Nictate.History"
-    }
+    /// Keys of settings that are no longer read. Reset removes them too, so an old value cannot come back.
+    static let retired = [rotationDepth, historyRetention]
 }

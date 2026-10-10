@@ -18,7 +18,7 @@ final class MainMenu: NSObject, NSMenuItemValidation {
     private let showSettings: () -> Void
     private let canFind: () -> Bool
 
-    /// `canFind` says whether a window with a search field (History) is the key window.
+    /// `canFind` says whether the History screen with its search field is showing.
     init(showSettings: @escaping () -> Void, canFind: @escaping () -> Bool) {
         self.showSettings = showSettings
         self.canFind = canFind
@@ -39,6 +39,7 @@ final class MainMenu: NSObject, NSMenuItemValidation {
     private func appMenu() -> NSMenu {
         let app = NSMenu(title: "Nictate")
         app.addItem(item(tr("About Nictate"), #selector(showAbout), target: self))
+        app.addItem(item(tr("Support the Developer…"), #selector(supportDeveloper), target: self))
         app.addItem(item(tr("Check for Updates…"), #selector(checkForUpdates), target: self))
         app.addItem(.separator())
         app.addItem(item(tr("Settings…"), #selector(openSettings), key: ",", target: self))
@@ -89,6 +90,7 @@ final class MainMenu: NSObject, NSMenuItemValidation {
     }
 
     @objc private func showAbout() { AboutPanel.show() }
+    @objc private func supportDeveloper() { SupportDeveloper.open() }
     @objc private func checkForUpdates() { Task { @MainActor in await UpdateAlert.run() } }
     @objc private func openSettings() { showSettings() }
     @objc private func find() { NotificationCenter.default.post(name: Self.findRequested, object: nil) }
@@ -96,6 +98,17 @@ final class MainMenu: NSObject, NSMenuItemValidation {
     /// Only Find… needs a say: the items without a target are validated by whoever answers them.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         menuItem.action == #selector(find) ? canFind() : true
+    }
+}
+
+/// "Support the Developer…": opens the developer's PayPal page in the default browser. Nothing is embedded or sent by
+/// the app itself; the browser does the rest.
+enum SupportDeveloper {
+    static let url = URL(string: "https://paypal.me/jrthormann")!
+
+    @MainActor
+    static func open() {
+        NSWorkspace.shared.open(url)
     }
 }
 

@@ -10,29 +10,30 @@ struct OutputTab: View {
     var body: some View {
         SettingsPage {
             SettingsSection("Clipboard") {
-                SettingToggle("Append mode (add to the clipboard)", isOn: $settings.appendMode.animated(reduceMotion: reduceMotion))
-
+                SettingToggle("Append to Clipboard", isOn: $settings.appendMode.animated(reduceMotion: reduceMotion))
                 SettingRow("Separator") {
                     Picker("Separator", selection: $settings.appendSeparator) {
-                        Text("New line").tag("newline")
-                        Text("Space").tag("space")
-                        Text("Tab").tag("tab")
+                        Text(tr("New Line")).tag("newline")
+                        Text(tr("Space")).tag("space")
+                        Text(tr("Tab")).tag("tab")
                     }
                     .labelsHidden()
                     .fixedSize()
                 }
                 .disclosed(by: settings.appendMode)
+                SettingCaption("Add new captures to the text already copied.")
 
-                SettingToggle("Keep captures private (no clipboard history or Handoff)", isOn: $settings.hideFromClipboardManagers)
+                SettingToggle("Private Clipboard", isOn: $settings.hideFromClipboardManagers)
+                SettingCaption("Limit clipboard sharing and history when supported by macOS.")
             }
 
-            SettingsSection("After capture") {
-                SettingToggle("Detect colors, links, emails and phone numbers", isOn: $settings.detectContent)
-
-                SettingRow("Scan QR codes and barcodes") {
-                    Picker("Scan QR codes and barcodes", selection: $settings.barcodeAction) {
-                        Text("Copy text only").tag("copy")
-                        Text("Ask before opening").tag("ask")
+            SettingsSection("Smart Detection") {
+                SettingToggle("Detect Links, Contacts & Colors", isOn: $settings.detectContent)
+                SettingCaption("Recognize links, email addresses, phone numbers, and colors.")
+                SettingRow("QR & Barcode Results") {
+                    Picker("QR & Barcode Results", selection: $settings.barcodeAction) {
+                        Text(tr("Copy Text Only")).tag("copy")
+                        Text(tr("Ask Before Opening")).tag("ask")
                     }
                     .labelsHidden()
                     .fixedSize()

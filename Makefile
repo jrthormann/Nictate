@@ -1,10 +1,13 @@
 # Nictate: a macOS menu bar app that copies text from anywhere on your screen.
 # Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
-.PHONY: setup build test ui-test strings sources check coverage run install
+.PHONY: setup build test-app test ui-test strings sources check coverage run install
 
 build:      ## Build build/Nictate.app
 	./scripts/build-app.sh
+
+test-app:   ## Build build/NictateTest.app, the isolated QA app with its own Keychain item and history (see scripts/variants)
+	NICTATE_VARIANT=test ./scripts/build-app.sh
 
 setup:      ## Create the local signing identity once, in its own keychain (asks for a new password)
 	scripts/create_signing_cert.sh

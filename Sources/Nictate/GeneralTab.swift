@@ -23,78 +23,74 @@ struct GeneralTab: View {
     @ObservedObject private var login = LoginItem.shared
     @ObservedObject private var history = History.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Shown only while an earlier encrypted history is on this Mac and has not been imported yet.
+    @StateObject private var legacyImport = LegacyImportState()
 
     var body: some View {
         SettingsPage {
-            SettingsSection("Shortcut") {
+            SettingsSection("Keyboard Shortcuts") {
                 SettingRow("Capture Text") { shortcutControl(.capture, name: tr("Capture Text")) }
                 SettingRow("Cycle History") { shortcutControl(.rotateHistory, name: tr("Cycle History")) }
-                SettingRow("Capture QR Code or Barcode") { shortcutControl(.captureCode, name: tr("Capture QR Code or Barcode")) }
-                SettingCaption("Click a shortcut, then press the new combination.")
-            }
-
-            SettingsSection("Feedback") {
-                SettingRow("Notification on copy") {
-                    Picker("Notification on copy", selection: $settings.notificationStyle) {
-                        Text("None").tag(NotificationStyle.none)
-                        Text("Notice only").tag(NotificationStyle.generic)
-                        Text("With the text").tag(NotificationStyle.text)
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                SettingToggle("Visual cue in the menu bar", isOn: $settings.visualCue)
+                SettingRow("Scan QR or Barcode") { shortcutControl(.captureCode, name: tr("Scan QR or Barcode")) }
+                SettingCaption("Click a shortcut to change it.")
             }
 
             SettingsSection("History") {
-                SettingToggle("Keep history", isOn: keepHistory.animated(reduceMotion: reduceMotion))
-                VStack(spacing: Design.Space.row) {
-                    SettingToggle("Clear history on quit", isOn: $settings.clearHistoryOnQuit)
-                    SettingRow("Delete old captures") {
-                        Picker("Delete old captures", selection: Binding(
-                            get: { settings.historyRetention },
-                            set: { settings.historyRetention = $0; History.shared.pruneExpired() })) {
-                            Text("Never").tag(HistoryRetention.never)
-                            Text("After 1 hour").tag(HistoryRetention.hour)
-                            Text("After 24 hours").tag(HistoryRetention.day)
-                            Text("After 7 days").tag(HistoryRetention.week)
+                SettingToggle("Save Captures", isOn: keepHistory.animated(reduceMotion: reduceMotion))
+                SettingToggle("Clear on Quit", isOn: $settings.clearHistoryOnQuit)
+                if legacyImport.available {
+                    SettingRow("Import Previous History…") {
+                        Button("Import Previous History…") {
+                            ImportPreviousHistory.confirmAndRun { legacyImport.refresh() }
                         }
-                        .labelsHidden()
-                        .fixedSize()
                     }
-                    SettingRow("Captures in rotation") {
-                        Picker("Captures in rotation", selection: $settings.rotationDepth) {
-                            ForEach([5, 10, 20, 50], id: \.self) { Text(verbatim: String($0)).tag($0) }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
+                    SettingCaption("Import captures saved by an earlier version of Nictate.")
+                }
+                if history.fileIsUnreadable {
+                    SettingRow("Unreadable history") {
+                        Button("Discard Unreadable History…") { HistoryClearing.confirmDiscardUnreadable() }
                     }
                 }
-                .disclosed(by: settings.historyEnabled)
                 if HistoryDeletion.showsClearControl(historyEnabled: settings.historyEnabled, savedCount: history.items.count) {
                     SettingRow("Saved captures") {
                         Button("Clear History…") { HistoryClearing.confirmClear() }
                             .disabled(history.items.isEmpty)
                     }
                 }
+                SettingCaption("Keep your last 15 captures on this Mac. With Clear on Quit, they are deleted each time Nictate quits.")
             }
 
-            SettingsSection("System") {
-                SettingToggle("Open at login", isOn: Binding(
-                    get: { login.enabled }, set: { login.set($0) }))
-                SettingRow("Reset Nictate") {
-                    Button("Reset Nictate…", role: .destructive) { ResetNictate.confirm() }
+            SettingsSection("Notifications") {
+                SettingRow("Copy Feedback") {
+                    Picker("Copy Feedback", selection: $settings.notificationStyle) {
+                        Text(tr("None")).tag(NotificationStyle.none)
+                        Text(tr("Notice Only")).tag(NotificationStyle.generic)
+                        Text(tr("Notice and Text")).tag(NotificationStyle.text)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
+                SettingToggle("Menu Bar Indicator", isOn: $settings.visualCue)
+            }
+
+            SettingsSection("Startup") {
+                SettingToggle("Launch at Login", isOn: Binding(
+                    get: { login.enabled }, set: { login.set($0) }))
+                SettingRow("Reset Settings…") {
+                    Button("Reset…", role: .destructive) { ResetNictate.confirm() }
+                }
+                SettingCaption("Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them.")
             }
         }
     }
 
-    /// "Keep history". Turning it off then asks whether the captures already saved go too; the question
+    /// "Save Captures". Turning it off then asks whether the captures already saved go too; the question
     /// waits for the switch to finish moving.
     private var keepHistory: Binding<Bool> {
         Binding(get: { settings.historyEnabled }, set: { on in
             settings.historyEnabled = on
-            if !on { DispatchQueue.main.async { HistoryClearing.historyTurnedOff() } }
+            History.shared.refresh()
+            if !on { Task { await HistoryClearing.historyTurnedOff() } }
         })
     }
 
@@ -102,7 +98,7 @@ struct GeneralTab: View {
     private func shortcutControl(_ slot: ShortcutSlot, name: String) -> some View {
         let current = settings.shortcut(for: slot)
         return HStack(spacing: Design.Space.compact) {
-            ShortcutRecorder(label: current?.label ?? tr("No shortcut"), name: name) { code, mods, newLabel in
+            ShortcutRecorder(label: current?.label ?? tr("Not Set"), name: name) { code, mods, newLabel in
                 record(slot, code: code, mods: mods, label: newLabel)
             }
             .frame(minWidth: 96)
