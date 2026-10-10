@@ -4,29 +4,29 @@
 </picture>
 
 <p align="center">
-  Free and open source. For macOS 14 and later.
+  Free and open source. Works on macOS 14 and later.
   <br>
   <a href="../../releases/latest">Download&nbsp;&rsaquo;</a>
   &nbsp;&nbsp;
-  <a href="#build-from-source">Build from source&nbsp;&rsaquo;</a>
+  <a href="#build-from-source">Build it yourself&nbsp;&rsaquo;</a>
   <br><br>
-  Made in the Dominican Republic <img src="docs/images/flag-do.svg" width="16" height="16" alt="" align="absmiddle">, fueled by Coke Zero and pizza.
+  Made in the Dominican Republic <img src="docs/images/flag-do.svg" width="16" height="16" alt="" align="absmiddle">, powered by Coke Zero and pizza.
   <br><br>
   English&nbsp;·&nbsp;<a href="docs/i18n/README.es.md">Español</a>
 </p>
 
 <br>
 
-## Select. Copy. Carry on.
+## Select. Copy. Move on.
 
-Your screen is full of text you can't copy. Nictate fixes that.
+Some text on your screen just won't let you copy it. Nictate grabs it for you.
 
-Press <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> and drag over any text on your screen: a web page,
-a photo of a whiteboard, a paused video, a slide someone is sharing. For a region, recognition takes a fraction
-of a second, and the text lands on your clipboard.
+Press <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> and drag over whatever has words on it: a web page, a
+photo of a whiteboard, a paused video, a slide someone is sharing. The text lands on your clipboard in a fraction
+of a second.
 
-Recognition runs on your Mac with Apple's Vision framework, in every language Vision supports. Nothing is uploaded.
-Your other problems are unfortunately outside the scope of this project.
+It all happens on your Mac, using Apple's Vision framework, in any language Vision reads. Nothing gets uploaded.
+Your other problems are still yours, sorry.
 
 <br>
 
@@ -40,42 +40,46 @@ Your other problems are unfortunately outside the scope of this project.
 <br>
 <br>
 
-Selections snap to whole screen pixels, so each edge lands on a pixel boundary. Arrow keys move the corner one
-pixel at a time, and Shift with an arrow moves it ten. The behavior matches the system screenshot tool.
+Selections snap to whole screen pixels, so every edge sits exactly where you put it. The arrow keys move the
+corner one pixel at a time, and Shift plus an arrow moves it ten. It works the same way as the system screenshot
+tool, so it'll feel familiar.
 
 <br>
 
-## It knows what it is reading.
+## It knows what it's reading.
 
-Nictate tells code, tables, lists and prose apart, and keeps each one the way it was written. Code keeps every
-line break and its indentation. Tables come out with tabs between the cells, ready for a spreadsheet. Only
-ordinary prose is joined into paragraphs, so a list never turns into a sentence.
+Nictate can tell code, tables, lists and plain prose apart, and it keeps each one the way it was written. Code
+keeps its line breaks and indentation. Tables paste with tabs between the cells, so they drop straight into a
+spreadsheet. Only ordinary prose gets joined into paragraphs, which means a list never turns into a sentence.
 
-Colors, links, emails and phone numbers in the last capture are one click away in the menu. QR codes and
-barcodes copy their content. A link inside one is copied, or opened only after you confirm its address, as you choose.
+Colors, links, emails and phone numbers from your last capture are one click away in the menu. QR codes and
+barcodes copy their contents. A link inside one gets copied, or opens only after you confirm the address, whichever
+you prefer.
 
 <br>
 
-## Keys
+## Shortcuts
 
-| Keys | What it does |
+| Shortcut | What it does |
 |:--|:--|
 | <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Select an area and copy its text. |
-| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Cycle through recent captures. |
-| Arrow keys, <kbd>⇧</kbd> with an arrow | Move the selection corner one pixel, or ten. |
-| <kbd>Return</kbd> | Start a corner from the keyboard; press it again to copy. |
+| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Cycle through your recent captures. |
+| Arrow keys, or <kbd>⇧</kbd> with an arrow | Move the selection corner one pixel, or ten. |
+| <kbd>Return</kbd> | Start a corner from the keyboard, then press it again to copy. |
 | <kbd>Esc</kbd> | Cancel the selection. |
 
-Every shortcut can be changed in Settings, and a shortcut only works with <kbd>⌘</kbd> or <kbd>⌃</kbd>, so
-ordinary typing is never captured by mistake. A shortcut for codes alone is optional.
+You can change any shortcut in Settings. Every shortcut needs <kbd>⌘</kbd> or <kbd>⌃</kbd>, so ordinary typing never
+fires a capture by accident. The shortcut for codes alone is optional.
 
 <br>
 
 ## Private by design.
 
-No account. No analytics. Your History is a plain file on your Mac, holding the 15 most recent captures. Nictate adds no encryption of its own, so turn History off or clear it whenever you like.
-Nictate makes no network requests of its own, except Check for Updates, which runs only when you ask it to.
-A link you choose to open is handed to your browser, which then connects as it normally would.
+No account and no analytics. If you turn on Save Captures, the 15 most recent captures are kept in a plain file on
+your Mac. Nictate doesn't encrypt that file, so turn saving off or clear the file whenever you like.
+
+Nictate makes no network requests of its own, except Check for Updates, and only when you ask it to. A link you
+choose to open goes to your browser, which connects the way it normally would.
 
 <br>
 
@@ -87,7 +91,7 @@ A link you choose to open is handed to your browser, which then connects as it n
 | **Size** | About 4 MB |
 | **Languages** | English and Spanish. Text is recognized in every language Vision supports. |
 | **Built with** | Swift, AppKit, SwiftUI, Vision and ScreenCaptureKit |
-| **Network access** | Only Check for Updates, when you ask for it. Links open in your browser only when you choose. |
+| **Network access** | Only Check for Updates, and only when you ask. Links open in your browser only when you choose. |
 | **Price** | Free |
 | **License** | MIT |
 
@@ -95,27 +99,27 @@ A link you choose to open is handed to your browser, which then connects as it n
 
 ## Status
 
-Nictate 1.0.0-beta.1 is a public test release. It is functional, and the maintainer has tested it on macOS 27.
-It has not yet been tested on macOS 14, 15 or 26, and VoiceOver support has not been audited. Reports are welcome:
-see [CHANGELOG.md](CHANGELOG.md) for what is tested and what is not.
+Nictate 1.0.0-beta.1 is a public test release. It works, and I've tested it on macOS 27. I haven't tried it on
+macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome. The
+[CHANGELOG](CHANGELOG.md) lists what's tested and what isn't.
 
 ## Install
 
-Download the disk image from the [latest release](../../releases/latest), open it, and drag Nictate to
-Applications. Nictate is signed with a local certificate and is not notarized, so macOS asks you once to confirm
-that you want to open it:
+Grab the disk image from the [latest release](../../releases/latest), open it, and drag Nictate into Applications.
+Nictate is signed with a local certificate and isn't notarized, so macOS asks you once to confirm you want to
+open it:
 
 - **macOS 15 and later:** open System Settings, go to **Privacy & Security**, and click **Open Anyway** next to the message about Nictate.
 - **macOS 14:** Control-click Nictate, choose **Open**, then **Open** again.
 
-On first launch, a welcome window asks for the **Screen Recording** permission. Grant it, then restart Nictate
-from that window, because macOS applies the permission only to a freshly launched app.
+On first launch, a welcome window asks for the **Screen Recording** permission. Grant it, then restart Nictate from
+that window. macOS only applies the permission to an app that was just launched.
 
 <br>
 
 ## Build from source
 
-You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). Xcode is not required.
+You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). You don't need Xcode.
 
 ```sh
 git clone https://github.com/jrthormann/Nictate.git
@@ -123,28 +127,26 @@ cd Nictate
 make install
 ```
 
-`make install` builds the app, copies it to Applications and opens it. Run the checks with `make check`.
+`make install` builds the app, copies it to Applications and opens it. `make check` runs the tests.
 
 <br>
 
 ## Support the Project
 
-If you find this app useful and would like to support its continued development, you can contribute through
-Buy Me a Coffee or PayPal.
+If Nictate saves you some time, you can chip in through Buy Me a Coffee or PayPal. It's entirely optional, and it
+goes toward maintenance, fixes and whatever comes next.
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-jrthormann-FFDD00?logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/jrthormann)
 [![PayPal](https://img.shields.io/badge/PayPal-jrthormann-00457C?logo=paypal&logoColor=FFFFFF)](https://paypal.me/jrthormann)
-
-Contributions are entirely optional and help support maintenance, improvements, and future features.
 
 <br>
 
 ## Contributing
 
-Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, propose a change,
-build, run the tests and submit a pull request. Translations live in `Sources/Nictate/Resources/`, one `.lproj` folder per
-language, and `make strings` checks that none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes each file.
-The latest test release is on the [Releases page](../../releases/latest).
+Bug reports, ideas and pull requests are all welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report a bug,
+propose a change, build, run the tests and send a pull request. Translations live in `Sources/Nictate/Resources/`,
+one `.lproj` folder per language, and `make strings` makes sure none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+walks through each file. The latest test release is on the [Releases page](../../releases/latest).
 
 <br>
 
