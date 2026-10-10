@@ -24,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let loading = History.shared.refresh()
         Task { @MainActor in
             await loading?.value
+            if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
+                HistoryClearing.clear()
+            }
             if BuildIdentity.isTestVariant {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
                 History.shared.seedFixtures(BuildIdentity.historyFixtures)
@@ -58,6 +61,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Permissions.request()
             windows.showWelcome()
         }
+    }
+
+    /// Quit clears the history when the saved "clear on quit" choice is on, then waits for the queued writes so the
+    /// last capture or deletion is on disk before the process ends.
+    func applicationWillTerminate(_ notification: Notification) {
+        if settings.clearHistoryOnQuit { HistoryClearing.clear() }
+        History.flushWrites()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

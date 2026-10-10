@@ -44,6 +44,8 @@ final class StatusPanelModel: ObservableObject {
         screen = .main
         query = ""
         history.query = ""
+        // A highlight from an earlier visit must not survive: the list may have changed since.
+        selection = nil
         history.refresh()
         history.pruneExpired()
     }

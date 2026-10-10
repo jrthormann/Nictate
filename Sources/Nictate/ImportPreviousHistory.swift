@@ -38,14 +38,15 @@ enum ImportPreviousHistory {
         let legacy = LegacyHistoryMigration.legacyURL
         let destination = JSONHistoryStore(fileURL: JSONHistoryStore.standardURL)
         Task { @MainActor in
+            History.shared.beginImport()
             let outcome = await History.performFileWork {
                 LegacyHistoryMigration.run(legacy: legacy, destination: destination) { try LegacyHistoryKeychain.existingKey() }
             }
-            report(outcome)
             if case .imported = outcome {
                 UserDefaults.standard.set(true, forKey: StorageKeys.legacyHistoryImported)
-                History.shared.reloadFromFile()
             }
+            History.shared.endImport()
+            report(outcome)
             finished()
         }
     }

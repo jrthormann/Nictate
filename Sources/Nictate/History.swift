@@ -138,6 +138,19 @@ final class History: ObservableObject {
         }
     }
 
+    /// Holds History still while an import rewrites the file. Until `endImport`, captures are not kept (the clipboard
+    /// copy still happens), so no save built from the older list can overwrite the merged file.
+    func beginImport() {
+        loadInFlight = true
+        state = .loading
+    }
+
+    /// Ends the hold and reads the file, which now holds whatever the import wrote.
+    func endImport() {
+        loadInFlight = false
+        reloadFromFile()
+    }
+
     /// Reads the file again, after something outside History changed it (an import). Captures are then shown as
     /// the file holds them.
     func reloadFromFile() {

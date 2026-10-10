@@ -70,7 +70,11 @@ enum HistoryClearing {
         let count = history.items.count
         guard HistoryDeletion.asksOnSwitchOff(savedCount: count) else { return }
         let answer = HistoryDeletion.Answer(response: run(switchOffAlert(savedCount: count)))
-        if answer == .cancel { settings.historyEnabled = true }
+        if answer == .cancel {
+            settings.historyEnabled = true
+            // The switch went off with refresh; turning it back on must load the history again.
+            history.refresh()
+        }
         if HistoryDeletion.clearsOnSwitchOff(savedCount: count, answer: answer) { clear(history) }
         // Keep Captures stops saving and deletes nothing; the switch stays off.
     }
