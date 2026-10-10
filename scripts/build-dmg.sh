@@ -72,9 +72,13 @@ PLIST="$APP/Contents/Info.plist"
     || fail "the built app's build number is not $BUILD_NUMBER"
 
 # An ad-hoc signature changes with every build, so macOS would ask for Screen Recording again after each update.
-SIGNING="$(codesign -dv "$APP" 2>&1 || true)"
-if [[ "$SIGNING" == *"Signature=adhoc"* || "$SIGNING" != *"Authority=$SIGN_NAME"* ]]; then
-    fail "$APP is not signed with \"$SIGN_NAME\"; run make setup, then build again so the local identity signs it"
+# The Authority lines are printed only at -dvv.
+SIGNING="$(codesign -dvv "$APP" 2>&1 || true)"
+if [[ "$SIGNING" == *"Signature=adhoc"* ]]; then
+    fail "$APP is signed ad hoc; run make setup, then build again so the local identity signs it"
+fi
+if [[ "$SIGNING" != *"Authority=$SIGN_NAME"* ]]; then
+    fail "$APP is not signed with \"$SIGN_NAME\"; the release must use that identity"
 fi
 
 STAGING="$WORK/staging"
