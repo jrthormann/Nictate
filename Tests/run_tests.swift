@@ -91,7 +91,7 @@ final class ScriptedStore: HistoryStore, @unchecked Sendable {
 }
 
 /// Saving is on for the history these tests build; the setting itself is not read.
-let alwaysSaving: () -> Bool = { true }
+let alwaysSaving: @Sendable () -> Bool = { true }
 
 /// A history file of its own under the test folder. Each call is a new file, so tests never share one.
 func sealedStore(_ tag: String) -> JSONHistoryStore {
