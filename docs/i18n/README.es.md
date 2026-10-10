@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Gratis y de código abierto. Funciona en macOS 14 o posterior.
+  Una utilidad independiente y de código abierto para macOS, hecha para que el texto de tu pantalla sea utilizable.
   <br>
   <a href="https://github.com/jrthormann/Nictate/releases">Descargar&nbsp;&rsaquo;</a>
   &nbsp;&nbsp;
@@ -93,7 +93,7 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 
 | | |
 |:--|:--|
-| **Compatibilidad** | macOS 14 Sonoma o posterior, en Apple silicon e Intel. Diseñada para macOS 27. |
+| **Compatibilidad** | Hecha para macOS. Versión mínima de despliegue: macOS 14 Sonoma, en Apple silicon e Intel. Probada por el autor en macOS 27. |
 | **Tamaño** | Unos 4 MB |
 | **Idiomas** | Inglés y español. El texto se reconoce en cualquier idioma que Vision admita. |
 | **Hecha con** | Swift, AppKit, SwiftUI, Vision y ScreenCaptureKit |
@@ -105,17 +105,17 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 
 ## Estado
 
-Nictate 1.0.0-beta.2 es una versión de prueba pública. Funciona, y la probé en macOS 27. Todavía no la he probado en
+Nictate 1.0.0-beta.2 es una beta pública experimental. Funciona, y la probé en macOS 27. Todavía no la he probado en
 macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son bienvenidos. El
-[CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no.
+[CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no. Nictate empezó como un proyecto personal, y esta beta muestra si es útil para otras personas.
 
 Si tienes la 1.0.0-beta.1, descarga la beta.2 desde la página de [Releases](https://github.com/jrthormann/Nictate/releases). La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no encuentra la beta.2.
 
 ## Instalación
 
-Descarga la imagen de disco de la [página de versiones](https://github.com/jrthormann/Nictate/releases), ábrela y arrastra Nictate a Aplicaciones.
-Nictate está firmada con un certificado local y no está notarizada, así que macOS te pide una vez que confirmes que
-quieres abrirla:
+Descarga la imagen de disco de la [página de versiones](https://github.com/jrthormann/Nictate/releases), ábrela y arrastra Nictate a Aplicaciones. Cada versión indica la suma SHA-256 de la imagen.
+
+Nictate es un proyecto independiente. Está firmada con un certificado local, no con un certificado Apple Developer ID, y Apple no la ha notarizado. macOS puede bloquear la primera apertura con una advertencia. Es lo esperado en esta beta experimental. Para abrir Nictate, usa los controles del propio sistema:
 
 - **macOS 15 o posterior:** abre Ajustes del Sistema, ve a **Privacidad y seguridad** y pulsa **Abrir igualmente** junto al aviso sobre Nictate.
 - **macOS 14:** haz clic con Control en Nictate, elige **Abrir** y luego **Abrir** otra vez.

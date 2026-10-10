@@ -42,7 +42,8 @@ From beta.2 on, Check for Updates offers newer betas and the stable release.
 - VoiceOver and other accessibility behaviour beyond the native labels ([#1](https://github.com/jrthormann/Nictate/issues/1)).
 
 ### Known limitations
-- Not signed with an Apple Developer ID and not notarized. macOS asks you to confirm the app once; see the README.
+- Signed with a local certificate, not an Apple Developer ID certificate, and not notarized by Apple. macOS may block the first launch; the README explains how to open it with the system's own controls.
+- Built for macOS 14 and later. The maintainer has tested it on macOS 27 only.
 - History is a plain file of the 15 most recent captures. It is not encrypted separately.
 - Users with an earlier encrypted History can import it once from Settings > General > History.
 

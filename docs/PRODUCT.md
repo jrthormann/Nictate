@@ -2,7 +2,8 @@
 
 > Nictate makes text visible on your screen usable.
 
-This document says what Nictate is for, who it is for, and what it does today. Each requirement is marked as
+Nictate is an independent, open-source macOS utility built to make text on your screen usable. This document says what
+it is for, who it is for, and what it does today. Each requirement is marked as
 implemented, assumed, or an opportunity, so the three are never mixed up. For the code, see
 [ARCHITECTURE.md](ARCHITECTURE.md). For the look and the wording, see [DESIGN.md](DESIGN.md).
 
@@ -108,7 +109,8 @@ A release is ready when all of these hold for the release commit:
 
 1. The `build-and-test` and `macos-14` CI jobs pass.
 2. The manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build, on a Mac the maintainer runs.
-3. The disk image opens on a second Mac after the Gatekeeper step in the README, on macOS 14 and on a later release.
+3. The disk image installs after the Gatekeeper step in the README on the macOS versions the release notes list as tested.
+   A version that was not tested is listed as untested. For an experimental beta, that is a limitation, not a blocker.
 4. The CHANGELOG has a section for the version, and the app reports the same version.
 
 Individual needs have their own checks. For example, "get the text in one step" holds when a two-line sample is
@@ -127,7 +129,8 @@ follows.
 
 **Later (1.1 at the earliest, not committed).**
 
-- Developer ID signing and notarization, if the cost is justified by the users it reaches.
+- Developer ID signing and notarization, once adoption, contributor interest, or demonstrated demand justifies the Apple
+  Developer Program membership.
 - Changes that come from the first reports.
 - Evaluating Swift Package Manager, only if it brings a concrete benefit.
 - More automation for the release process.

@@ -100,7 +100,7 @@ global shortcut (HotKeyManager, Carbon)
 - **Settings UI:** tabs are native grouped Forms (`SettingsForm.swift`), so the system supplies the materials. Rules that faithful mode overrides are dimmed and disabled in the UI, and the engine enforces the same override in `CaptureCoordinator.capture`, so what the screen shows is what runs.
 - **Clipboard privacy:** AppKit has no transient pasteboard type, so the nspasteboard.org convention (`org.nspasteboard.TransientType`) is used. Nictate confirms each copy by reading back its own text. Append mode is the one place it reads the current clipboard text, and it skips text marked concealed or transient.
 - **Deployment target:** macOS 14. `scripts/build-app.sh` passes `-target` so newer APIs are flagged at compile time.
-- **Build:** `scripts/build-app.sh` compiles with `swiftc` once per architecture (`-warnings-as-errors`, `-strict-concurrency=complete`) and joins the results with `lipo`. The app is signed with the hardened runtime and `Sources/Nictate/Resources/Nictate.entitlements`.
+- **Build:** `scripts/build-app.sh` compiles with `swiftc` once per architecture (`-warnings-as-errors`, `-strict-concurrency=complete`) and joins the results with `lipo`. The app is signed with the hardened runtime and `Sources/Nictate/Resources/Nictate.entitlements`, using the local identity. It is not signed with an Apple Developer ID and is not notarized.
 - **Sandbox:** the entitlements enable the App Sandbox and the network client entitlement, which only Check for Updates uses (one request to GitHub's release API when the user asks).
 
 ## Known limits
