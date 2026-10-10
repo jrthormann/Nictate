@@ -5,26 +5,42 @@ import CryptoKit
 import Foundation
 import Security
 
-/// The one-time migration from the encrypted `history.sealed` of earlier versions to `history.json`. Only this file
-/// knows about the old cipher and the Keychain key. Normal operation never reads either. The migration never deletes
-/// or changes the old file, never creates a key, and never replaces a History that is already valid.
+/// The explicit, one-time import of the encrypted `history.sealed` written by earlier versions. Only this file knows
+/// about the old cipher and the Keychain key, and only the user's "Import Previous History…" action runs it. It never
+/// deletes or changes the old file, never creates a key, and never replaces captures it cannot read.
 enum LegacyHistoryMigration {
     enum Outcome: Equatable {
-        case noLegacyFile
-        case alreadyMigrated
-        case migrated(count: Int)
-        /// Nothing was written. `reason` is for the log, not for the user interface.
+        /// The captures were imported and read back. `dropped` counts captures removed to keep the 15-capture limit.
+        case imported(count: Int, dropped: Int)
+        /// The user (or macOS, for the Keychain prompt) cancelled. Nothing was written.
+        case cancelled
+        /// Nothing was written. `reason` is for the log, never for the interface.
         case failed(reason: String)
     }
 
-    /// Runs the migration. `key` returns the old key without creating one; it may throw when the Keychain refuses.
+    /// The old file, next to the new one in Application Support, in the folder this build uses.
+    static var legacyURL: URL {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return folder.appendingPathComponent(BuildIdentity.historyFolderName, isDirectory: true)
+            .appendingPathComponent("history.sealed")
+    }
+
+    /// Whether the import can be offered: an old file is present, and this build is allowed to read the old key.
+    static var isOffered: Bool {
+        BuildIdentity.supportsLegacyImport && FileManager.default.fileExists(atPath: legacyURL.path)
+    }
+
+    /// Imports the old captures into `destination`, merged with what it already holds. The result is the newest
+    /// `HistoryPolicy.maximumHistoryEntries` captures of both, without duplicates. `key` returns the old key without
+    /// creating one; it throws when the Keychain refuses or cancels.
     static func run(legacy: URL, destination: JSONHistoryStore, key: () throws -> SymmetricKey) -> Outcome {
-        guard FileManager.default.fileExists(atPath: legacy.path) else { return .noLegacyFile }
-        if case .loaded = destination.load() { return .alreadyMigrated }
         guard let sealed = try? Data(contentsOf: legacy) else { return .failed(reason: "legacy file unreadable") }
         let symmetric: SymmetricKey
         do {
             symmetric = try key()
+        } catch LegacyHistoryKeychain.Failure.status(let status) where status == errSecUserCanceled {
+            return .cancelled
         } catch {
             return .failed(reason: "legacy key unavailable: \(error)")
         }
@@ -33,27 +49,39 @@ enum LegacyHistoryMigration {
               old.texts.count == old.dates.count else {
             return .failed(reason: "legacy file could not be decrypted and decoded")
         }
-        let kept = sorted(old).capped()
+        // Captures already in the new History are kept. A History that cannot be read is never replaced.
+        let current: HistorySnapshot
+        switch destination.load() {
+        case .empty: current = .empty
+        case .loaded(let snapshot): current = snapshot
+        case .corrupt, .unavailable: return .failed(reason: "new history could not be read; it was left unchanged")
+        }
+        let merged = merge(current: current, imported: old)
+        let kept = merged.capped()
+        let dropped = merged.texts.count - kept.texts.count
         guard destination.save(kept) else { return .failed(reason: "new file could not be written") }
-        // Read the new file back and confirm it holds what was expected before the migration counts as done.
+        // Read the new file back and confirm it holds exactly what was intended.
         guard case .loaded(let check) = destination.load(), check == kept else {
             return .failed(reason: "new file did not read back as written")
         }
-        return .migrated(count: kept.texts.count)
+        return .imported(count: kept.texts.count, dropped: dropped)
     }
 
-    /// Newest first by capture time. Entries with unknown times keep their stored order, after the known ones.
-    static func sorted(_ snapshot: HistorySnapshot) -> HistorySnapshot {
-        let indexed = snapshot.texts.indices.map { ($0, snapshot.texts[$0], snapshot.dates[$0]) }
-        let ordered = indexed.sorted { lhs, rhs in
-            if lhs.2 != rhs.2 { return lhs.2 > rhs.2 }
-            return lhs.0 < rhs.0
+    /// Both sets, newest first, each text once. For a text in both, the newer capture time is kept.
+    static func merge(current: HistorySnapshot, imported: HistorySnapshot) -> HistorySnapshot {
+        var newest: [String: Double] = [:]
+        for (text, date) in zip(current.texts + imported.texts, current.dates + imported.dates) {
+            newest[text] = max(newest[text] ?? date, date)
         }
-        return HistorySnapshot(texts: ordered.map(\.1), dates: ordered.map(\.2))
+        let ordered = newest.sorted { lhs, rhs in
+            if lhs.value != rhs.value { return lhs.value > rhs.value }
+            return lhs.key < rhs.key
+        }
+        return HistorySnapshot(texts: ordered.map(\.key), dates: ordered.map(\.value))
     }
 }
 
-/// The old AES-GCM format. Kept only so the migration can read it, and so tests can make fixtures.
+/// The old AES-GCM format. Kept only so the import can read it, and so tests can make fixtures.
 enum LegacyHistoryCipher {
     static func seal(_ plain: Data, key: SymmetricKey) throws -> Data {
         guard let combined = try AES.GCM.seal(plain, using: key).combined else { throw CocoaError(.coderInvalidValue) }

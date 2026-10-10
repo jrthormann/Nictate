@@ -6,6 +6,8 @@
 // This build never touches the production history file.
 enum BuildIdentity {
     static let isTestVariant = true
+    /// The QA build never reads the production Keychain key, so it offers no import of the old history.
+    static let supportsLegacyImport = false
     static let historyFolderName = "Nictate Test"
     /// Representative OCR captures: code with indentation, a table, links, contacts, accents, a long paragraph.
     static let historyFixtures: [String] = [

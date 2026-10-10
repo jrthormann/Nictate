@@ -53,6 +53,8 @@ enum StorageKeys {
     static let historyDefaultApplied = "historyDefaultApplied"
     /// Whether Recognition’s Advanced section is open (a UI state, not a recognition setting).
     static let advancedRecognitionExpanded = "advancedRecognitionExpanded"
+    /// Set once the earlier encrypted history has been imported and read back. Hides the import action.
+    static let legacyHistoryImported = "legacyHistoryImported"
 
     /// Every key of `Settings`.
     static let settings = [

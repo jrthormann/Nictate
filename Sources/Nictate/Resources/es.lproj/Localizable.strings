@@ -217,3 +217,12 @@
 "Startup" = "Inicio";
 "Text Recognition" = "Reconocimiento de texto";
 "Reset…" = "Restablecer…";
+"Couldn't import your previous history. Your original data has not been changed." = "No se pudo importar tu historial anterior. Tus datos originales no se han modificado.";
+"Earlier versions of Nictate encrypted their history with a key in your Keychain. macOS may ask once for permission to read that key. The 15 most recent captures are imported into the new History, which stores them on this Mac without additional encryption. Your original file and Keychain item are not changed." = "Las versiones anteriores de Nictate cifraban su historial con una clave guardada en tu llavero. macOS puede pedir permiso una vez para leer esa clave. Las 15 capturas más recientes se importan al nuevo historial, que las guarda en este Mac sin cifrado adicional. Tu archivo original y el elemento del llavero no se modifican.";
+"Import" = "Importar";
+"Import Previous History?" = "¿Importar historial anterior?";
+"Import Previous History…" = "Importar historial anterior…";
+"Import canceled. Nothing was changed." = "Importación cancelada. No se ha cambiado nada.";
+"Import captures saved by an earlier version of Nictate." = "Importa capturas guardadas en una versión anterior de Nictate.";
+"Previous history imported." = "Historial anterior importado.";
+"Your current captures are kept. If the total is more than 15, the oldest are removed." = "Tus capturas actuales se conservan. Si el total supera 15, se eliminan las más antiguas.";

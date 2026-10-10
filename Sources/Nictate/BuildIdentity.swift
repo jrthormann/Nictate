@@ -6,6 +6,8 @@
 /// place, with its own bundle identifier, history folder and fixtures. Nothing else differs.
 enum BuildIdentity {
     static let isTestVariant = false
+    /// Whether this build may import the encrypted history of earlier versions (reads the old Keychain key).
+    static let supportsLegacyImport = true
     /// The folder under Application Support that holds `history.json`.
     static let historyFolderName = "Nictate"
     /// Captures added on the first launch of a test build, so the History screen can be checked. Empty here.

@@ -23,6 +23,8 @@ struct GeneralTab: View {
     @ObservedObject private var login = LoginItem.shared
     @ObservedObject private var history = History.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Shown only while an earlier encrypted history is on this Mac and has not been imported yet.
+    @StateObject private var legacyImport = LegacyImportState()
 
     var body: some View {
         SettingsPage {
@@ -35,6 +37,14 @@ struct GeneralTab: View {
 
             SettingsSection("History") {
                 SettingToggle("Save Captures", isOn: keepHistory.animated(reduceMotion: reduceMotion))
+                if legacyImport.available {
+                    SettingRow("Import Previous History…") {
+                        Button("Import Previous History…") {
+                            ImportPreviousHistory.confirmAndRun { legacyImport.refresh() }
+                        }
+                    }
+                    SettingCaption("Import captures saved by an earlier version of Nictate.")
+                }
                 if HistoryDeletion.showsClearControl(historyEnabled: settings.historyEnabled, savedCount: history.items.count) {
                     SettingRow("Saved captures") {
                         Button("Clear History…") { HistoryClearing.confirmClear() }

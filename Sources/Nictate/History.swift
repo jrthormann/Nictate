@@ -123,6 +123,22 @@ final class History: ObservableObject {
         }
     }
 
+    /// Runs file work on the same serial queue as the writes, so an import never races a capture being saved.
+    static func performFileWork<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+            io.async { continuation.resume(returning: work()) }
+        }
+    }
+
+    /// Reads the file again, after something outside History changed it (an import). Captures are then shown as
+    /// the file holds them.
+    func reloadFromFile() {
+        guard !loadInFlight else { return }
+        loadInFlight = true
+        state = .loading
+        Task { await reload() }
+    }
+
     /// Waits until every queued write has finished and its result has been published. Tests use it before they
     /// look at the history or the file.
     static func flushWrites() {

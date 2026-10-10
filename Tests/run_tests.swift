@@ -1590,7 +1590,8 @@ do {
     check(duplicate.items == ["same"], "limit: a repeated capture moves to the front rather than duplicating")
 }
 
-// Migration from the encrypted history.sealed of earlier versions: one-time, non-destructive, verified.
+// Import of the encrypted history.sealed of earlier versions: explicit, merged with what the new History holds,
+// verified by reading back, and never destructive. Every file here is a disposable fixture.
 do {
     let fixtureKey = SymmetricKey(data: Data(repeating: 7, count: 32))
     let legacyURL = testPreferences.appendingPathComponent("legacy-\(UUID().uuidString).sealed")
@@ -1598,51 +1599,64 @@ do {
         let plain = (try? JSONEncoder().encode(snapshot)) ?? Data()
         try? ((try? LegacyHistoryCipher.seal(plain, key: fixtureKey)) ?? Data()).write(to: legacyURL)
     }
-    func destination() -> JSONHistoryStore { sealedStore("migrated") }
+    func destination() -> JSONHistoryStore { sealedStore("imported") }
 
-    let none = destination()
-    check(LegacyHistoryMigration.run(legacy: testPreferences.appendingPathComponent("absent.sealed"), destination: none,
-                                     key: { fixtureKey }) == .noLegacyFile, "migration: no legacy file, nothing to do")
+    let absent = LegacyHistoryMigration.run(legacy: testPreferences.appendingPathComponent("absent.sealed"),
+                                            destination: destination(), key: { fixtureKey })
+    if case .failed = absent {} else { check(false, "import: a missing legacy file writes nothing") }
 
     let legacy = HistorySnapshot(texts: ["second", "first"], dates: [2_000, 1_000])
     writeLegacy(legacy)
     let legacyBytes = (try? Data(contentsOf: legacyURL)) ?? Data()
-    let valid = destination()
-    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: valid, key: { fixtureKey }) == .migrated(count: 2),
-          "migration: a valid legacy file is migrated")
-    check(valid.load() == .loaded(legacy), "migration: the migrated history reads back exactly, newest first")
-    check((try? Data(contentsOf: legacyURL)) == legacyBytes, "migration: the encrypted file is left byte for byte unchanged")
-    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: valid, key: { fixtureKey }) == .alreadyMigrated,
-          "migration: a valid history.json is never replaced by a second migration")
+    let fresh = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: fresh, key: { fixtureKey }) == .imported(count: 2, dropped: 0),
+          "import: a valid legacy file is imported")
+    check(fresh.load() == .loaded(legacy), "import: the imported history reads back exactly, newest first")
+    check((try? Data(contentsOf: legacyURL)) == legacyBytes, "import: the encrypted file is left byte for byte unchanged")
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: fresh, key: { fixtureKey }) == .imported(count: 2, dropped: 0)
+          && fresh.load() == .loaded(legacy),
+          "import: importing the same file again adds nothing and duplicates nothing")
+
+    let current = destination()
+    _ = current.save(HistorySnapshot(texts: ["now"], dates: [9_000]))
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: current, key: { fixtureKey }) == .imported(count: 3, dropped: 0)
+          && current.load() == .loaded(HistorySnapshot(texts: ["now", "second", "first"], dates: [9_000, 2_000, 1_000])),
+          "import: captures already in the new History are kept and merged, newest first")
 
     let big = (0..<20).map { "old \($0)" }
     writeLegacy(HistorySnapshot(texts: big, dates: (0..<20).map { Double(5_000 - $0) }))
     let capped = destination()
-    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: capped, key: { fixtureKey }) == .migrated(count: 15),
-          "migration: more than 15 legacy captures migrate only the newest 15")
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: capped, key: { fixtureKey }) == .imported(count: 15, dropped: 5),
+          "import: more than 15 legacy captures import only the newest 15")
     if case .loaded(let got) = capped.load() {
-        check(got.texts == Array(big.prefix(15)), "migration: the 15 kept are the newest, in order")
+        check(got.texts == Array(big.prefix(15)), "import: the 15 kept are the newest, in order")
     }
 
     let missingKey = destination()
     let outcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: missingKey, key: { throw LegacyHistoryKeychain.Failure.status(errSecItemNotFound) })
-    check(outcome != .migrated(count: 15) && missingKey.load() == .empty,
-          "migration: a missing key writes nothing and the legacy file stays", "\(outcome)")
+    check(outcome != .imported(count: 15, dropped: 5) && missingKey.load() == .empty,
+          "import: a missing key writes nothing and the legacy file stays", "\(outcome)")
     let cancelled = destination()
-    let cancelledOutcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: cancelled, key: { throw LegacyHistoryKeychain.Failure.status(errSecUserCanceled) })
-    check(cancelledOutcome != .migrated(count: 15) && cancelled.load() == .empty,
-          "migration: a cancelled authorization writes nothing; the legacy file is kept")
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: cancelled, key: { throw LegacyHistoryKeychain.Failure.status(errSecUserCanceled) }) == .cancelled
+          && cancelled.load() == .empty,
+          "import: a cancelled authorization writes nothing and reports cancelled")
     let wrongKey = destination()
     let wrongOutcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: wrongKey, key: { SymmetricKey(data: Data(repeating: 1, count: 32)) })
-    check(wrongOutcome != .migrated(count: 15) && wrongKey.load() == .empty,
-          "migration: a decryption failure writes nothing", "\(wrongOutcome)")
+    check(wrongOutcome != .imported(count: 15, dropped: 5) && wrongKey.load() == .empty,
+          "import: a decryption failure writes nothing", "\(wrongOutcome)")
 
-    // Restart after migration: the JSON file is read without touching the key again.
+    let unreadable = sealedStore("import-unreadable")
+    try? "not json".data(using: .utf8)?.write(to: unreadable.fileURL)
+    writeLegacy(legacy)
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: unreadable, key: { fixtureKey }) != .imported(count: 2, dropped: 0)
+          && ((try? Data(contentsOf: unreadable.fileURL)) ?? Data()) == "not json".data(using: .utf8),
+          "import: an unreadable new History is never replaced")
+
     let restarted = destination()
     _ = LegacyHistoryMigration.run(legacy: legacyURL, destination: restarted, key: { fixtureKey })
     let afterRestart = History(store: restarted, retention: { .never })
-    check(afterRestart.items == Array(big.prefix(15)) && afterRestart.state == .available,
-          "migration: after migration the history reads back from history.json on restart")
+    check(afterRestart.items == ["second", "first"] && afterRestart.state == .available,
+          "import: after the import the history reads back from history.json on restart")
 }
 
 // Keep History: off for new installs, kept on for an install that already had the app set up, and no new capture
