@@ -113,6 +113,16 @@ final class History: ObservableObject {
         apply(result)
     }
 
+    /// Test variant only: fills an empty history with the fixtures, through the normal encrypted write path, newest
+    /// first as listed. Does nothing once the history has anything in it, so a restart does not add them again.
+    func seedFixtures(_ texts: [String]) {
+        guard state == .available, items.isEmpty else { return }
+        let now = Date()
+        for (offset, text) in texts.enumerated().reversed() {
+            add(text, at: now.addingTimeInterval(-Double(offset) * 300))
+        }
+    }
+
     /// Waits until every queued write has finished and its result has been published. Tests use it before they
     /// look at the history or the file.
     static func flushWrites() {

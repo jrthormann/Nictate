@@ -45,7 +45,7 @@ struct EncryptedHistoryStore: HistoryStore, Sendable {
     static var standardURL: URL {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return folder.appendingPathComponent("Nictate", isDirectory: true).appendingPathComponent("history.sealed")
+        return folder.appendingPathComponent(BuildIdentity.historyFolderName, isDirectory: true).appendingPathComponent("history.sealed")
     }
 
     func load() -> HistoryLoad {
@@ -98,7 +98,7 @@ enum HistoryCipher {
 enum HistoryKeychain {
     enum Failure: Error { case status(OSStatus), malformed }
 
-    private static let service = "app.nictate.history"
+    private static var service: String { BuildIdentity.keychainService }
     private static let account = "history-key"
 
     /// The stored key. Without `mayCreate` a missing key is an error, never a new key: a new key could not open

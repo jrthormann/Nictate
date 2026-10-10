@@ -20,6 +20,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let loading = History.shared.refresh()
         Task { @MainActor in
             await loading?.value
+            if BuildIdentity.isTestVariant {
+                Log.app.info("Test variant: history file \(EncryptedHistoryStore.standardURL.path, privacy: .public), key service \(BuildIdentity.keychainService, privacy: .public)")
+                History.shared.seedFixtures(BuildIdentity.historyFixtures)
+            }
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
                 HistoryClearing.clear()
             }
