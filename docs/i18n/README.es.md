@@ -75,8 +75,7 @@ normal nunca dispara una captura por error. Un atajo solo para códigos es opcio
 
 ## Privado por diseño.
 
-Sin cuenta. Sin analíticas. Tus capturas se guardan cifradas en tu Mac, con la clave en tu llavero de inicio de
-sesión. Nictate no hace peticiones de red por su cuenta, salvo Comprobar actualizaciones, que solo se ejecuta cuando lo pides. Un enlace que elijas abrir se entrega a tu navegador, que se conecta como lo haría normalmente.
+Sin cuenta. Sin analíticas. Tu historial es un archivo en tu Mac, sin cifrado adicional, con las 15 capturas más recientes. Puedes desactivarlo o borrarlo cuando quieras. Nictate no hace peticiones de red por su cuenta, salvo Comprobar actualizaciones, que solo se ejecuta cuando lo pides. Un enlace que elijas abrir se entrega a tu navegador, que se conecta como lo haría normalmente.
 
 <br>
 

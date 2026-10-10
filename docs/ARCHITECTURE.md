@@ -23,7 +23,7 @@ global hotkey (HotKeyManager, Carbon)
 | File | Responsibility |
 | --- | --- |
 | `main.swift` | Entry point: creates the `AppDelegate` and runs the application. |
-| `AppDelegate.swift` | Launch sequence (history expiry), Dock policy, global shortcuts and the alert for a shortcut the system refuses. |
+| `AppDelegate.swift` | Launch sequence (background history load), Dock policy, global shortcuts and the alert for a shortcut the system refuses. |
 | `StatusItemController.swift` | The menu bar item: icon, tooltip and VoiceOver label (in step with Append mode), the capture cue and the VoiceOver announcement. |
 | `CaptureCoordinator.swift` | One capture from selection to output: recognition off the main thread, then clipboard, history and feedback. Also rotates the history and holds the latest capture's detections. |
 | `MenuController.swift` | The status item's menu, rebuilt each time it opens. |
@@ -35,8 +35,9 @@ global hotkey (HotKeyManager, Carbon)
 | `Settings.swift` | `ObservableObject` over `UserDefaults`; shortcut helpers. |
 | `Updates.swift` | Check for Updates: one request to GitHub's latest-release API, only on the user's click; version order and the accepted release pages are unit tested. |
 | `ResetNictate.swift` | Reset Nictate: confirmation, then settings and captures are cleared and the app relaunches. |
-| `History.swift` / `HistoryView.swift` | Capture history (texts and capture times, kept aligned, with optional expiry) and its searchable window: Return copies, Command-F searches. Unit tested. |
-| `HistoryStore.swift` | The history as one AES-GCM sealed file; the 256-bit key lives in the login Keychain (file-based, not the data protection Keychain). Tampering and a locked key are handled as separate cases. Unit tested except the Keychain itself. |
+| `History.swift` / `HistoryView.swift` | Capture history (texts and capture times, kept aligned), at most `HistoryPolicy.maximumHistoryEntries` (15), and its searchable window: Return copies, Command-F searches. Unit tested. |
+| `HistoryStore.swift` | The history as `history.json` in Application Support, written atomically and read back before a write counts as saved. No Keychain and no encryption of its own. Unit tested. |
+| `LegacyHistoryMigration.swift` / `ImportPreviousHistory.swift` | The one explicit import of an earlier encrypted `history.sealed`, the only code that reads the old Keychain key. Merged with current captures; the old file is never changed. Unit tested with fixtures. |
 | `PreferencesController.swift` | Settings window: toolbar tabs (`GeneralTab`, `RecognitionTab`, `OutputTab`); the window resizes to each tab, capped at 80% of the screen. |
 | `SettingsForm.swift` | Shared Settings components on a native grouped Form: sections, toggles, rows, captions, and the `dimmed(when:)` modifier. |
 | `ShortcutRecorder.swift` | Click-to-record shortcut control. |

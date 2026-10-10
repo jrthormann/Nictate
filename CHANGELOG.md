@@ -13,9 +13,9 @@ First release of Nictate.
 - **Precise selection.** The area snaps to whole screen pixels. Arrow keys move the corner one pixel at a time, Shift with an arrow ten.
 - **Codes.** QR codes and barcodes copy their content. Links from a code can be copied only, or confirmed before opening.
 - **Detected content.** Colors, links, emails and phone numbers from the last capture are in the menu.
-- **History.** Searchable, optionally expiring, and encrypted with AES-GCM; the key is in your login Keychain.
-- **Cycle History** through recent captures with its own shortcut, and **Append mode** to collect several captures in one paste.
-- **Private captures.** With the option on, captures stay off Universal Clipboard, Handoff and clipboard managers.
+- **History.** The 15 most recent captures, searchable, with one-click copy. Saved on your Mac without additional encryption; turn it off or clear it in Settings.
+- **Cycle History** through recent captures with its own shortcut, and **Append to Clipboard** to collect several captures in one paste.
+- **Private Clipboard.** With the option on, Nictate asks Universal Clipboard, Handoff and clipboard managers to skip each capture, where macOS supports it. Other apps may still store what you copy.
 - **Check for Updates** asks GitHub for the latest release, only when you choose it.
-- **Reset Nictate** returns settings to their defaults and deletes saved captures.
+- **Reset Settings** returns settings to their defaults. Saved captures are kept unless you also choose to delete them.
 - English and Spanish interface.

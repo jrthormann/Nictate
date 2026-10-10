@@ -73,7 +73,7 @@ ordinary typing is never captured by mistake. A shortcut for codes alone is opti
 
 ## Private by design.
 
-No account. No analytics. Your captures are stored encrypted on your Mac, with the key in your login Keychain.
+No account. No analytics. Your History is a plain file on your Mac, holding the 15 most recent captures. Nictate adds no encryption of its own, so turn History off or clear it whenever you like.
 Nictate makes no network requests of its own, except Check for Updates, which runs only when you ask it to.
 A link you choose to open is handed to your browser, which then connects as it normally would.
 
