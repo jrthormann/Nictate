@@ -62,6 +62,12 @@ on a Mac. Use the QA build (`make test-app`), so your own captures and history a
 
 Interface strings are in `Sources/Nictate/Resources/<language>.lproj/Localizable.strings`. Every key must exist in every language. `make strings` checks that.
 
+## Security and conduct
+
+Report a security problem privately, through the [Security tab](https://github.com/jrthormann/Nictate/security), as
+described in [SECURITY.md](SECURITY.md). Everyone taking part is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Latest release
 
 The current public test release is listed at [Releases](https://github.com/jrthormann/Nictate/releases). Test it, and tell us what you find.

@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/jrthormann/Nictate/security
+    about: Report it privately through the Security tab. Please don't open a public issue for a security problem.
