@@ -64,13 +64,14 @@ struct GeneralTab: View {
                     }
                     SettingRow("Captures in rotation") {
                         Picker("Captures in rotation", selection: $settings.rotationDepth) {
-                            ForEach([5, 10, 20, 50], id: \.self) { Text(verbatim: String($0)).tag($0) }
+                            ForEach([5, 10, HistoryPolicy.maximumHistoryEntries], id: \.self) { Text(verbatim: String($0)).tag($0) }
                         }
                         .labelsHidden()
                         .fixedSize()
                     }
                 }
                 .disclosed(by: settings.historyEnabled)
+                SettingCaption("History stores up to 15 recent text captures locally on your Mac. It is not encrypted separately. You can turn History off or delete saved captures at any time.")
                 if HistoryDeletion.showsClearControl(historyEnabled: settings.historyEnabled, savedCount: history.items.count) {
                     SettingRow("Saved captures") {
                         Button("Clear History…") { HistoryClearing.confirmClear() }

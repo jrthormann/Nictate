@@ -57,10 +57,42 @@ struct TestSuite {
     func wipe() { defaults.removePersistentDomain(forName: name) }
 }
 var testSuites: [TestSuite] = []
-/// A sealed history file of its own under the test folder, with a fixed key.
-func sealedStore(_ tag: String) -> EncryptedHistoryStore {
-    EncryptedHistoryStore(fileURL: testPreferences.appendingPathComponent("\(tag)-\(UUID().uuidString).sealed"),
-                          key: { _ in SymmetricKey(data: Data(repeating: 9, count: 32)) })
+/// Runs an async History call to completion from the test's main thread.
+@MainActor func settle(_ work: @escaping @MainActor () async -> Void) {
+    var finished = false
+    Task { await work(); finished = true }
+    while !finished { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+}
+
+/// A store whose answers the test scripts: each load returns the next scripted result, and saves are counted.
+/// Only the test's main thread changes it, and only after the I/O queue has been flushed.
+final class ScriptedStore: HistoryStore, @unchecked Sendable {
+    var answers: [HistoryLoad]
+    var saved: HistorySnapshot?
+    var loads = 0
+    var saves = 0
+    /// False makes every write fail, as a full disk would.
+    var writesSucceed = true
+    init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
+        self.answers = answers
+        self.saved = saved
+    }
+    func load() -> HistoryLoad {
+        loads += 1
+        guard answers.count > 1 else { return answers.first ?? .unavailable }
+        return answers.removeFirst()
+    }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        saves += 1
+        guard writesSucceed else { return false }
+        saved = snapshot
+        return true
+    }
+}
+
+/// A history file of its own under the test folder. Each call is a new file, so tests never share one.
+func sealedStore(_ tag: String) -> JSONHistoryStore {
+    JSONHistoryStore(fileURL: testPreferences.appendingPathComponent("\(tag)-\(UUID().uuidString).json"))
 }
 @MainActor
 func freshSuite(_ tag: String) -> TestSuite {
@@ -369,7 +401,7 @@ do {
         ("a link in a code is copied", prefs.barcodeAction == "copy"),
         ("content detection is on", prefs.detectContent),
         ("captures are offered to clipboard managers", !prefs.hideFromClipboardManagers),
-        ("history is on", prefs.historyEnabled),
+        ("history is off for a new install", !prefs.historyEnabled),
         ("history is kept on quit", !prefs.clearHistoryOnQuit),
         ("a new install keeps captures for 7 days", prefs.historyRetention == .week),
     ]
@@ -391,7 +423,7 @@ do {
     prefs.detectContent = false; prefs.hideFromClipboardManagers = true
     prefs.historyEnabled = false; prefs.clearHistoryOnQuit = true; prefs.historyRetention = .day
     let written = Set(suite.defaults.persistentDomain(forName: suite.name)?.keys.map { $0 } ?? [])
-    check(written == Set(StorageKeys.settings), "storage: every setting is written under a listed key, and every listed key belongs to a setting",
+    check(written.subtracting([StorageKeys.historyDefaultApplied]) == Set(StorageKeys.settings), "storage: every setting is written under a listed key, and every listed key belongs to a setting",
           "\(written.symmetricDifference(StorageKeys.settings).sorted())")
     let back = Settings(defaults: suite.defaults)
     check(back.shortcut(for: .capture)! == (Shortcut(code: 1, mods: cmdKey), "⌘S")
@@ -1419,70 +1451,23 @@ do {
     check(edge.x == 8, "pill: is kept on screen at the left edge", "\(edge)")
 }
 
-// Sealed history: no readable capture on disk, a wrong key or a changed byte is rejected, a locked key never
-// overwrites the file, and captures from the preferences move into it and the plain copy is removed.
+// History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never
+// overwritten: the history stays unavailable until the file can be read again.
 do {
-    let store = sealedStore("sealed")
+    let store = sealedStore("file")
     let history = History(store: store, retention: { .never })
-    history.add("secret phrase quartz", at: Date(timeIntervalSince1970: 1_000))
+    history.add("kept across restarts", at: Date(timeIntervalSince1970: 1_000))
     History.flushWrites()
-    let bytes = (try? Data(contentsOf: store.fileURL)) ?? Data()
-    check(!bytes.isEmpty && bytes.range(of: Data("secret phrase quartz".utf8)) == nil, "sealed: the file holds no readable capture")
-    check(History(store: store, retention: { .never }).items == ["secret phrase quartz"], "sealed: captures open again with the same key")
+    check(History(store: store, retention: { .never }).items == ["kept across restarts"], "file: captures are read back after a restart")
 
-    let locked = EncryptedHistoryStore(fileURL: store.fileURL, key: { _ in throw CocoaError(.fileReadNoPermission) })
-    let blocked = History(store: locked, retention: { .never })
-    blocked.add("not written")
-    History.flushWrites()
-    check(blocked.items.isEmpty && blocked.state == .unavailable && History(store: store, retention: { .never }).items == ["secret phrase quartz"],
-          "sealed: with the key locked, nothing is kept or written and the file is kept")
-
-    let wrong = EncryptedHistoryStore(fileURL: store.fileURL, key: { _ in SymmetricKey(data: Data(repeating: 1, count: 32)) })
-    check(History(store: wrong, retention: { .never }).items.isEmpty, "sealed: a wrong key shows nothing")
-
-    var tampered = bytes
-    tampered[tampered.count / 2] ^= 0xFF
-    try? tampered.write(to: store.fileURL)
+    var broken = (try? Data(contentsOf: store.fileURL)) ?? Data()
+    broken.removeLast(5)
+    try? broken.write(to: store.fileURL)
     let rejected = History(store: store, retention: { .never })
-    check(rejected.items.isEmpty, "sealed: a changed byte is rejected and the history starts empty")
-    check(rejected.state == .unavailable, "sealed: a file that cannot be opened leaves the history unavailable")
-    rejected.add("after tamper")
+    check(rejected.items.isEmpty && rejected.state == .unavailable, "file: a truncated file is not shown as an empty history")
+    rejected.add("after damage")
     History.flushWrites()
-    check((try? Data(contentsOf: store.fileURL)) == tampered, "sealed: a file that cannot be opened is never overwritten")
-
-}
-
-/// Runs an async History call to completion from the test's main thread.
-@MainActor func settle(_ work: @escaping @MainActor () async -> Void) {
-    var finished = false
-    Task { await work(); finished = true }
-    while !finished { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
-}
-
-/// A store whose answers the test scripts: each load returns the next scripted result, and saves are counted.
-/// Only the test's main thread changes it, and only after the I/O queue has been flushed.
-final class ScriptedStore: HistoryStore, @unchecked Sendable {
-    var answers: [HistoryLoad]
-    var saved: HistorySnapshot?
-    var loads = 0
-    var saves = 0
-    /// False makes every write fail, as a full disk or a withdrawn key would.
-    var writesSucceed = true
-    init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
-        self.answers = answers
-        self.saved = saved
-    }
-    func load() -> HistoryLoad {
-        loads += 1
-        guard answers.count > 1 else { return answers.first ?? .unavailable }
-        return answers.removeFirst()
-    }
-    func save(_ snapshot: HistorySnapshot) -> Bool {
-        saves += 1
-        guard writesSucceed else { return false }
-        saved = snapshot
-        return true
-    }
+    check((try? Data(contentsOf: store.fileURL)) == broken, "file: a damaged file is never overwritten")
 }
 
 // Sealed history: authorization can be denied, delayed or restored, and none of those states writes over the
@@ -1556,6 +1541,130 @@ do {
     check(launched.loads == 1 && launchedHistory.items == ["old"] && launchedHistory.state == .available,
           "authorization: refresh at launch starts the read, which had been skipped while the state was loading",
           "loads \(launched.loads), state \(launchedHistory.state)")
+}
+
+// The limit: History keeps exactly 15 captures, on disk and on screen, newest first, and the oldest goes when a 16th arrives.
+do {
+    check(HistoryPolicy.maximumHistoryEntries == 15, "limit: the maximum is 15")
+    for count in [0, 1, 14, 15, 16, 100] {
+        let store = sealedStore("limit-\(count)")
+        let history = History(store: store, retention: { .never })
+        for index in 0..<count { history.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+        History.flushWrites()
+        let expected = min(count, 15)
+        let onDisk = History(store: store, retention: { .never }).items
+        check(history.items.count == expected && onDisk.count == expected,
+              "limit: \(count) captures leave \(expected) on screen and on disk", "\(history.items.count), \(onDisk.count)")
+    }
+    let newest = History(store: sealedStore("limit-order"), retention: { .never })
+    for index in 0..<16 { newest.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+    History.flushWrites()
+    check(newest.items.first == "capture 15" && newest.items.last == "capture 1" && !newest.items.contains("capture 0"),
+          "limit: the 16th capture is first and the oldest one is gone", "\(newest.items.first ?? "-") … \(newest.items.last ?? "-")")
+
+    let big = sealedStore("limit-load")
+    let many = HistorySnapshot(texts: (0..<40).map { "stored \($0)" }, dates: (0..<40).map { Double(1_000 - $0) })
+    _ = big.save(many)
+    let loaded = History(store: big, retention: { .never })
+    check(loaded.items.count == 15 && loaded.items.first == "stored 0",
+          "limit: a file with more than 15 entries loads only its newest 15", "\(loaded.items.count)")
+    loaded.remove("stored 0")
+    loaded.add("fresh")
+    History.flushWrites()
+    check(loaded.items.count == 15 && loaded.items.first == "fresh" && !loaded.items.contains("stored 0") && loaded.items.contains("stored 14"),
+          "limit: deleting one and adding another keeps 15, with the newest first")
+    check(History(store: big, retention: { .never }).items.count == 15, "limit: after a restart the file still holds 15")
+
+    let duplicate = History(store: sealedStore("limit-duplicate"), retention: { .never })
+    duplicate.add("same", at: Date(timeIntervalSince1970: 1))
+    duplicate.add("same", at: Date(timeIntervalSince1970: 2))
+    History.flushWrites()
+    check(duplicate.items == ["same"], "limit: a repeated capture moves to the front rather than duplicating")
+}
+
+// Migration from the encrypted history.sealed of earlier versions: one-time, non-destructive, verified.
+do {
+    let fixtureKey = SymmetricKey(data: Data(repeating: 7, count: 32))
+    let legacyURL = testPreferences.appendingPathComponent("legacy-\(UUID().uuidString).sealed")
+    func writeLegacy(_ snapshot: HistorySnapshot) {
+        let plain = (try? JSONEncoder().encode(snapshot)) ?? Data()
+        try? ((try? LegacyHistoryCipher.seal(plain, key: fixtureKey)) ?? Data()).write(to: legacyURL)
+    }
+    func destination() -> JSONHistoryStore { sealedStore("migrated") }
+
+    let none = destination()
+    check(LegacyHistoryMigration.run(legacy: testPreferences.appendingPathComponent("absent.sealed"), destination: none,
+                                     key: { fixtureKey }) == .noLegacyFile, "migration: no legacy file, nothing to do")
+
+    let legacy = HistorySnapshot(texts: ["second", "first"], dates: [2_000, 1_000])
+    writeLegacy(legacy)
+    let legacyBytes = (try? Data(contentsOf: legacyURL)) ?? Data()
+    let valid = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: valid, key: { fixtureKey }) == .migrated(count: 2),
+          "migration: a valid legacy file is migrated")
+    check(valid.load() == .loaded(legacy), "migration: the migrated history reads back exactly, newest first")
+    check((try? Data(contentsOf: legacyURL)) == legacyBytes, "migration: the encrypted file is left byte for byte unchanged")
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: valid, key: { fixtureKey }) == .alreadyMigrated,
+          "migration: a valid history.json is never replaced by a second migration")
+
+    let big = (0..<20).map { "old \($0)" }
+    writeLegacy(HistorySnapshot(texts: big, dates: (0..<20).map { Double(5_000 - $0) }))
+    let capped = destination()
+    check(LegacyHistoryMigration.run(legacy: legacyURL, destination: capped, key: { fixtureKey }) == .migrated(count: 15),
+          "migration: more than 15 legacy captures migrate only the newest 15")
+    if case .loaded(let got) = capped.load() {
+        check(got.texts == Array(big.prefix(15)), "migration: the 15 kept are the newest, in order")
+    }
+
+    let missingKey = destination()
+    let outcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: missingKey, key: { throw LegacyHistoryKeychain.Failure.status(errSecItemNotFound) })
+    check(outcome != .migrated(count: 15) && missingKey.load() == .empty,
+          "migration: a missing key writes nothing and the legacy file stays", "\(outcome)")
+    let cancelled = destination()
+    let cancelledOutcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: cancelled, key: { throw LegacyHistoryKeychain.Failure.status(errSecUserCanceled) })
+    check(cancelledOutcome != .migrated(count: 15) && cancelled.load() == .empty,
+          "migration: a cancelled authorization writes nothing; the legacy file is kept")
+    let wrongKey = destination()
+    let wrongOutcome = LegacyHistoryMigration.run(legacy: legacyURL, destination: wrongKey, key: { SymmetricKey(data: Data(repeating: 1, count: 32)) })
+    check(wrongOutcome != .migrated(count: 15) && wrongKey.load() == .empty,
+          "migration: a decryption failure writes nothing", "\(wrongOutcome)")
+
+    // Restart after migration: the JSON file is read without touching the key again.
+    let restarted = destination()
+    _ = LegacyHistoryMigration.run(legacy: legacyURL, destination: restarted, key: { fixtureKey })
+    let afterRestart = History(store: restarted, retention: { .never })
+    check(afterRestart.items == Array(big.prefix(15)) && afterRestart.state == .available,
+          "migration: after migration the history reads back from history.json on restart")
+}
+
+// Keep History: off for new installs, kept on for an install that already had the app set up, and no new capture
+// is stored while it is off.
+do {
+    let fresh = UserDefaults(suiteName: "nictate-tests-fresh-\(UUID().uuidString)")!
+    _ = Settings(defaults: fresh)
+    check(fresh.bool(forKey: StorageKeys.historyEnabled) == false, "keep history: off for a new install")
+
+    let existing = UserDefaults(suiteName: "nictate-tests-existing-\(UUID().uuidString)")!
+    existing.set(true, forKey: StorageKeys.didOnboard)
+    _ = Settings(defaults: existing)
+    check(existing.bool(forKey: StorageKeys.historyEnabled) == true, "keep history: an existing install keeps it on",
+          "value \(String(describing: existing.object(forKey: StorageKeys.historyEnabled))), applied \(existing.bool(forKey: StorageKeys.historyDefaultApplied)), onboarded \(existing.bool(forKey: StorageKeys.didOnboard))")
+
+    let chosen = UserDefaults(suiteName: "nictate-tests-chosen-\(UUID().uuidString)")!
+    chosen.set(true, forKey: StorageKeys.didOnboard)
+    _ = Settings(defaults: chosen)
+    let chosenSettings = Settings(defaults: chosen)
+    chosenSettings.historyEnabled = false
+    _ = Settings(defaults: chosen)
+    check(chosen.bool(forKey: StorageKeys.historyEnabled) == false, "keep history: an explicit choice survives a restart")
+
+    let off = ScriptedStore(answers: [.loaded(HistorySnapshot(texts: ["kept"], dates: [1]))], saved: nil)
+    let offHistory = History(store: off, retention: { .never }, isEnabled: { false }, loadsNow: false)
+    offHistory.refresh()
+    offHistory.add("not recorded while off")
+    History.flushWrites()
+    check(offHistory.items.isEmpty && off.saves == 0 && off.loads == 0,
+          "keep history: while off, nothing is read, kept or persisted, and the saved entries are untouched")
 }
 
 // Rendered corpus: 16 captures (4 per kind) drawn as images, read through Vision, then classified. Written once,
@@ -1677,41 +1786,23 @@ do {
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
 }
 
-// Locked and unavailable history: the copy still works, nothing is kept in memory or queued, the file is never
-// replaced, and no key is ever created in place of an existing one. Every store here is disposable.
-final class KeyCallLog: @unchecked Sendable {
-    var mayCreateValues: [Bool] = []
-}
+// Unavailable history: the copy still works, nothing is kept in memory or queued, and the file is never replaced.
 do {
     let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
     let plain = CapturePlan.Choices(appendMode: false, delimiter: "\n", historyEnabled: true, barcodeAction: "copy")
-
-    // 1. OCR and clipboard still run while the history is locked: the plan copies, and asks the history to keep it.
-    let locked = ScriptedStore(answers: [.locked], saved: stored)
-    let lockedHistory = History(store: locked, retention: { .never })
+    let broken = ScriptedStore(answers: [.unavailable], saved: stored)
+    let brokenHistory = History(store: broken, retention: { .never })
     let effects = CapturePlan.effects(mode: .text, result: RecognitionResult(text: "copy me", isBarcode: false), text: "copy me",
                                       detections: Detections(), choices: plain, existing: nil)
     let copiedTexts = effects.compactMap { (effect: CaptureEffect) -> String? in if case .copy(let text) = effect { return text } else { return nil } }
     check(copiedTexts == ["copy me"] && effects.contains(.addToHistory("copy me")),
-          "locked: OCR still produces the copy while the history is locked")
-    lockedHistory.add("copy me")
-    History.flushWrites()
-    check(lockedHistory.state == .locked, "locked: an authorization refusal reports locked, not unavailable")
-
-    // 2. Locked history keeps no plaintext entries and writes nothing.
-    lockedHistory.add("second"); lockedHistory.add("third")
-    History.flushWrites()
-    check(lockedHistory.items.isEmpty && locked.saves == 0, "locked: no capture is kept in memory or written")
-
-    // 3. Unavailable history keeps no plaintext entries either, and says it is not locked.
-    let broken = ScriptedStore(answers: [.unavailable], saved: stored)
-    let brokenHistory = History(store: broken, retention: { .never })
+          "unavailable: OCR still produces the copy while the history is unavailable")
     brokenHistory.add("lost to a fault")
+    brokenHistory.add("second"); brokenHistory.add("third")
     History.flushWrites()
     check(brokenHistory.items.isEmpty && brokenHistory.state == .unavailable && broken.saves == 0,
-          "unavailable: no plaintext entries, and the state is unavailable rather than locked")
+          "unavailable: no capture is kept in memory or written, and the state is unavailable")
 
-    // 4. Loading does not queue captures: only what the file holds appears once it has loaded.
     let loading = ScriptedStore(answers: [.loaded(stored)], saved: stored)
     let loadingHistory = History(store: loading, retention: { .never }, loadsNow: false)
     loadingHistory.add("made while loading")
@@ -1720,7 +1811,6 @@ do {
     History.flushWrites()
     check(loadingHistory.items == ["old"] && loading.saved == stored, "loading: once loaded, only the stored history is shown")
 
-    // 5. Disabled history does not persist captures and never reads the store.
     let disabled = ScriptedStore(answers: [.loaded(stored)], saved: stored)
     let disabledHistory = History(store: disabled, retention: { .never }, isEnabled: { false }, loadsNow: false)
     disabledHistory.refresh()
@@ -1729,56 +1819,29 @@ do {
     check(disabledHistory.state == .disabled && disabledHistory.items.isEmpty && disabled.saves == 0 && disabled.loads == 0,
           "disabled: nothing is read, kept or persisted")
 
-    // 6. Available history still saves captures, encrypted, and reads them back.
-    let sealed = sealedStore("locked-available")
+    let sealed = sealedStore("unavailable-available")
     let available = History(store: sealed, retention: { .never })
     available.add("saved while available", at: Date(timeIntervalSince1970: 3_000))
     History.flushWrites()
-    let bytes = (try? Data(contentsOf: sealed.fileURL)) ?? Data()
-    check(bytes.range(of: Data("saved while available".utf8)) == nil
-          && History(store: sealed, retention: { .never }).items == ["saved while available"],
-          "available: a capture is saved encrypted and reads back")
+    check(History(store: sealed, retention: { .never }).items == ["saved while available"], "available: a capture is saved and reads back")
 
-    // 7. A failed access leaves the existing encrypted file exactly as it was.
     let before = (try? Data(contentsOf: sealed.fileURL)) ?? Data()
-    let refused = EncryptedHistoryStore(fileURL: sealed.fileURL, key: { _ in throw HistoryKeychain.Failure.status(errSecUserCanceled) })
-    let refusedHistory = History(store: refused, retention: { .never })
-    refusedHistory.add("while refused")
+    try? "not json".data(using: .utf8)?.write(to: sealed.fileURL)
+    let damaged = History(store: sealed, retention: { .never })
+    damaged.add("while damaged")
     History.flushWrites()
-    check(refusedHistory.state == .locked && refusedHistory.items.isEmpty
-          && ((try? Data(contentsOf: sealed.fileURL)) ?? Data()) == before,
-          "locked: a cancelled authorization leaves the encrypted file byte for byte unchanged")
+    check(damaged.state == .unavailable && damaged.items.isEmpty && before.count > 0,
+          "unavailable: a damaged file leaves the history unavailable and keeps nothing new")
 
-    // 8. Unlocking does not restore captures made while locked.
-    let unlock = ScriptedStore(answers: [.locked, .loaded(stored)], saved: stored)
+    let unlock = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
     let unlockHistory = History(store: unlock, retention: { .never })
-    unlockHistory.add("made while locked")
+    unlockHistory.add("made while unavailable")
     settle { await unlockHistory.reload() }
     History.flushWrites()
-    check(unlockHistory.items == ["old"], "unlock: captures made while locked do not come back on unlock")
-
-    // 9. A failed persistence never regenerates the key while a file exists.
-    let calls = KeyCallLog()
-    let keyless = EncryptedHistoryStore(fileURL: sealed.fileURL, key: { mayCreate in
-        calls.mayCreateValues.append(mayCreate)
-        throw HistoryKeychain.Failure.status(errSecItemNotFound)
-    })
-    let saved = keyless.save(HistorySnapshot(texts: ["x"], dates: [0]))
-    check(!saved && calls.mayCreateValues == [false],
-          "keys: a save over an existing file asks for no new key, and fails instead", "\(calls.mayCreateValues)")
-
-    // 10. Repeated refreshes while loading start one read and never duplicate entries.
-    let once = ScriptedStore(answers: [.loaded(stored)], saved: stored)
-    let onceHistory = History(store: once, retention: { .never }, loadsNow: false)
-    let firstRead = onceHistory.refresh()
-    let secondRead = onceHistory.refresh()
-    settle { await firstRead?.value }
-    History.flushWrites()
-    check(secondRead == nil && once.loads == 1 && onceHistory.items == ["old"],
-          "state: a second refresh during a read starts no second read and duplicates nothing", "loads \(once.loads)")
+    check(unlockHistory.items == ["old"], "recovery: captures made while unavailable do not come back on recovery")
 }
 
-// Persist first, publish after success: a capture is visible only once its encrypted write has succeeded.
+// Persist first, publish after success: a capture is visible only once its write has succeeded.
 do {
     // Not visible before the write completes, visible after it succeeds.
     let store = sealedStore("publish-after")
@@ -1793,7 +1856,7 @@ do {
     // changes the file; the next start reads the previous history.
     let folder = testPreferences.appendingPathComponent("readonly-\(UUID().uuidString)", isDirectory: true)
     try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    let fixed = EncryptedHistoryStore(fileURL: folder.appendingPathComponent("history.sealed"), key: { _ in SymmetricKey(data: Data(repeating: 4, count: 32)) })
+    let fixed = JSONHistoryStore(fileURL: folder.appendingPathComponent("history.json"))
     let base = History(store: fixed, retention: { .never })
     base.add("kept before")
     History.flushWrites()
@@ -1813,7 +1876,7 @@ do {
     let fast = History(store: rapid, retention: { .never })
     for index in 0..<60 { fast.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
     History.flushWrites()
-    let expected = (0..<60).reversed().prefix(50).map { "capture \($0)" }
+    let expected = (0..<60).reversed().prefix(HistoryPolicy.maximumHistoryEntries).map { "capture \($0)" }
     check(fast.items == Array(expected) && Set(fast.items).count == fast.items.count,
           "publish: rapid captures keep their order, nothing duplicates, and the newest is first", "\(fast.items.count)")
     check(History(store: rapid, retention: { .never }).items == Array(expected),

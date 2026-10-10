@@ -172,5 +172,4 @@
 "Loading history…" = "Cargando historial…";
 "Couldn't copy text. Try again." = "No se pudo copiar el texto. Inténtalo otra vez.";
 "History is unavailable right now. New captures are still copied but won't be saved." = "El historial no está disponible ahora. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán.";
-"History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked." = "El historial está bloqueado. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán hasta que lo desbloquees.";
-"Unlock History" = "Desbloquear historial";
+"History stores up to 15 recent text captures locally on your Mac. It is not encrypted separately. You can turn History off or delete saved captures at any time." = "El historial guarda hasta 15 capturas de texto recientes en tu Mac. No utiliza cifrado adicional. Puedes desactivarlo o eliminar las capturas guardadas cuando quieras.";

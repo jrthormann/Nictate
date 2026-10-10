@@ -172,5 +172,4 @@
 "Loading history…" = "Loading history…";
 "Couldn't copy text. Try again." = "Couldn't copy text. Try again.";
 "History is unavailable right now. New captures are still copied but won't be saved." = "History is unavailable right now. New captures are still copied but won't be saved.";
-"History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked." = "History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked.";
-"Unlock History" = "Unlock History";
+"History stores up to 15 recent text captures locally on your Mac. It is not encrypted separately. You can turn History off or delete saved captures at any time." = "History stores up to 15 recent text captures locally on your Mac. It is not encrypted separately. You can turn History off or delete saved captures at any time.";

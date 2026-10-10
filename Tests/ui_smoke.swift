@@ -342,8 +342,7 @@ MainActor.assumeIsolated {
         check(clear.buttons[0].keyEquivalent == "\r" && clear.buttons[1].keyEquivalent == "" && clear.buttons[1].hasDestructiveAction,
               "history deletion: Clear History has no key, so Return cannot delete")
         // With nothing saved, neither path shows an alert (a modal here would hang the run until the timeout).
-        let empty = History(store: EncryptedHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).sealed"),
-                                                         key: { _ in SymmetricKey(data: Data(repeating: 3, count: 32)) }),
+        let empty = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json")),
                             retention: { .never })
         HistoryClearing.confirmClear(empty)
         HistoryClearing.historyTurnedOff(empty)
@@ -418,8 +417,7 @@ do {
 
 // MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight
 do {
-    let store = EncryptedHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).sealed"),
-                                      key: { _ in SymmetricKey(data: Data(repeating: 6, count: 32)) })
+    let store = JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json"))
     let history = History(store: store, retention: { .never })
     history.add("first")
     history.add("second")

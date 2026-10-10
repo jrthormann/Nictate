@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await loading?.value
             if BuildIdentity.isTestVariant {
-                Log.app.info("Test variant: history in memory (\(BuildIdentity.usesMemoryHistory), no Keychain), production file \(EncryptedHistoryStore.standardURL.path, privacy: .public) is not used")
+                Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path, privacy: .public)")
                 History.shared.seedFixtures(BuildIdentity.historyFixtures)
             }
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {

@@ -163,13 +163,6 @@ private struct HistoryScreen: View {
         switch model.historyState {
         case .loading:
             Text(tr("Loading history…")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
-        case .locked:
-            VStack(alignment: .leading, spacing: 4) {
-                Text(tr("History is locked. New captures are still copied to your clipboard but won't be saved until history is unlocked."))
-                    .font(.caption).foregroundStyle(.secondary)
-                Button(tr("Unlock History"), action: model.unlockHistory).buttonStyle(.borderless).font(.caption)
-            }
-            .padding(.horizontal, 12)
         case .unavailable:
             Text(tr("History is unavailable right now. New captures are still copied but won't be saved."))
                 .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
@@ -181,7 +174,7 @@ private struct HistoryScreen: View {
     @ViewBuilder private var content: some View {
         let entries = model.entries
         // While the history loads, or cannot be read, the note above says so: "No captures yet" would be false.
-        let waiting = model.historyCount == 0 && [HistoryState.loading, .locked, .unavailable].contains(model.historyState)
+        let waiting = model.historyCount == 0 && [HistoryState.loading, .unavailable].contains(model.historyState)
         if waiting {
             EmptyView()
         } else if model.historyCount == 0 {

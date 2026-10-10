@@ -49,6 +49,8 @@ enum StorageKeys {
 
     // Stored outside Settings
     static let didOnboard = "didOnboard"
+    /// Set once the Keep History default has been applied (see Settings.init).
+    static let historyDefaultApplied = "historyDefaultApplied"
 
     /// Every key of `Settings`.
     static let settings = [

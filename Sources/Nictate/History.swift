@@ -20,11 +20,11 @@ enum HistoryRetention: String, CaseIterable {
 }
 
 /// Whether the history can be read and written right now.
-/// `available` means a save can succeed: the key is readable and the last write, if any, was saved.
-/// `loading` covers the time the key may take to authorize; nothing is written during it.
-/// `locked` and `unavailable` keep nothing new and never write over the file.
+/// `available` means a save can succeed: the file was read and the last write, if any, was saved.
+/// `loading` covers the time the file takes to read; nothing is written during it.
+/// `unavailable` keeps nothing new and never writes over the file.
 enum HistoryState: Equatable {
-    case loading, available, disabled, locked, unavailable
+    case loading, available, disabled, unavailable
 }
 
 /// Last captured texts, newest first, each with the time it was captured. Kept in the sealed `HistoryStore`.
@@ -36,7 +36,6 @@ enum HistoryState: Equatable {
 final class History: ObservableObject {
     /// The app's history. It loads in the background (see `refresh`), never on the main thread.
     static let shared = History(store: AppHistoryStore.make(), loadsNow: false)
-    private let limit = 50
     /// Longer captures are still copied but not kept: the whole history lives in one preferences file
     /// that is rewritten on every capture. A screen of text is a few thousand characters.
     static let maxStoredLength = 100_000
@@ -78,7 +77,7 @@ final class History: ObservableObject {
     /// The app uses `shared`, with the sealed file, the standard defaults and the retention in `Settings`.
     /// Tests pass a store and a retention of their own, so they never touch the user's captures. With
     /// `loadsNow` the file is read at once, on the calling thread; the app loads in the background instead.
-    init(store: any HistoryStore = EncryptedHistoryStore.standard,
+    init(store: any HistoryStore = AppHistoryStore.make(),
          retention: @escaping @MainActor () -> HistoryRetention = { Settings.shared.historyRetention },
          isEnabled: @escaping @MainActor () -> Bool = { Settings.shared.historyEnabled },
          loadsNow: Bool = true) {
@@ -136,7 +135,8 @@ final class History: ObservableObject {
     private func apply(_ result: HistoryLoad) {
         loadInFlight = false
         switch result {
-        case .loaded(let stored):
+        case .loaded(let file):
+            let stored = file.capped()
             let times = Self.alignedDates(count: stored.texts.count, stored: stored.dates)
             let kept = pendingClear ? [] : zip(stored.texts, times).filter { !pendingRemovals.contains($0.0) }
             let texts = kept.map(\.0)
@@ -158,9 +158,9 @@ final class History: ObservableObject {
             dates = []
             intendedTexts = []
             intendedDates = []
-        case .locked, .corrupt, .unavailable:
+        case .corrupt, .unavailable:
             // Nothing is shown from a file that cannot be read, and nothing is written over it.
-            state = result == .locked ? .locked : .unavailable
+            state = .unavailable
             items = []
             dates = []
             intendedTexts = []
@@ -191,7 +191,7 @@ final class History: ObservableObject {
         return dates[index]
     }
 
-    /// Keeps a capture in the history, once it is saved. Only while the history is available: a locked, loading,
+    /// Keeps a capture in the history, once it is saved. Only while the history is available: a loading,
     /// disabled or unavailable history keeps no plaintext copy and no queue. The clipboard copy happens regardless.
     func add(_ text: String, at date: Date = Date()) {
         guard state == .available else { return }
@@ -199,7 +199,7 @@ final class History: ObservableObject {
         // Whitespace-only text is never kept. Valid text is stored exactly as captured, with its spaces.
         guard !text.allSatisfy(\.isWhitespace) else { return }
         let kept = zip(intendedTexts, intendedDates).filter { $0.0 != text }
-        commit(Array(([text] + kept.map(\.0)).prefix(limit)), Array(([date] + kept.map(\.1)).prefix(limit)))
+        commit(Array(([text] + kept.map(\.0)).prefix(HistoryPolicy.maximumHistoryEntries)), Array(([date] + kept.map(\.1)).prefix(HistoryPolicy.maximumHistoryEntries)))
     }
 
     /// Removes captures older than `limit` seconds. A capture with an unknown time (saved before times were

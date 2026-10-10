@@ -3,13 +3,9 @@
 
 // Replaces Sources/Nictate/BuildIdentity.swift in the test variant (scripts/build-app.sh, NICTATE_VARIANT=test).
 // The bundle identifier and names are set by the script to match: com.jrthormann.nictate.test, "Nictate Test".
-// This build never touches the production Keychain item or the production history file.
+// This build never touches the production history file.
 enum BuildIdentity {
     static let isTestVariant = true
-    /// The QA app keeps its fixtures in memory and reads its key from nowhere, so no Keychain prompt can appear
-    /// after a rebuild. Each launch starts from the fixtures below. Production builds never set this.
-    static let usesMemoryHistory = true
-    static let keychainService = "app.nictate.history.test"
     static let historyFolderName = "Nictate Test"
     /// Representative OCR captures: code with indentation, a table, links, contacts, accents, a long paragraph.
     static let historyFixtures: [String] = [
