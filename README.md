@@ -127,6 +127,18 @@ make install
 
 <br>
 
+## Support the Project
+
+If you find this app useful and would like to support its continued development, you can contribute through
+Buy Me a Coffee or PayPal.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-jrthormann-FFDD00?logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/jrthormann)
+[![PayPal](https://img.shields.io/badge/PayPal-jrthormann-00457C?logo=paypal&logoColor=FFFFFF)](https://paypal.me/jrthormann)
+
+Contributions are entirely optional and help support maintenance, improvements, and future features.
+
+<br>
+
 ## Contributing
 
 Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, propose a change,

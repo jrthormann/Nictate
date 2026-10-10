@@ -79,6 +79,7 @@ final class StatusPanelModel: ObservableObject {
     func setLaunchAtLogin(_ on: Bool) { LoginItem.shared.set(on) }
     func showPreferences() { dismiss(); windows.showPreferences() }
     func showAbout() { dismiss(); AboutPanel.show() }
+    func supportDeveloper() { dismiss(); SupportDeveloper.open() }
     func checkForUpdates() { dismiss(); Task { @MainActor in await UpdateAlert.run() } }
     func quit() { NSApp.terminate(nil) }
 

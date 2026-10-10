@@ -63,6 +63,7 @@ private struct MainScreen: View {
                 MenuDivider()
                 MenuAction(tr("Settings…"), shortcut: "⌘,", leadingSymbol: "gearshape", action: model.showPreferences)
                 MenuAction(tr("About Nictate"), leadingSymbol: "info.circle", action: model.showAbout)
+                MenuAction(tr("Support the Developer…"), leadingSymbol: "heart", action: model.supportDeveloper)
                 MenuAction(tr("Check for Updates…"), leadingSymbol: "arrow.down.circle", action: model.checkForUpdates)
                 MenuDivider()
                 MenuAction(tr("Quit Nictate"), shortcut: "⌘Q", action: model.quit)
