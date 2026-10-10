@@ -165,6 +165,8 @@ final class History: ObservableObject {
 
     func add(_ text: String, at date: Date = Date()) {
         guard text.count <= Self.maxStoredLength else { return }
+        // Whitespace-only text is never kept. Valid text is stored exactly as captured, with its spaces.
+        guard !text.allSatisfy(\.isWhitespace) else { return }
         let kept = zip(items, dates).filter { $0.0 != text }
         items = Array(([text] + kept.map(\.0)).prefix(limit))
         dates = Array(([date] + kept.map(\.1)).prefix(limit))

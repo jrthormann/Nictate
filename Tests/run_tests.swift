@@ -1658,6 +1658,23 @@ do {
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
 }
 
+// Whitespace-only text is never kept in the history, but valid text keeps every space, tab and line break.
+do {
+    let store = sealedStore("blank")
+    let history = History(store: store, retention: { .never })
+    for blank in ["", "   ", "\n", "\t", " \n \t "] {
+        history.add(blank)
+    }
+    check(history.items.isEmpty, "blank captures: whitespace-only text is not stored")
+    let indented = "    Hello World"
+    history.add(indented)
+    history.add("line one\n\tindented line two\n")
+    check(history.items == ["line one\n\tindented line two\n", indented],
+          "blank captures: valid text keeps its leading spaces, tabs and line breaks exactly", "\(history.items)")
+    check(!"x".allSatisfy(\.isWhitespace) && "  x  ".allSatisfy(\.isWhitespace) == false,
+          "blank captures: any visible character makes a capture")
+}
+
 // Clipboard reliability: a history copy is confirmed by reading the text back, and a refused write puts the
 // previous clipboard contents back. A private pasteboard keeps the user's clipboard out of the tests.
 do {

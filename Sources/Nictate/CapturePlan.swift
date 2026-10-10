@@ -40,7 +40,8 @@ enum CapturePlan {
     static func effects(mode: CaptureMode, result: RecognitionResult, text: String, detections: Detections,
                         choices: Choices, existing: ExistingClipboard?) -> [CaptureEffect] {
         guard mode.accepts(result) else { return miss(tr("No code found")) }
-        guard !text.isEmpty else { return miss(tr("No text found")) }
+        // Whitespace-only text is not a capture. The text itself is never trimmed: a valid capture keeps its spaces.
+        guard !text.allSatisfy(\.isWhitespace) else { return miss(tr("No text found")) }
 
         let appendTo = existing.flatMap { $0.isPrivate ? nil : $0.text }
         let output = TextCleaner.clipboardText(new: text, existing: appendTo, appendMode: choices.appendMode,
