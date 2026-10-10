@@ -35,7 +35,7 @@ final class Settings: ObservableObject {
             StorageKeys.keepLineBreaks: true, StorageKeys.detectColumns: true, StorageKeys.tablesAsTabs: true, StorageKeys.cleanText: false,
             StorageKeys.appendMode: false, StorageKeys.appendSeparator: "newline",
             StorageKeys.barcodeAction: "copy", StorageKeys.detectContent: true, StorageKeys.hideFromClipboardManagers: false,
-            StorageKeys.clearHistoryOnQuit: false, StorageKeys.historyRetention: HistoryRetention.week.rawValue,
+            StorageKeys.clearHistoryOnQuit: false, StorageKeys.historyRetention: HistoryRetention.never.rawValue,
         ])
     }
 

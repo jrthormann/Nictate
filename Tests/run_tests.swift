@@ -403,7 +403,7 @@ do {
         ("captures are offered to clipboard managers", !prefs.hideFromClipboardManagers),
         ("history is off for a new install", !prefs.historyEnabled),
         ("history is kept on quit", !prefs.clearHistoryOnQuit),
-        ("a new install keeps captures for 7 days", prefs.historyRetention == .week),
+        ("captures are not removed by age; the 15-capture limit is the only removal", prefs.historyRetention == .never),
     ]
     for (name, ok) in table { check(ok, "default: \(name)") }
 }
@@ -1541,6 +1541,14 @@ do {
     check(launched.loads == 1 && launchedHistory.items == ["old"] && launchedHistory.state == .available,
           "authorization: refresh at launch starts the read, which had been skipped while the state was loading",
           "loads \(launched.loads), state \(launchedHistory.state)")
+}
+
+// Recognized languages: the compact summary shows the names, and says how many more there are.
+do {
+    check(RecognitionTab.summary(of: []) == tr("Automatic"), "languages: nothing chosen is Automatic")
+    check(RecognitionTab.summary(of: ["English"]) == "English", "languages: one name is shown as it is")
+    check(RecognitionTab.summary(of: ["English", "Spanish"]) == "English, Spanish", "languages: two names are both shown")
+    check(RecognitionTab.summary(of: ["English", "Spanish", "French"]) == "English, Spanish +1", "languages: more than two shows the first two and +count")
 }
 
 // The limit: History keeps exactly 15 captures, on disk and on screen, newest first, and the oldest goes when a 16th arrives.

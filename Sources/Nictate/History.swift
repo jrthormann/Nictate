@@ -77,8 +77,9 @@ final class History: ObservableObject {
     /// The app uses `shared`, with the sealed file, the standard defaults and the retention in `Settings`.
     /// Tests pass a store and a retention of their own, so they never touch the user's captures. With
     /// `loadsNow` the file is read at once, on the calling thread; the app loads in the background instead.
+    /// Captures never expire by age: the 15-capture limit is the only thing that removes them.
     init(store: any HistoryStore = AppHistoryStore.make(),
-         retention: @escaping @MainActor () -> HistoryRetention = { Settings.shared.historyRetention },
+         retention: @escaping @MainActor () -> HistoryRetention = { .never },
          isEnabled: @escaping @MainActor () -> Bool = { Settings.shared.historyEnabled },
          loadsNow: Bool = true) {
         self.store = store

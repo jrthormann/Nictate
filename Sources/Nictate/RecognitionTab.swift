@@ -5,69 +5,70 @@ import SwiftUI
 
 struct RecognitionTab: View {
     @ObservedObject private var settings = Settings.shared
+    /// Remembered between visits, so a user who opened Advanced finds it open again.
+    @AppStorage(StorageKeys.advancedRecognitionExpanded) private var advancedExpanded = false
 
-    /// Languages shown as checkboxes by default; others appear once added.
-    private static let featured = ["en-US", "es-ES", "fr-FR", "it-IT", "de-DE"]
-    private let supported = Set(Recognizer.supportedLanguages)
-
-    /// Faithful mode ignores correction, line-break and column rules, so those controls fade out.
+    /// Preserve Original Formatting ignores correction, line-break and column rules, so those controls fade out.
     private var faithful: Bool { settings.codeMode }
-
-    private var shownLanguages: [String] {
-        let featured = Self.featured.filter(supported.contains)
-        return featured + settings.languages.filter { !featured.contains($0) }
-    }
-
-    private var addableLanguages: [String] {
-        Recognizer.supportedLanguages.filter { !shownLanguages.contains($0) }
-    }
 
     var body: some View {
         SettingsPage {
-            SettingsSection("Text mode") {
-                SettingToggle("Faithful mode (code and structure)", isOn: $settings.codeMode)
-                SettingCaption("Faithful mode copies text exactly as it appears: it keeps indentation, spacing between columns and blank lines, and turns off correction and text clean-up.")
+            SettingsSection("Text Recognition") {
+                SettingToggle("Preserve Original Formatting", isOn: $settings.codeMode)
+                SettingCaption("Keep spacing, indentation, and line breaks as they appear.")
+                SettingToggle("Improve Recognized Text", isOn: $settings.languageCorrection)
+                    .dimmed(when: faithful)
+                SettingCaption("Fix common recognition errors.")
             }
 
             SettingsSection("Languages") {
-                SettingToggle("Language correction", isOn: $settings.languageCorrection)
-                    .dimmed(when: faithful)
-                if settings.languages.isEmpty {
-                    SettingCaption("With nothing selected, the language is detected automatically.")
-                }
-                ForEach(shownLanguages, id: \.self) { code in
-                    Toggle(languageName(code), isOn: languageBinding(code)).toggleStyle(.checkbox)
-                }
-                if !addableLanguages.isEmpty {
-                    Menu("+ Add Language…") {
-                        ForEach(addableLanguages, id: \.self) { code in
-                            Button(languageName(code)) { settings.languages.append(code) }
+                SettingRow("Recognized Languages") { languageMenu }
+                SettingCaption("Automatically detect languages, or choose the ones you use.")
+            }
+
+            DisclosureGroup("Advanced", isExpanded: $advancedExpanded) {
+                    VStack(alignment: .leading, spacing: Design.Space.row) {
+                        SettingToggle("Keep Line Breaks", isOn: $settings.keepLineBreaks)
+                        SettingToggle("Detect Text Columns", isOn: $settings.detectColumns)
+                        SettingToggle("Separate Table Cells with Tabs", isOn: $settings.tablesAsTabs)
+                        SettingToggle("Join Split Words", isOn: $settings.cleanText)
+                        SettingToggle("Code Cleanup", isOn: $settings.codeClean)
+                        SettingCaption("Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation.")
+                        if faithful {
+                            SettingCaption("Preserve Original Formatting ignores these settings, except Code Cleanup.")
                         }
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                }
-            }
-
-            SettingsSection("Layout") {
-                SettingToggle("Keep line breaks", isOn: $settings.keepLineBreaks)
-                SettingToggle("Detect text columns", isOn: $settings.detectColumns)
-                SettingToggle("Separate table cells with tabs", isOn: $settings.tablesAsTabs)
-                if faithful {
-                    SettingCaption("Faithful mode ignores these settings.")
-                }
+                    .padding(.top, Design.Space.row)
             }
             .dimmed(when: faithful)
+        }
+    }
 
-            SettingsSection("Text clean-up") {
-                SettingToggle("Join split words and collapse spaces", isOn: $settings.cleanText)
+    /// Automatic, or the chosen languages as one line. Several can be chosen; the menu keeps its checkmarks.
+    private var languageMenu: some View {
+        Menu {
+            Button("Automatic") { settings.languages = [] }
+            Divider()
+            ForEach(Recognizer.supportedLanguages, id: \.self) { code in
+                Toggle(languageName(code), isOn: languageBinding(code))
             }
-            .dimmed(when: faithful)
+        } label: {
+            Text(languageSummary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
 
-            SettingsSection("Code clean-up") {
-                SettingToggle("Clean code when capturing", isOn: $settings.codeClean)
-                SettingCaption("Removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. Works together with faithful mode and keeps indentation.")
-            }
+    private var languageSummary: String {
+        RecognitionTab.summary(of: settings.languages.map(languageName))
+    }
+
+    /// "Automatic" for none, the name for one, "English, Spanish" for two, and "English, Spanish +1" beyond that.
+    static func summary(of names: [String]) -> String {
+        switch names.count {
+        case 0: return tr("Automatic")
+        case 1, 2: return names.joined(separator: ", ")
+        default: return tr("%@, %@ +%d", names[0], names[1], names.count - 2)
         }
     }
 

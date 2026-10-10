@@ -153,7 +153,8 @@ final class CaptureCoordinator {
     /// Puts the next older capture on the clipboard, wrapping around after the oldest in the rotation.
     func rotateHistory() {
         History.shared.pruneExpired()
-        let items = HistoryRotation.items(History.shared.items, depth: settings.rotationDepth, historyEnabled: settings.historyEnabled)
+        // Cycle History walks through every saved capture: the history itself is the limit.
+        let items = HistoryRotation.items(History.shared.items, depth: HistoryPolicy.maximumHistoryEntries, historyEnabled: settings.historyEnabled)
         guard let index = HistoryRotation.nextIndex(items: items, clipboard: clipboard.ownText) else {
             status.cue(.failure)
             status.announce(tr("History is empty"))

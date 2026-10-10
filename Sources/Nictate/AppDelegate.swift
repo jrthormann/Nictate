@@ -24,13 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path, privacy: .public)")
                 History.shared.seedFixtures(BuildIdentity.historyFixtures)
             }
-            if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
-                HistoryClearing.clear()
-            }
             History.shared.pruneExpired()
         }
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
-        // Captures expire while the app keeps running, not only at the next launch or menu click.
+        // Age-based removal is off (captures are limited by count only); the timer keeps the policy applied.
         expiryTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in
             Task { @MainActor in History.shared.pruneExpired() }
         }
@@ -57,10 +54,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Permissions.request()
             windows.showWelcome()
         }
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        if settings.clearHistoryOnQuit { HistoryClearing.clear() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

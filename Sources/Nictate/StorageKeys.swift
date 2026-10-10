@@ -51,6 +51,8 @@ enum StorageKeys {
     static let didOnboard = "didOnboard"
     /// Set once the Keep History default has been applied (see Settings.init).
     static let historyDefaultApplied = "historyDefaultApplied"
+    /// Whether Recognition’s Advanced section is open (a UI state, not a recognition setting).
+    static let advancedRecognitionExpanded = "advancedRecognitionExpanded"
 
     /// Every key of `Settings`.
     static let settings = [
