@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Nictate does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a problem. Please do not include text you captured if it is private.
+  - type: input
+    id: version
+    attributes:
+      label: Nictate version
+      description: Shown in About Nictate.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 27.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Press ⇧⌘2
+        2. Drag over ...
+        3. ...
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked that Screen Recording is granted for Nictate.
+          required: true

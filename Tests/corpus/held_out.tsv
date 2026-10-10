@@ -1,0 +1,13 @@
+code	    let total = prices.reduce(0, +)\n    print(total)
+code	if (x > 0) {\n  y = x;\n}
+code	<div class="box">\n  <p>Hello</p>\n</div>
+code	pip install -r requirements.txt\npython manage.py migrate
+code	x = 1\ny = 2\nz = x + y
+prose	Click Save to keep your changes. You can undo this later from the History menu.
+prose	The results were mixed (see table 2). Further work is needed before we decide\nwhat to do next.
+prose	For the first time in years, if the weather holds, we will hike the whole ridge\nbefore the end of the month.
+prose	Thanks for reading. We will send the next update when the new version is ready\nfor everyone to try.
+table	Date   Event          Place\n3 May  Launch day     Berlin\n9 May  Review         Paris
+table	Fruit     Colour    Weight\nLemon     Yellow    120 g\nLime      Green     70 g
+list	Requirements:\n- macOS 14 or later\n- Screen Recording permission\n- Internet is not needed
+list	Steps\n1. Open Settings\n2. Click Shortcuts

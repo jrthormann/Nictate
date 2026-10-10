@@ -1,0 +1,40 @@
+code	func add(_ a: Int, _ b: Int) -> Int {\n    return a + b\n}
+code	def load(path):\n    with open(path) as f:\n        return json.load(f)
+code	const total = items.map(i => i.price).reduce((a, b) => a + b, 0);\nconsole.log(total);
+code	$ git status\nOn branch main\n$ npm install
+code	#include <stdio.h>\nint main(void) {\n    printf("hi");\n    return 0;\n}
+code	SELECT id, name\nFROM users\nWHERE active = 1\nORDER BY name;
+code	1  import os\n2  \n3  def run():\n4      os.system('ls')
+code	func main() {\n\tfmt.Println("hello")\n}
+code	{\n  "name": "nictate",\n  "version": 1\n}
+code	>>> x = [1, 2, 3]\n>>> sum(x)\n6
+table	Name    Qty    Price\nApple   3      1.20\nPear    12     0.80
+table	Region  2023    2024\nNorth   120     140\nSouth   98      110
+table	Item\tCount\nBolts\t40\nNuts\t35
+table	Month     Revenue     Costs\nJan        1,200       900\nFeb        1,450       980\nMar        1,100       1,020
+table	ID   Status    Owner\n101  open      Ana\n102  closed    Ben\n103  open      Cy
+table	Server    CPU    RAM\nweb-1     12%    4 GB\nweb-2     48%    8 GB
+table	Language  Speakers\nEnglish   1500\nSpanish   560
+table	Key      Value\nTimeout  30 s\nRetries  3
+table	Day    Open    Close\nMon    9:00    17:00\nTue    9:00    17:30
+table	Product   Price   Stock\nA-100     9.99    12\nB-200     19.50   0
+list	- Buy milk\n- Call Ana\n- Send the report
+list	1. Open the app\n2. Press Shift Command 2\n3. Drag over the text
+list	• Fast\n• Offline\n• Private
+list	* Install Xcode tools\n* Clone the repo\n* Run make setup
+list	a) First option\nb) Second option\nc) Third option
+list	1) Preheat the oven\n2) Mix the flour\n3) Bake for 20 minutes
+list	- Settings\n- History\n- About
+list	- Ana: approved\n- Ben: pending\n- Cy: rejected
+list	1. Sign in\n2. Choose a plan\n3. Confirm
+list	- Item one\n- Item two\n- Item three\n- Item four
+prose	The quick brown fox jumps over the lazy dog. It was a calm morning, and nobody had\nyet opened the shop on the corner.
+prose	Nictate reads text on your screen and copies it. Nothing leaves your Mac, and\nno account is needed to start.
+prose	We met at the station at noon. She had brought the maps, and we walked to the\nriver before the rain started.
+prose	Thank you for trying the app. If something does not work, tell us what you\nexpected to happen.
+prose	The meeting moved to Thursday because the client could not come on Wednesday.\nPlease update your calendars.
+prose	This sample is an ordinary paragraph of English prose written for testing the\nlayout, with nothing technical in it at all.
+prose	In 1920 the town built a new bridge across the river. It stood for eighty years\nbefore the flood took it.
+prose	Our goal is simple: make text easy to copy from anywhere. We keep the design calm\nand the features few.
+prose	Please read the terms before you continue. They explain what we collect, how\nlong we keep it, and how to ask for it to be removed.
+prose	Yesterday I walked to the market, bought bread and apples, and came home\nbefore it rained again.

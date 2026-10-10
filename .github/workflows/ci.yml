@@ -1,0 +1,102 @@
+# Nictate: a macOS menu bar app that copies text from anywhere on your screen.
+# Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request replaces the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # macos-26 is what macos-latest points at today (runner-images README); pinned so a
+    # migration of the alias does not change the compiler under the builds unannounced.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Toolchain
+        run: |
+          swiftc --version
+          xcrun --show-sdk-path
+      # Swift 6 language mode is not what ships (the code builds as Swift 5 with complete
+      # concurrency checking); this keeps it from drifting further from the move to 6.
+      - name: Type-check in Swift 6 mode
+        run: swiftc -typecheck -swift-version 6 -target arm64-apple-macos14.0 Sources/Nictate/*.swift
+      # Optimized, like the shipped app, so a bug that only shows up with -O is caught here.
+      - name: Unit tests (layout, cleaning, OCR)
+        run: OPT=-O Tests/run_tests.sh
+      # Keep the arm64 runner: the Intel step below rebuilds build/run_tests
+      # as x86_64.
+      - name: Keep the arm64 test runner
+        run: mkdir prebuilt && cp build/run_tests prebuilt/run_tests
+      - name: Unit tests as Intel (under Rosetta)
+        run: |
+          arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+          TEST_ARCH=x86_64 Tests/run_tests.sh
+      - name: UI smoke tests
+        run: Tests/run_ui_tests.sh
+      - name: Localization check
+        run: scripts/check_strings.py
+      - name: Source rules (no NSLog/print, files under 400 lines)
+        run: scripts/check_sources.sh
+      - name: Build app
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/build-app.sh
+      # tar keeps the executable bits and the signed bundle intact, which the
+      # artifact upload would not.
+      - name: Package tests and app for macOS 14
+        run: tar -cf prebuilt/prebuilt.tar -C prebuilt run_tests -C ../build Nictate.app
+      - name: Upload prebuilt tests and app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prebuilt
+          path: prebuilt/prebuilt.tar
+          if-no-files-found: error
+
+  macos-14:
+    # The oldest macOS Nictate supports. It compiles nothing: the macos-14
+    # image ships an SDK too old for the macOS 26 APIs the code guards with
+    # #available, so it runs what build-and-test built on the newest macOS.
+    needs: build-and-test
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prebuilt
+          path: prebuilt
+      - name: Unit tests (prebuilt, run on macOS 14, OCR skipped)
+        run: |
+          test "$(uname -m)" = arm64
+          mkdir -p build
+          tar -xf prebuilt/prebuilt.tar -C build
+          chmod +x build/run_tests
+          SKIP_OCR=1 build/run_tests
+      # On the macOS 14 VM, Vision's barcode model runs on the paravirtual GPU and returns no results
+      # without an error (forced onto the CPU it reads the code; real Macs have no paravirtual GPU).
+      # Only those two QR checks may fail here, with a warning; any other OCR failure fails the job.
+      - name: OCR checks on macOS 14
+        run: |
+          set +e; build/run_tests | tee test-output.txt; status=${PIPESTATUS[0]}; set -e
+          unexpected=$(grep '^FAIL' test-output.txt | grep -v -e 'ocr: a QR code is read as its payload' -e 'ocr: a code-only capture reads the QR code' || true)
+          if [ -n "$unexpected" ]; then echo "$unexpected"; exit 1; fi
+          if [ "$status" -ne 0 ]; then echo "::warning::QR checks skipped on the macOS 14 VM (paravirtual GPU)"; fi
+      - name: App signature
+        run: codesign --verify --strict build/Nictate.app

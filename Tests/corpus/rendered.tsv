@@ -1,0 +1,16 @@
+code	guard let url = URL(string: raw) else {\n    return nil\n}\nreturn url
+code	for item in cart.items {\n    total += item.price\n}
+code	SELECT name, email\nFROM customers\nWHERE country = 'DE'\nORDER BY name;
+code	const port = process.env.PORT || 3000;\napp.listen(port);
+table	City      Population   Area\nBerlin    3645000      891\nMunich    1472000      310\nHamburg   1841000      755
+table	Task        Owner     Due\nReport      Ana       Mon\nReview      Ben       Wed\nRelease     Cy        Fri
+table	Sensor    Min    Max\nTemp      12     31\nHumidity  40     90
+table	Plan       Price   Users\nFree       0       1\nPro        9       25\nTeam       29      100
+list	- Bring the charger\n- Pick up the parcel\n- Call the bank
+list	1. Open the settings\n2. Choose a language\n3. Restart the app
+list	• Notes are stored locally\n• Nothing is uploaded\n• You can turn history off
+list	- Monday: planning\n- Tuesday: design review\n- Wednesday: release
+prose	The train left the station on time, which surprised everyone who had waited through the week of delays.\nBy noon the rain had stopped.
+prose	Our library opens at nine on weekdays. Books can be returned at any time through the slot by the door.
+prose	She planted the tomatoes in May and watered them every evening. By August the garden smelled of summer.
+prose	The report is due on Friday. Please send your comments to the team before then, so that we can finish.

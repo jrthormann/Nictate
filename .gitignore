@@ -1,0 +1,19 @@
+# Build output
+build/
+.build/
+.swiftpm/
+DerivedData/
+*.dSYM/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Generated from scripts/make_icon.swift (AppIcon.icns is the tracked result)
+*.iconset/
+
+# Python bytecode from scripts/*.py
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
