@@ -34,7 +34,7 @@ final class Settings: ObservableObject {
             StorageKeys.keepLineBreaks: true, StorageKeys.detectColumns: true, StorageKeys.tablesAsTabs: true, StorageKeys.cleanText: false,
             StorageKeys.appendMode: false, StorageKeys.appendSeparator: "newline",
             StorageKeys.barcodeAction: "copy", StorageKeys.detectContent: true, StorageKeys.hideFromClipboardManagers: false,
-            StorageKeys.clearHistoryOnQuit: false, StorageKeys.historyRetention: HistoryRetention.never.rawValue,
+            StorageKeys.clearHistoryOnQuit: false,
         ])
     }
 
@@ -144,13 +144,6 @@ final class Settings: ObservableObject {
         set { store(newValue, StorageKeys.historyEnabled) }
     }
     var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
-    /// Never by default (the registered default), so captures do not expire by age. A stored value that is not a
-    /// choice reads as never, so a damaged preference can never delete captures.
-    var historyRetention: HistoryRetention {
-        get { HistoryRetention(rawValue: text(StorageKeys.historyRetention)) ?? .never }
-        set { store(newValue.rawValue, StorageKeys.historyRetention) }
-    }
-
     /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
     /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {

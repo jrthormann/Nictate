@@ -64,14 +64,9 @@ enum StorageKeys {
         languages, languageCorrection, codeMode, keepLineBreaks, detectColumns, tablesAsTabs, cleanText,
         codeClean,
         appendMode, appendSeparator, barcodeAction, detectContent, hideFromClipboardManagers,
-        historyEnabled, clearHistoryOnQuit, historyRetention,
+        historyEnabled, clearHistoryOnQuit,
     ]
 
     /// Keys of settings that are no longer read. Reset removes them too, so an old value cannot come back.
-    static let retired = [rotationDepth]
-
-    /// Window frame autosave names (AppKit stores each frame in UserDefaults under these).
-    enum WindowFrame {
-        static let history = "Nictate.History"
-    }
+    static let retired = [rotationDepth, historyRetention]
 }

@@ -64,7 +64,7 @@ final class Notifier {
 }
 
 /// macOS holds back a notification that arrives while its own app is frontmost unless the delegate asks for
-/// it, so with the Settings or History window key the capture's banner never appeared.
+/// it, so with the Settings window key the capture's banner never appeared.
 private final class ForegroundPresenter: NSObject, UNUserNotificationCenterDelegate, Sendable {
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {

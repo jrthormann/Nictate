@@ -45,7 +45,6 @@
 "Minimize" = "Minimize";
 "Multiple Languages…" = "Multiple Languages…";
 "New captures are no longer saved. If you keep the saved ones, Clear History… stays in Settings and in the menu." = "New captures are no longer saved. If you keep the saved ones, Clear History… stays in Settings and in the menu.";
-"Nictate History" = "Nictate History";
 "Nictate, append mode on" = "Nictate, append mode on";
 "No code found" = "No code found";
 "No text found" = "No text found";
@@ -65,7 +64,6 @@
 "Remove shortcut" = "Remove shortcut";
 "Restart Nictate" = "Restart Nictate";
 "Saved captures" = "Saved captures";
-"Search" = "Search";
 "Select All" = "Select All";
 "Separator" = "Separator";
 "Settings…" = "Settings…";
@@ -90,7 +88,6 @@
 "Keep Captures" = "Keep Captures";
 "Delete Captures" = "Delete Captures";
 "No captures yet" = "No captures yet";
-"Press ⇧⌘2 and drag over any text." = "Press ⇧⌘2 and drag over any text.";
 "Select the text to copy" = "Select the text to copy";
 "The screen could not be read" = "The screen could not be read";
 "Reading…" = "Reading…";
@@ -176,3 +173,6 @@
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Your current captures are kept. If the total is more than 15, the oldest are removed.";
 "Detect Links, Contacts & Colors" = "Detect Links, Contacts & Colors";
 "Recognize links, email addresses, phone numbers, and colors." = "Recognize links, email addresses, phone numbers, and colors.";
+"Recent changes to saved captures could not be written yet. Nothing was reset." = "Recent changes to saved captures could not be written yet. Nothing was reset.";
+"Reset stopped" = "Reset stopped";
+"Saved captures could not be deleted. Nothing was reset." = "Saved captures could not be deleted. Nothing was reset.";

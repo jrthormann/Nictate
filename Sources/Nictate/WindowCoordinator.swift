@@ -4,14 +4,13 @@
 import AppKit
 import SwiftUI
 
-/// Owns the settings, history and welcome windows: each is created on first use and then just brought forward.
+/// Owns the settings and welcome windows: each is created on first use and then just brought forward.
 /// Nictate lives in the menu bar; while one of these windows is open it also has a Dock icon and the menu bar,
 /// so the window can be found with ⌘Tab and its Window menu, and goes back to the menu bar alone when the
 /// last one closes.
 @MainActor
 final class WindowCoordinator: NSObject {
     private var prefsWindow: NSWindow?
-    private var historyWindow: NSWindow?
     private var welcomeWindow: NSWindow?
 
     override init() {
@@ -37,14 +36,11 @@ final class WindowCoordinator: NSObject {
         openWindows > 0 ? .regular : .accessory
     }
 
-    private var ownWindows: [NSWindow] { [prefsWindow, historyWindow, welcomeWindow].compactMap { $0 } }
+    private var ownWindows: [NSWindow] { [prefsWindow, welcomeWindow].compactMap { $0 } }
 
     private func setActivationPolicy(_ policy: NSApplication.ActivationPolicy) {
         if NSApp.activationPolicy() != policy { NSApp.setActivationPolicy(policy) }
     }
-
-    /// Whether the History window has the keyboard focus, so Find… has a search field to go to.
-    var isHistoryKey: Bool { historyWindow?.isKeyWindow ?? false }
 
     func showPreferences() {
         if prefsWindow == nil {
@@ -55,12 +51,6 @@ final class WindowCoordinator: NSObject {
             prefsWindow = window
         }
         bringForward(prefsWindow)
-    }
-
-    func showHistory() {
-        show(&historyWindow, title: tr("Nictate History"),
-             style: [.titled, .closable, .resizable, .miniaturizable],
-             autosaveName: StorageKeys.WindowFrame.history) { HistoryView() }
     }
 
     func showWelcome() {
@@ -74,14 +64,13 @@ final class WindowCoordinator: NSObject {
 
     /// Creates the window on first use, then just brings it to the front.
     private func show<Content: View>(_ window: inout NSWindow?, title: String, style: NSWindow.StyleMask,
-                                     autosaveName: String? = nil, @ViewBuilder content: () -> Content) {
+                                     @ViewBuilder content: () -> Content) {
         if window == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView: content()))
             w.title = title
             w.styleMask = style
             w.isReleasedWhenClosed = false
             w.center()
-            if let autosaveName { w.setFrameAutosaveName(autosaveName) }
             window = w
         }
         bringForward(window)

@@ -44,7 +44,6 @@
 "Minimize" = "Minimizar";
 "Multiple Languages…" = "Varios idiomas…";
 "New captures are no longer saved. If you keep the saved ones, Clear History… stays in Settings and in the menu." = "Las capturas nuevas ya no se guardan. Si conservas las guardadas, Borrar historial… sigue en Ajustes y en el menú.";
-"Nictate History" = "Historial de Nictate";
 "Nictate, append mode on" = "Nictate, modo añadir activado";
 "No code found" = "No se encontró ningún código";
 "No text found" = "No se encontró texto";
@@ -64,7 +63,6 @@
 "Remove shortcut" = "Quitar atajo";
 "Restart Nictate" = "Reiniciar Nictate";
 "Saved captures" = "Capturas guardadas";
-"Search" = "Buscar";
 "Select All" = "Seleccionar todo";
 "Separator" = "Separador";
 "Settings…" = "Ajustes…";
@@ -89,7 +87,6 @@
 "Keep Captures" = "Mantener capturas";
 "Delete Captures" = "Borrar capturas";
 "No captures yet" = "Todavía no hay capturas";
-"Press ⇧⌘2 and drag over any text." = "Pulsa ⇧⌘2 y arrastra sobre cualquier texto.";
 "Select the text to copy" = "Selecciona el texto que quieres copiar";
 "The screen could not be read" = "No se pudo leer la pantalla";
 "Reading…" = "Leyendo…";
@@ -176,3 +173,6 @@
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Tus capturas actuales se conservan. Si el total supera 15, se eliminan las más antiguas.";
 "Detect Links, Contacts & Colors" = "Detectar enlaces, contactos y colores";
 "Recognize links, email addresses, phone numbers, and colors." = "Reconoce enlaces, correos electrónicos, números de teléfono y colores.";
+"Recent changes to saved captures could not be written yet. Nothing was reset." = "Todavía no se pudieron guardar los cambios de tus capturas. No se restableció nada.";
+"Reset stopped" = "Restablecimiento detenido";
+"Saved captures could not be deleted. Nothing was reset." = "No se pudieron borrar las capturas guardadas. No se restableció nada.";

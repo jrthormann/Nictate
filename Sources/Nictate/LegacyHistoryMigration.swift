@@ -45,10 +45,12 @@ enum LegacyHistoryMigration {
             return .failed(reason: "legacy key unavailable: \(error)")
         }
         guard let plain = try? LegacyHistoryCipher.open(sealed, key: symmetric),
-              let old = try? JSONDecoder().decode(HistorySnapshot.self, from: plain),
-              old.texts.count == old.dates.count else {
+              let decoded = try? JSONDecoder().decode(HistorySnapshot.self, from: plain) else {
             return .failed(reason: "legacy file could not be decrypted and decoded")
         }
+        // Times that do not line up with the texts are unknown, not a reason to drop the captures (as History does).
+        let old = decoded.dates.count == decoded.texts.count ? decoded
+            : HistorySnapshot(texts: decoded.texts, dates: decoded.texts.map { _ in Date.distantPast.timeIntervalSince1970 })
         // Captures already in the new History are kept. A History that cannot be read is never replaced.
         let current: HistorySnapshot
         switch destination.load() {

@@ -12,7 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// was never made.
     private var running: Running?
     private var cancellables = Set<AnyCancellable>()
-    private var expiryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The history loads in the background: a Keychain prompt must never hold up the menu bar. Clearing on quit
@@ -34,16 +33,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
                 History.shared.seedFixtures(BuildIdentity.historyFixtures)
             }
-            History.shared.pruneExpired()
         }
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
-        // Age-based removal is off (captures are limited by count only); the timer keeps the policy applied.
-        expiryTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in
-            Task { @MainActor in History.shared.pruneExpired() }
-        }
 
+        // Command-F works while the panel shows its History screen, and nowhere else.
         let mainMenu = MainMenu(showSettings: { [weak self] in self?.windows.showPreferences() },
-                                canFind: { [weak self] in self?.windows.isHistoryKey ?? false })
+                                canFind: { [weak self] in
+                                    guard let panel = self?.running?.panel else { return false }
+                                    return panel.isShown && panel.model.screen == .history
+                                })
         mainMenu.install()
         let status = StatusItemController()
         let capture = CaptureCoordinator(status: status, windows: windows)
@@ -75,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Notifier.removeAllDelivered()
             _ = History.shared.clearForQuit()
         } else {
-            History.shared.settleForQuit()
+            // A failed wait is already logged by History; quit goes on, as it cannot wait longer than a few seconds.
+            _ = History.shared.waitForPendingWrites()
         }
     }
 

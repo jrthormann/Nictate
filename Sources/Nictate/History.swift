@@ -4,21 +4,6 @@
 import Combine
 import Foundation
 
-/// How long captures are kept: never, an hour, a day or a week.
-enum HistoryRetention: String, CaseIterable {
-    case never, hour, day, week
-
-    /// Nil means captures never expire.
-    var seconds: TimeInterval? {
-        switch self {
-        case .never: return nil
-        case .hour: return 3_600
-        case .day: return 86_400
-        case .week: return 604_800
-        }
-    }
-}
-
 /// Whether the history can be read and written right now.
 /// `available` means a save can succeed: the file was read and the last write, if any, was saved.
 /// `loading` covers the time the file takes to read; nothing is written during it.
@@ -48,10 +33,6 @@ final class History: ObservableObject {
     @Published private(set) var state: HistoryState
     @Published var query = ""
 
-    var filtered: [String] {
-        query.isEmpty ? items : items.filter { $0.localizedCaseInsensitiveContains(query) }
-    }
-
     private let store: any HistoryStore
     /// What the file should hold once the writes in flight are done. Changes are built here and published later.
     private var intendedTexts: [String] = []
@@ -68,8 +49,10 @@ final class History: ObservableObject {
     private var canWriteExisting: Bool { !importing && (state == .available || (state == .disabled && hasLoadedFile)) }
     /// True from `beginImport` to `endImport`. Reads that finish meanwhile are stale, so they are ignored.
     private var importing = false
-    /// True once `clearForQuit` has been called. From then on no read is applied and no write is started.
+    /// True once a deletion for quit or for a reset has begun. From then on no read is applied and no write starts.
     private var closed = false
+    /// The read in flight, if any, so `finishLoading` can wait for it.
+    private var loadTask: Task<Void, Never>?
     /// The longest the app waits on the file at quit. Past it, nothing is claimed as written.
     static let quitTimeout: TimeInterval = 3
     /// Numbers each write. A write's result is published only if it is newer than the last one published.
@@ -77,8 +60,6 @@ final class History: ObservableObject {
     private var publishedWrite = 0
     /// Writes queued on the I/O queue whose results have not yet reached the main actor.
     private var writesInFlight = 0
-    /// The retention the user chose, read each time captures are pruned.
-    private let retention: @MainActor () -> HistoryRetention
     /// Whether the history is switched on. Read by `refresh`, so a disabled history never touches the Keychain.
     private let isEnabled: @MainActor () -> Bool
 
@@ -86,16 +67,13 @@ final class History: ObservableObject {
     /// the menu bar and writes happen in the order they were made.
     private static let io = DispatchQueue(label: "app.nictate.history.io", qos: .utility)
 
-    /// The app uses `shared`, with the sealed file, the standard defaults and the retention in `Settings`.
-    /// Tests pass a store and a retention of their own, so they never touch the user's captures. With
+    /// The app uses `shared`. Tests pass a store of their own, so they never touch the user's captures. With
     /// `loadsNow` the file is read at once, on the calling thread; the app loads in the background instead.
     /// Captures never expire by age: the 15-capture limit is the only thing that removes them.
     init(store: any HistoryStore = AppHistoryStore.make(),
-         retention: @escaping @MainActor () -> HistoryRetention = { .never },
          isEnabled: @escaping @MainActor () -> Bool = { Settings.shared.historyEnabled },
          loadsNow: Bool = true) {
         self.store = store
-        self.retention = retention
         self.isEnabled = isEnabled
         items = []
         dates = []
@@ -113,12 +91,25 @@ final class History: ObservableObject {
             state = .disabled
             guard !hasLoadedFile, !loadInFlight else { return nil }
             loadInFlight = true
-            return Task { await reload() }
+            return startLoad()
         }
         guard state != .available, !loadInFlight else { return nil }
         loadInFlight = true
         state = .loading
-        return Task { await reload() }
+        return startLoad()
+    }
+
+    /// Starts a read and keeps its task, so a caller can wait for the saved captures to be shown.
+    private func startLoad() -> Task<Void, Never> {
+        let task = Task { await reload() }
+        loadTask = task
+        return task
+    }
+
+    /// Waits for a read in flight to be applied, so a decision that depends on the saved captures sees them.
+    func finishLoading() async {
+        guard loadInFlight else { return }
+        await loadTask?.value
     }
 
     /// Reads the file and key on the I/O queue, then applies the result here on the main actor.
@@ -171,14 +162,19 @@ final class History: ObservableObject {
         return done.wait(timeout: .now() + max(0, deadline.timeIntervalSinceNow)) == .success
     }
 
-    /// Quit with Clear on Quit off: waits, at most `timeout`, until a read in flight is applied and every queued
-    /// write has finished, so changes made just before quit are on disk. Bounded, so a slow disk cannot hold up quit.
-    func settleForQuit(timeout: TimeInterval = History.quitTimeout) {
+    /// Waits, at most `timeout`, until a read in flight is applied and every queued write has finished. Returns true
+    /// only when everything finished in time, so a caller that is about to end the process knows the changes are on
+    /// disk. Bounded, so a slow disk cannot hold up quit or a reset forever.
+    @discardableResult func waitForPendingWrites(timeout: TimeInterval = History.quitTimeout) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while loadInFlight || writesInFlight > 0 {
-            guard Date() < deadline, History.drainIO(until: deadline) else { return }
+            guard Date() < deadline, History.drainIO(until: deadline) else {
+                Log.app.error("History changes were not written in time; they may be lost")
+                return false
+            }
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
         }
+        return true
     }
 
     /// Clear on Quit. From this call on, a read that finishes is ignored and no write starts, so a load still running
@@ -188,11 +184,28 @@ final class History: ObservableObject {
     func clearForQuit(timeout: TimeInterval = History.quitTimeout) -> Bool {
         closed = true
         guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
+        emptyInMemory()
+        return true
+    }
+
+    /// Reset with "Also delete saved captures". Like `clearForQuit`, but a refused or late write reopens the history,
+    /// so the app keeps saving and the reset can stop with a message instead of restarting over captures that remain.
+    func clearForReset(timeout: TimeInterval = History.quitTimeout) -> Bool {
+        closed = true
+        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else {
+            closed = false
+            refresh()
+            return false
+        }
+        emptyInMemory()
+        return true
+    }
+
+    private func emptyInMemory() {
         items = []
         dates = []
         intendedTexts = []
         intendedDates = []
-        return true
     }
 
     /// Clear on Quit is on and the file could not be read (corrupt or unreadable): it is overwritten with an empty
@@ -233,7 +246,7 @@ final class History: ObservableObject {
         guard !loadInFlight else { return }
         loadInFlight = true
         state = .loading
-        Task { await reload() }
+        _ = startLoad()
     }
 
     /// Waits until every queued write has finished and its result has been published. Tests use it before they
@@ -247,8 +260,11 @@ final class History: ObservableObject {
     /// Applies what a read found. Only what the file holds is shown; a removal that was made while the file
     /// could not be written is applied now and written back.
     private func apply(_ result: HistoryLoad) {
-        guard !importing, !closed else { return }
+        // A read that finishes during an import belongs to the import's hold, and is ignored. Once the history is
+        // closed, a read still ends (so `loadInFlight` is cleared), but its captures are not shown or written.
+        guard !importing else { return }
         loadInFlight = false
+        guard !closed else { return }
         switch result {
         case .loaded(let file):
             hasLoadedFile = true
@@ -304,11 +320,6 @@ final class History: ObservableObject {
         return formatter.localizedString(for: date, relativeTo: now)
     }
 
-    func date(for text: String) -> Date? {
-        guard let index = items.firstIndex(of: text), dates[index] != .distantPast else { return nil }
-        return dates[index]
-    }
-
     /// Keeps a capture in the history, once it is saved. Only while the history is available: a loading,
     /// disabled or unavailable history keeps no plaintext copy and no queue. The clipboard copy happens regardless.
     func add(_ text: String, at date: Date = Date()) {
@@ -318,20 +329,6 @@ final class History: ObservableObject {
         guard !text.allSatisfy(\.isWhitespace) else { return }
         let kept = zip(intendedTexts, intendedDates).filter { $0.0 != text }
         commit(Array(([text] + kept.map(\.0)).prefix(HistoryPolicy.maximumHistoryEntries)), Array(([date] + kept.map(\.1)).prefix(HistoryPolicy.maximumHistoryEntries)))
-    }
-
-    /// Removes captures older than `limit` seconds. A capture with an unknown time (saved before times were
-    /// kept) stays: its age cannot be judged.
-    func prune(olderThan limit: TimeInterval?, now: Date = Date()) {
-        guard let limit, canWriteExisting else { return }
-        let kept = zip(intendedTexts, intendedDates).filter { $0.1 == .distantPast || now.timeIntervalSince($0.1) <= limit }
-        guard kept.count != intendedTexts.count else { return }
-        commit(kept.map(\.0), kept.map(\.1))
-    }
-
-    /// Applies the retention the user chose.
-    func pruneExpired(now: Date = Date()) {
-        prune(olderThan: retention().seconds, now: now)
     }
 
     func remove(_ text: String) {

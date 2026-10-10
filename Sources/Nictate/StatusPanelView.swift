@@ -179,6 +179,7 @@ private struct HistoryScreen: View {
         }
         .padding(.horizontal, Panel.verticalInset)
         .onAppear { searchFocused = true }
+        .onChange(of: model.searchFocusRequests) { _, _ in searchFocused = true }
     }
 
     /// Says when the saved captures are not shown, so an empty list is never mistaken for an empty history.
@@ -211,16 +212,23 @@ private struct HistoryScreen: View {
             Text(tr("No matches")).font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 20)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(entries.enumerated()), id: \.element.text) { index, entry in
-                        CaptureRow(text: entry.text, date: entry.date, selected: model.selection == index,
-                                   copy: { model.copyCapture(entry.text) },
-                                   delete: { model.deleteCapture(entry.text) })
+            // The highlighted row is kept in view as the arrow keys move it.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(entries.enumerated()), id: \.element.text) { index, entry in
+                            CaptureRow(text: entry.text, date: entry.date, selected: model.selection == index,
+                                       copy: { model.copyCapture(entry.text) },
+                                       delete: { model.deleteCapture(entry.text) })
+                                .id(index)
+                        }
                     }
                 }
+                .frame(maxHeight: 280)
+                .onChange(of: model.selection) { _, index in
+                    if let index { proxy.scrollTo(index) }
+                }
             }
-            .frame(maxHeight: 280)
         }
     }
 }
@@ -269,7 +277,7 @@ private struct CaptureRow: View {
 }
 
 /// Whether the pointer is over a row. An object rather than `@State`, whose macro needs a toolchain this project's
-/// build does not use (see HistoryView).
+/// build does not use.
 @MainActor private final class HoverFlag: ObservableObject {
     @Published var on = false
 }

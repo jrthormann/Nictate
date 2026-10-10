@@ -41,17 +41,24 @@ final class StatusPanelModel: ObservableObject {
             DispatchQueue.main.async { self?.keepSelectionValid() }
         }.store(in: &observers)
         Settings.shared.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
+        // Command-F in the main menu asks for the search field of the History screen.
+        NotificationCenter.default.publisher(for: MainMenu.findRequested)
+            .sink { [weak self] _ in self?.searchFocusRequests += 1 }
+            .store(in: &observers)
     }
+
+    /// Counts each Command-F. The History screen moves focus to its search field when this changes.
+    @Published var searchFocusRequests = 0
 
     /// Called each time the panel opens: the main screen, with a fresh search.
     func reset() {
         screen = .main
         query = ""
         history.query = ""
-        // A highlight from an earlier visit must not survive: the list may have changed since.
+        // A highlight or an error from an earlier visit must not survive: the list may have changed since.
         selection = nil
+        copyError = nil
         history.refresh()
-        history.pruneExpired()
     }
 
 
@@ -77,8 +84,8 @@ final class StatusPanelModel: ObservableObject {
     func setKeepHistory(_ on: Bool) {
         settings.historyEnabled = on
         history.refresh()
-        // Asked after the menu has finished updating, so the question is not shown mid-change.
-        if !on { DispatchQueue.main.async { HistoryClearing.historyTurnedOff() } }
+        // Asked after the menu has finished updating, and after the saved captures have loaded, so the question sees them.
+        if !on { Task { await HistoryClearing.historyTurnedOff() } }
     }
     func setLaunchAtLogin(_ on: Bool) { LoginItem.shared.set(on) }
     func showPreferences() { dismiss(); windows.showPreferences() }

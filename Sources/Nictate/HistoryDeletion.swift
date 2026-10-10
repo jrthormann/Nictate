@@ -66,7 +66,9 @@ enum HistoryClearing {
     }
 
     /// After "Save Captures" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
-    static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) {
+    /// It waits for a load in flight first, so a history that is still reading is counted, not shown as empty.
+    static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) async {
+        await history.finishLoading()
         let count = history.items.count
         guard HistoryDeletion.asksOnSwitchOff(savedCount: count) else { return }
         let answer = HistoryDeletion.Answer(response: run(switchOffAlert(savedCount: count)))

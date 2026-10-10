@@ -18,7 +18,7 @@ final class MainMenu: NSObject, NSMenuItemValidation {
     private let showSettings: () -> Void
     private let canFind: () -> Bool
 
-    /// `canFind` says whether a window with a search field (History) is the key window.
+    /// `canFind` says whether the History screen with its search field is showing.
     init(showSettings: @escaping () -> Void, canFind: @escaping () -> Bool) {
         self.showSettings = showSettings
         self.canFind = canFind
