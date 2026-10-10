@@ -11,7 +11,7 @@ enum ResetNictate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = tr("Reset Settings?")
-        alert.informativeText = tr("Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below.")
+        alert.informativeText = tr("Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below.")
         let deleteCaptures = NSButton(checkboxWithTitle: tr("Also delete saved captures"), target: nil, action: nil)
         alert.accessoryView = deleteCaptures
         alert.addButton(withTitle: tr("Cancel"))
@@ -24,8 +24,8 @@ enum ResetNictate {
         let deletes = deleteCaptures.state == .on
         let ready = deletes ? History.shared.clearForReset() : History.shared.waitForPendingWrites()
         guard ready else {
-            stop(deletes ? tr("Saved captures could not be deleted. Nothing was reset.")
-                         : tr("Recent changes to saved captures could not be written yet. Nothing was reset."))
+            stop(deletes ? tr("Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.")
+                         : tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
             return
         }
         Settings.resetToDefaults()

@@ -70,6 +70,28 @@ enum HistoryClearing {
         if run(clearAlert(savedCount: count)) == .alertSecondButtonReturn { clear(history) }
     }
 
+    /// "Discard Unreadable History": asks first, and says the deletion cannot be undone. Cancel is the default.
+    static func confirmDiscardUnreadable(_ history: History = .shared) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Discard unreadable history?")
+        alert.informativeText = tr("Nictate can't load the saved captures in this file, so they can't be shown. Discarding the file deletes them permanently. This can't be undone.")
+        alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\r"
+        alert.addButton(withTitle: tr("Discard")).hasDestructiveAction = true
+        guard run(alert) == .alertSecondButtonReturn else { return }
+        Task { @MainActor in
+            guard await history.discardUnreadableFile() else {
+                let failure = NSAlert()
+                failure.alertStyle = .warning
+                failure.messageText = tr("Discard didn't work")
+                failure.informativeText = tr("The file couldn't be replaced, so it was left unchanged.")
+                failure.addButton(withTitle: tr("OK"))
+                _ = run(failure)
+                return
+            }
+        }
+    }
+
     /// After "Save Captures" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
     /// It waits for a load in flight first, so a history that is still reading is counted, not shown as empty.
     static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) async {

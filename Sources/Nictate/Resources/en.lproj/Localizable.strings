@@ -131,7 +131,6 @@
 "Copy Feedback" = "Copy Feedback";
 "Copy Text Only" = "Copy Text Only";
 "Detect Text Columns" = "Detect Text Columns";
-"Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below." = "Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below.";
 "Fix common recognition errors." = "Fix common recognition errors.";
 "Improve Recognized Text" = "Improve Recognized Text";
 "Join Split Words" = "Join Split Words";
@@ -154,7 +153,6 @@
 "Recognized Languages" = "Recognized Languages";
 "Reset Settings?" = "Reset Settings?";
 "Reset Settings…" = "Reset Settings…";
-"Restores every setting to its default. Saved captures are kept unless you also delete them." = "Restores every setting to its default. Saved captures are kept unless you also delete them.";
 "Save Captures" = "Save Captures";
 "Scan QR or Barcode" = "Scan QR or Barcode";
 "Separate Table Cells with Tabs" = "Separate Table Cells with Tabs";
@@ -173,8 +171,19 @@
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Your current captures are kept. If the total is more than 15, the oldest are removed.";
 "Detect Links, Contacts & Colors" = "Detect Links, Contacts & Colors";
 "Recognize links, email addresses, phone numbers, and colors." = "Recognize links, email addresses, phone numbers, and colors.";
-"Recent changes to saved captures could not be written yet. Nothing was reset." = "Recent changes to saved captures could not be written yet. Nothing was reset.";
 "Reset stopped" = "Reset stopped";
-"Saved captures could not be deleted. Nothing was reset." = "Saved captures could not be deleted. Nothing was reset.";
 "Nictate didn't restart" = "Nictate didn't restart";
 "Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Recent changes to saved captures aren't on disk yet. Try again in a moment.";
+
+"Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.";
+"Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment.";
+"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below.";
+"Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them.";
+"Your saved captures can't be loaded from this file." = "Your saved captures can't be loaded from this file.";
+"Discard Unreadable History…" = "Discard Unreadable History…";
+"Restart Nictate to change saved captures again." = "Restart Nictate to change saved captures again.";
+"Discard unreadable history?" = "Discard unreadable history?";
+"Nictate can't load the saved captures in this file, so they can't be shown. Discarding the file deletes them permanently. This can't be undone." = "Nictate can't load the saved captures in this file, so they can't be shown. Discarding the file deletes them permanently. This can't be undone.";
+"Discard" = "Discard";
+"Discard didn't work" = "Discard didn't work";
+"The file couldn't be replaced, so it was left unchanged." = "The file couldn't be replaced, so it was left unchanged.";

@@ -74,7 +74,7 @@ struct GeneralTab: View {
                 SettingRow("Reset Settings…") {
                     Button("Reset…", role: .destructive) { ResetNictate.confirm() }
                 }
-                SettingCaption("Restores every setting to its default. Saved captures are kept unless you also delete them.")
+                SettingCaption("Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them.")
             }
         }
     }

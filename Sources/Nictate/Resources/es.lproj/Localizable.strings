@@ -131,7 +131,6 @@
 "Copy Feedback" = "Confirmación al copiar";
 "Copy Text Only" = "Copiar solo el texto";
 "Detect Text Columns" = "Detectar columnas de texto";
-"Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below." = "Cada ajuste vuelve a su valor predeterminado y Nictate se reinicia. Las capturas guardadas se conservan, salvo que marques la casilla de abajo.";
 "Fix common recognition errors." = "Corrige errores comunes de reconocimiento.";
 "Improve Recognized Text" = "Mejorar el texto reconocido";
 "Join Split Words" = "Unir palabras partidas";
@@ -154,7 +153,6 @@
 "Recognized Languages" = "Idiomas reconocidos";
 "Reset Settings?" = "¿Restablecer ajustes?";
 "Reset Settings…" = "Restablecer ajustes…";
-"Restores every setting to its default. Saved captures are kept unless you also delete them." = "Restaura todos los ajustes a su valor predeterminado. Las capturas guardadas se conservan, salvo que también las elimines.";
 "Save Captures" = "Guardar capturas";
 "Scan QR or Barcode" = "Escanear QR o código de barras";
 "Separate Table Cells with Tabs" = "Separar celdas de tablas con tabulaciones";
@@ -173,8 +171,19 @@
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Tus capturas actuales se conservan. Si el total supera 15, se eliminan las más antiguas.";
 "Detect Links, Contacts & Colors" = "Detectar enlaces, contactos y colores";
 "Recognize links, email addresses, phone numbers, and colors." = "Reconoce enlaces, correos electrónicos, números de teléfono y colores.";
-"Recent changes to saved captures could not be written yet. Nothing was reset." = "Todavía no se pudieron guardar los cambios de tus capturas. No se restableció nada.";
 "Reset stopped" = "Restablecimiento detenido";
-"Saved captures could not be deleted. Nothing was reset." = "No se pudieron borrar las capturas guardadas. No se restableció nada.";
 "Nictate didn't restart" = "Nictate no se reinició";
 "Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Los cambios recientes de tus capturas todavía no están en el disco. Inténtalo de nuevo en un momento.";
+
+"Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "No se pudieron borrar las capturas guardadas, así que no se restableció nada. Reinicia Nictate e inténtalo de nuevo.";
+"Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Todavía no se pudieron guardar los cambios recientes de tus capturas, así que no se restableció nada. Inténtalo de nuevo en un momento.";
+"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Cada ajuste vuelve a su valor predeterminado, excepto Abrir al iniciar sesión, que se queda como está. Nictate se reinicia. Las capturas guardadas se conservan, salvo que marques la casilla de abajo.";
+"Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restaura todos los ajustes a su valor predeterminado, excepto Abrir al iniciar sesión. Las capturas guardadas se conservan, salvo que también las borres.";
+"Your saved captures can't be loaded from this file." = "Las capturas guardadas no se pueden cargar desde este archivo.";
+"Discard Unreadable History…" = "Descartar historial ilegible…";
+"Restart Nictate to change saved captures again." = "Reinicia Nictate para volver a cambiar las capturas guardadas.";
+"Discard unreadable history?" = "¿Descartar el historial ilegible?";
+"Nictate can't load the saved captures in this file, so they can't be shown. Discarding the file deletes them permanently. This can't be undone." = "Nictate no puede cargar las capturas guardadas de este archivo, así que no se pueden mostrar. Descartar el archivo las borra para siempre. Esto no se puede deshacer.";
+"Discard" = "Descartar";
+"Discard didn't work" = "No se pudo descartar";
+"The file couldn't be replaced, so it was left unchanged." = "No se pudo reemplazar el archivo, así que no se modificó.";

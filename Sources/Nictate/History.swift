@@ -31,6 +31,10 @@ final class History: ObservableObject {
     /// before times were kept).
     @Published private(set) var dates: [Date]
     @Published private(set) var state: HistoryState
+    /// True when the file was read and could not be decoded or read. Only an explicit discard replaces it.
+    @Published private(set) var fileIsUnreadable = false
+    /// True once a deletion has begun and could not be confirmed, or for quit: no change is saved until restart.
+    @Published private(set) var isClosed = false
     @Published var query = ""
 
     private let store: any HistoryStore
@@ -177,12 +181,11 @@ final class History: ObservableObject {
         return true
     }
 
-    /// Clear on Quit. From this call on, a read that finishes is ignored and no write starts, so a load still running
-    /// cannot bring captures back. The empty history is written on the serial I/O queue, after everything queued
-    /// before it, and the call waits at most `timeout` for the store's answer. It returns true only when the store
-    /// confirmed the empty history is on disk. Only then is the in-memory list cleared. A false result claims nothing.
+    /// Clear on Quit. The history closes: a read still running is ignored, and no write starts. The empty history is
+    /// written after everything queued before it. True only when the store confirms it; a false result claims nothing.
     func clearForQuit(timeout: TimeInterval = History.quitTimeout) -> Bool {
         closed = true
+        isClosed = true
         guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
         emptyInMemory()
         return true
@@ -192,11 +195,9 @@ final class History: ObservableObject {
     /// so the app keeps saving and the reset can stop with a message instead of restarting over captures that remain.
     func clearForReset(timeout: TimeInterval = History.quitTimeout) -> Bool {
         closed = true
-        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else {
-            closed = false
-            refresh()
-            return false
-        }
+        isClosed = true
+        // Not confirmed: the history stays closed, because a late write may still empty the file.
+        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
         emptyInMemory()
         return true
     }
@@ -208,17 +209,15 @@ final class History: ObservableObject {
         intendedDates = []
     }
 
-    /// Clear on Quit is on and the file could not be read (corrupt or unreadable): it is overwritten with an empty
-    /// history, off the main thread, so a stuck disk cannot freeze the menu bar. A failure is retried next launch.
-    func clearUnreadableFile() async {
-        guard state == .unavailable, !closed else { return }
+    /// "Discard Unreadable History": replaces a file that could not be read, once the store confirms. Only after the
+    /// user's explicit Discard. A failure leaves the file and the state as they were.
+    func discardUnreadableFile() async -> Bool {
+        guard fileIsUnreadable, !closed else { return false }
         let store = self.store
-        let saved = await History.performFileWork { store.save(HistorySnapshot(texts: [], dates: [])) }
-        guard saved else {
-            Log.app.error("Clear on Quit: the unreadable history could not be overwritten; it is retried on the next launch")
-            return
-        }
+        guard await History.performFileWork({ store.save(HistorySnapshot(texts: [], dates: [])) }) else { return false }
+        fileIsUnreadable = false
         reloadFromFile()
+        return true
     }
 
     /// Queues the empty history behind everything already queued, and waits until `deadline` for the store's answer.
@@ -268,6 +267,7 @@ final class History: ObservableObject {
         switch result {
         case .loaded(let file):
             hasLoadedFile = true
+            fileIsUnreadable = false
             let stored = file.capped()
             let times = Self.alignedDates(count: stored.texts.count, stored: stored.dates)
             let kept = pendingClear ? [] : zip(stored.texts, times).filter { !pendingRemovals.contains($0.0) }
@@ -284,6 +284,7 @@ final class History: ObservableObject {
             if changed { commit(texts, dates) }
         case .empty:
             hasLoadedFile = true
+            fileIsUnreadable = false
             pendingRemovals = []
             pendingClear = false
             state = isEnabled() ? .available : .disabled
@@ -294,6 +295,7 @@ final class History: ObservableObject {
         case .corrupt, .unavailable:
             // Nothing is shown from a file that cannot be read, and nothing is written over it.
             hasLoadedFile = false
+            fileIsUnreadable = true
             state = .unavailable
             items = []
             dates = []

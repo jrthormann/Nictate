@@ -71,6 +71,8 @@ final class StatusPanelModel: ObservableObject {
     var keepHistory: Bool { settings.historyEnabled }
     var historyCount: Int { history.items.count }
     var historyState: HistoryState { history.state }
+    var historyFileUnreadable: Bool { history.fileIsUnreadable }
+    var historyClosed: Bool { history.isClosed }
     var hotKeyLabel: String { settings.hotKeyLabel }
     var rotateHotKeyLabel: String { settings.rotateHotKeyLabel }
     var codeHotKeyLabel: String? { settings.shortcut(for: .captureCode)?.label }
@@ -164,6 +166,10 @@ final class StatusPanelModel: ObservableObject {
 
     func clearHistory() {
         HistoryClearing.confirmClear()
+    }
+
+    func discardUnreadableHistory() {
+        HistoryClearing.confirmDiscardUnreadable()
     }
 
     func openHistory() { screen = .history }

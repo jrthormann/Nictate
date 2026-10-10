@@ -168,6 +168,7 @@ private struct HistoryScreen: View {
                 .onSubmit { model.copySelected() }
                 .padding(.horizontal, 10).padding(.vertical, 4)
             stateNote
+            HistoryRecoveryNotes(model: model)
             if let copyError = model.copyError {
                 Text(copyError).font(.caption).foregroundStyle(.red).padding(.horizontal, 10)
             }
@@ -225,9 +226,7 @@ private struct HistoryScreen: View {
                     }
                 }
                 .frame(maxHeight: 280)
-                .onChange(of: model.selection) { _, index in
-                    if let index { proxy.scrollTo(index) }
-                }
+                .onChange(of: model.selection) { _, index in if let index { proxy.scrollTo(index) } }
             }
         }
     }
@@ -352,7 +351,7 @@ private struct MenuLine: View {
 }
 
 /// A full-width menu action. Its shortcut or symbol sits at the trailing edge.
-private struct MenuAction: View {
+struct MenuAction: View {
     let title: String
     var shortcut: String?
     var leadingSymbol: String?

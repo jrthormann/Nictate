@@ -2128,19 +2128,6 @@ do {
           "quit: a hung disk does not hold quit past its timeout, and nothing is claimed", "elapsed \(elapsed), confirmed \(confirmed)")
 }
 
-// A corrupt file at launch with Clear on Quit on is overwritten and then read back as an empty history.
-do {
-    let store = ScriptedStore(answers: [.corrupt, .empty])
-    let history = History(store: store, isEnabled: alwaysSaving)
-    check(history.state == .unavailable, "launch: a corrupt file starts unavailable")
-    settle {
-        await history.clearUnreadableFile()
-        while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
-    }
-    check(store.saved?.texts.isEmpty == true && history.state == .available,
-          "launch: the corrupt file is overwritten and then read as empty", "state \(history.state)")
-}
-
 // Clear on Quit off: quitting writes what is pending and does not clear anything.
 do {
     let store = ScriptedStore(answers: [.empty])
@@ -2220,7 +2207,7 @@ do {
     store.writesSucceed = true
     history.add("after the refusal")
     History.flushWrites()
-    check(store.saved?.texts == ["after the refusal", "keep"], "reset: after a refused deletion the history keeps saving", "\(store.saved?.texts ?? [])")
+    check(store.saved?.texts == ["keep"] && history.isClosed, "reset: after a refused deletion the history stays closed and writes nothing", "\(store.saved?.texts ?? [])")
 }
 // Regression: a reset without deletion waits for the pending writes, and reports a write that never finishes.
 do {
@@ -2265,6 +2252,68 @@ do {
 check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: false), "switch-off: a decision made after saving is back on is dropped")
 check(HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: true), "switch-off: with saving off and captures kept, the question is asked")
 check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 0, stillOff: true), "switch-off: nothing saved, nothing to ask")
+
+// A history whose deletion is not confirmed in time: a late write may still land, but nothing is written after it.
+final class LateSaveStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    var saved: HistorySnapshot?
+    init(stored: HistorySnapshot) { self.stored = stored }
+    func load() -> HistoryLoad { .loaded(stored) }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        Thread.sleep(forTimeInterval: 0.4)
+        saved = snapshot
+        return true
+    }
+}
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = LateSaveStore(stored: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    check(!history.clearForReset(timeout: 0.1) && history.isClosed && history.items == ["keep"],
+          "reset: an unconfirmed deletion is reported, and the history stays closed")
+    history.add("after the timeout")
+    History.flushWrites()
+    check(store.saved?.texts.isEmpty == true && history.items == ["keep"],
+          "reset: a late deletion cannot be followed by a restored or new capture", "\(store.saved?.texts ?? [])")
+}
+
+// An unreadable history file is never overwritten at startup or by a capture. Only an explicit discard replaces it.
+do {
+    let store = ScriptedStore(answers: [.corrupt])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("not saved")
+    History.flushWrites()
+    check(history.fileIsUnreadable && history.state == .unavailable && store.saves == 0,
+          "unreadable history: startup and a capture leave the file alone", "saves \(store.saves)")
+}
+do {
+    let store = ScriptedStore(answers: [.corrupt, .empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle {
+        let discarded = await history.discardUnreadableFile()
+        while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
+        check(discarded && store.saved?.texts.isEmpty == true && history.state == .available && !history.fileIsUnreadable,
+              "unreadable history: an explicit discard replaces the file and starts an empty history")
+    }
+}
+do {
+    let store = ScriptedStore(answers: [.corrupt])
+    store.writesSucceed = false
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle {
+        let discarded = await history.discardUnreadableFile()
+        check(!discarded && history.fileIsUnreadable && store.saved == nil,
+              "unreadable history: a discard that fails leaves the file and the state as they were")
+    }
+}
+
+// Reset touches the stored settings only. App state outside them, such as the legacy import marker, is kept.
+do {
+    let suite = freshSuite("reset-app-state")
+    suite.defaults.set(true, forKey: StorageKeys.legacyHistoryImported)
+    Settings.resetToDefaults(in: suite.defaults)
+    check(suite.defaults.bool(forKey: StorageKeys.legacyHistoryImported), "reset: app state outside the settings is kept")
+}
 
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
