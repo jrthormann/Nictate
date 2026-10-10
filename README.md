@@ -12,7 +12,7 @@
 <p align="center">
   Free and open source. Works on macOS 14 and later.
   <br>
-  <a href="../../releases">Download&nbsp;&rsaquo;</a>
+  <a href="https://github.com/jrthormann/Nictate/releases">Download&nbsp;&rsaquo;</a>
   &nbsp;&nbsp;
   <a href="#build-from-source">Build it yourself&nbsp;&rsaquo;</a>
   <br><br>
@@ -111,7 +111,7 @@ macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are w
 
 ## Install
 
-Grab the disk image from the [releases page](../../releases), open it, and drag Nictate into Applications.
+Grab the disk image from the [releases page](https://github.com/jrthormann/Nictate/releases), open it, and drag Nictate into Applications.
 Nictate is signed with a local certificate and isn't notarized, so macOS asks you once to confirm you want to
 open it:
 
@@ -152,7 +152,7 @@ goes toward maintenance, fixes and whatever comes next.
 Bug reports, ideas and pull requests are all welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report a bug,
 propose a change, build, run the tests and send a pull request. Translations live in `Sources/Nictate/Resources/`,
 one `.lproj` folder per language, and `make strings` makes sure none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-walks through each file. The test releases are on the [Releases page](../../releases).
+walks through each file. The test releases are on the [Releases page](https://github.com/jrthormann/Nictate/releases).
 
 <br>
 
