@@ -3,7 +3,7 @@
 
 import SwiftUI
 
-/// The menu bar panel: the main screen with every action, and the history as a second screen of the same panel.
+/// The menu bar panel, styled as a compact native menu. History is a second screen of the same panel.
 struct StatusPanelView: View {
     @ObservedObject var model: StatusPanelModel
 
@@ -14,8 +14,8 @@ struct StatusPanelView: View {
             case .history: HistoryScreen(model: model)
             }
         }
-        .frame(width: 300)
-        .padding(.vertical, 8)
+        .frame(width: Panel.width)
+        .padding(.vertical, Panel.verticalInset)
         .onExitCommand(perform: escape)
     }
 
@@ -29,53 +29,63 @@ struct StatusPanelView: View {
     }
 }
 
+/// Sizes shared by every screen, so the rows line up as they do in a system menu.
+private enum Panel {
+    static let width: CGFloat = 260
+    static let verticalInset: CGFloat = 6
+}
+
 private struct MainScreen: View {
     @ObservedObject var model: StatusPanelModel
+    @ObservedObject private var login = LoginItem.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PanelRow(tr("Capture Text"), symbol: "text.viewfinder", shortcut: model.hotKeyLabel, action: model.captureText)
-            PanelRow(tr("Capture QR Code or Barcode"), symbol: "qrcode.viewfinder", shortcut: model.codeHotKeyLabel, action: model.captureCode)
+            MenuAction(tr("Capture Text"), shortcut: model.hotKeyLabel, leadingSymbol: "text.viewfinder", action: model.captureText)
+            MenuAction(tr("Capture QR Code or Barcode"), shortcut: model.codeHotKeyLabel, leadingSymbol: "qrcode.viewfinder", action: model.captureCode)
             if model.historyEnabled {
-                PanelRow(tr("Cycle History"), symbol: "arrow.triangle.2.circlepath", shortcut: model.rotateHotKeyLabel, action: model.cycleHistory)
+                MenuAction(tr("Cycle History"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "arrow.triangle.2.circlepath", action: model.cycleHistory)
+                MenuAction(tr("History"), leadingSymbol: "clock.arrow.circlepath", trailingSymbol: "chevron.right", action: model.openHistory)
             }
-            Divider().padding(.vertical, 4)
+            MenuDivider()
             detections
-            modeAndLanguage
-            Toggle(tr("Append Mode"), isOn: Binding(get: { model.appendMode }, set: { model.appendMode = $0 }))
-                .toggleStyle(.switch).controlSize(.small).padding(.horizontal, 12).padding(.vertical, 4)
-            Divider().padding(.vertical, 4)
-            if model.historyEnabled {
-                PanelRow(tr("History"), symbol: "clock.arrow.circlepath", badge: "\(model.historyCount)") { model.screen = .history }
-            }
-            PanelRow(tr("Settings…"), symbol: "gearshape", shortcut: "⌘,", action: model.showPreferences)
-            PanelRow(tr("About Nictate"), symbol: "info.circle", action: model.showAbout)
-            PanelRow(tr("Check for Updates…"), symbol: "arrow.down.circle", action: model.checkForUpdates)
-            PanelRow(tr("Quit Nictate"), symbol: "power", shortcut: "⌘Q", action: model.quit)
+            captureOptions
+            MenuDivider()
+            MenuToggle(tr("Save Captures"), symbol: "clock", isOn: Binding(get: { model.keepHistory }, set: { model.setKeepHistory($0) }))
+            MenuToggle(tr("Launch at Login"), symbol: "power", isOn: Binding(get: { login.enabled }, set: { model.setLaunchAtLogin($0) }))
+            MenuDivider()
+            MenuAction(tr("Settings…"), shortcut: "⌘,", leadingSymbol: "gearshape", action: model.showPreferences)
+            MenuAction(tr("About Nictate"), leadingSymbol: "info.circle", action: model.showAbout)
+            MenuAction(tr("Check for Updates…"), leadingSymbol: "arrow.down.circle", action: model.checkForUpdates)
+            MenuDivider()
+            MenuAction(tr("Quit Nictate"), shortcut: "⌘Q", action: model.quit)
         }
+        .padding(.horizontal, Panel.verticalInset)
     }
 
     @ViewBuilder private var detections: some View {
         let found = model.lastDetections
         if !found.isEmpty {
             Text(tr("Found in the last capture"))
-                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 2)
+                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 4)
             ForEach(Array(found.colors.enumerated()), id: \.offset) { _, detected in
                 Menu {
                     ForEach(Array(detected.color.formats.enumerated()), id: \.offset) { _, format in
                         Button("\(format.name): \(format.value)") { model.copyDetected(format.value) }
                     }
                 } label: {
-                    Label { Text(detected.source) } icon: { Image(nsImage: detected.color.swatch) }
+                    MenuLine(detected.source, swatch: detected.color.swatch, trailingSymbol: "chevron.right")
                 }
-                .menuStyle(.borderlessButton).padding(.horizontal, 12).padding(.vertical, 3)
+                .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.plain)
             }
             ForEach(found.links, id: \.self) { url in
                 Menu {
                     Button(tr("Open in Browser")) { model.openDetected(url) }
                     Button(tr("Copy Link")) { model.copyDetected(url.absoluteString) }
-                } label: { Label(LinkPolicy.menuTitle(for: url), systemImage: "link") }
-                .menuStyle(.borderlessButton).padding(.horizontal, 12).padding(.vertical, 3)
+                } label: {
+                    MenuLine(LinkPolicy.menuTitle(for: url), leadingSymbol: "link", trailingSymbol: "chevron.right")
+                }
+                .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.plain)
             }
             ForEach(found.emails, id: \.self) { address in
                 Menu {
@@ -83,23 +93,28 @@ private struct MainScreen: View {
                         Button(tr("Write Email")) { model.openDetected(mailto) }
                     }
                     Button(tr("Copy Address")) { model.copyDetected(address) }
-                } label: { Label(address, systemImage: "envelope") }
-                .menuStyle(.borderlessButton).padding(.horizontal, 12).padding(.vertical, 3)
+                } label: {
+                    MenuLine(address, leadingSymbol: "envelope", trailingSymbol: "chevron.right")
+                }
+                .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.plain)
             }
             ForEach(found.phones, id: \.self) { number in
-                PanelRow(number, symbol: "phone") { model.copyDetected(number) }
+                MenuAction(number, leadingSymbol: "phone") { model.copyDetected(number) }
             }
-            Divider().padding(.vertical, 4)
+            MenuDivider()
         }
     }
 
-    private var modeAndLanguage: some View {
+    /// Mode, language and append mode: the settings that change how a capture is read.
+    private var captureOptions: some View {
         VStack(alignment: .leading, spacing: 0) {
             Menu {
                 Button { model.setFaithful(false) } label: { CheckLabel(tr("Normal"), checked: !model.codeMode) }
                 Button { model.setFaithful(true) } label: { CheckLabel(tr("Faithful Mode (Code and Structure)"), checked: model.codeMode) }
-            } label: { Text(tr("Mode: %@", model.codeMode ? tr("Faithful") : tr("Normal"))) }
-            .menuStyle(.borderlessButton).padding(.horizontal, 12).padding(.vertical, 3)
+            } label: {
+                MenuLine(tr("Mode"), value: model.codeMode ? tr("Faithful") : tr("Normal"), leadingSymbol: "slider.horizontal.3", trailingSymbol: "chevron.right")
+            }
+            .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.plain)
             Menu {
                 Button { model.setLanguage("") } label: { CheckLabel(tr("Automatic"), checked: model.languages.isEmpty) }
                 Divider()
@@ -110,8 +125,11 @@ private struct MainScreen: View {
                 }
                 Divider()
                 Button(tr("Multiple Languages…"), action: model.showPreferences)
-            } label: { Text(tr("Language: %@", languageTitle)) }
-            .menuStyle(.borderlessButton).padding(.horizontal, 12).padding(.vertical, 3)
+            } label: {
+                MenuLine(tr("Language"), value: languageTitle, leadingSymbol: "globe", trailingSymbol: "chevron.right")
+            }
+            .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.plain)
+            MenuToggle(tr("Append Mode"), symbol: "text.append", isOn: Binding(get: { model.appendMode }, set: { model.appendMode = $0 }))
         }
     }
 
@@ -129,32 +147,27 @@ private struct HistoryScreen: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Button(action: model.backToMain) { Label(tr("Back"), systemImage: "chevron.left") }
-                    .buttonStyle(.borderless)
-                Spacer()
-                Text(tr("History")).font(.headline)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
+        VStack(alignment: .leading, spacing: 0) {
+            MenuAction(tr("Back"), leadingSymbol: "chevron.left", action: model.backToMain)
+            MenuDivider()
             TextField(tr("Search history"), text: Binding(get: { model.query }, set: { model.searchChanged($0) }))
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
                 .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
                 .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
                 .onSubmit { model.copySelected() }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10).padding(.vertical, 4)
             stateNote
             if let copyError = model.copyError {
-                Text(copyError).font(.caption).foregroundStyle(.red).padding(.horizontal, 12)
+                Text(copyError).font(.caption).foregroundStyle(.red).padding(.horizontal, 10)
             }
             content
             if model.historyCount > 0 {
-                Button(tr("Clear History…"), role: .destructive, action: model.clearHistory)
-                    .buttonStyle(.borderless).font(.caption).padding(.horizontal, 12)
+                MenuDivider()
+                MenuAction(tr("Clear History…"), destructive: true, action: model.clearHistory)
             }
         }
+        .padding(.horizontal, Panel.verticalInset)
         .onAppear { searchFocused = true }
     }
 
@@ -162,10 +175,10 @@ private struct HistoryScreen: View {
     @ViewBuilder private var stateNote: some View {
         switch model.historyState {
         case .loading:
-            Text(tr("Loading history…")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
+            Text(tr("Loading history…")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
         case .unavailable:
             Text(tr("History is unavailable right now. New captures are still copied but won't be saved."))
-                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
+                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
         case .available, .disabled:
             EmptyView()
         }
@@ -183,10 +196,10 @@ private struct HistoryScreen: View {
                 Text(tr("Press %@, then drag to select an area.", model.hotKeyLabel))
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity).padding(.vertical, 24)
+            .frame(maxWidth: .infinity).padding(.vertical, 20)
         } else if entries.isEmpty {
             Text(tr("No matches")).font(.callout).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity).padding(.vertical, 24)
+                .frame(maxWidth: .infinity).padding(.vertical, 20)
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -197,26 +210,30 @@ private struct HistoryScreen: View {
                     }
                 }
             }
-            .frame(maxHeight: 300)
+            .frame(maxHeight: 280)
         }
     }
 }
 
+/// One capture: a click copies the whole text. The trash button removes only this entry.
 private struct CaptureRow: View {
+    private var highlighted: Bool { selected || hover.on }
+
     let text: String
     let date: Date
     var selected = false
     let copy: () -> Void
     let delete: () -> Void
+    @StateObject private var hover = HoverFlag()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .center, spacing: 6) {
             Button(action: copy) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\t", with: " "))
                         .lineLimit(2).truncationMode(.tail)
                     if let age = History.ageLabel(for: date) {
-                        Text(age).font(.caption).foregroundStyle(.secondary)
+                        Text(age).font(.caption).foregroundStyle(highlighted ? Color.white.opacity(0.85) : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,19 +242,26 @@ private struct CaptureRow: View {
             .buttonStyle(.plain)
             .accessibilityHint(tr("Copies the whole capture"))
             .accessibilityAction(named: tr("Copy")) { copy() }
-            Button(action: delete) { Image(systemName: "trash") }
-                .buttonStyle(.borderless).foregroundStyle(selected ? Color.white : Color.secondary)
+            Button(action: delete) { Image(systemName: "trash").font(.caption) }
+                .buttonStyle(.borderless)
                 .accessibilityLabel(tr("Delete"))
         }
-        .foregroundStyle(selected ? Color.white : Color.primary)
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor : .clear).padding(.horizontal, 4))
+        .foregroundStyle(highlighted ? Color.white : Color.primary)
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 5).fill(highlighted ? Color.accentColor : .clear))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .onHover { hover.on = $0 }
         .contextMenu {
             Button(tr("Copy"), action: copy)
             Button(tr("Delete"), role: .destructive, action: delete)
         }
     }
+}
+
+/// Whether the pointer is over a row. An object rather than `@State`, whose macro needs a toolchain this project's
+/// build does not use (see HistoryView).
+@MainActor private final class HoverFlag: ObservableObject {
+    @Published var on = false
 }
 
 /// A menu entry with a check mark when it is the current choice.
@@ -258,33 +282,101 @@ private struct CheckLabel: View {
     }
 }
 
-private struct PanelRow: View {
+private struct MenuDivider: View {
+    var body: some View {
+        Divider().padding(.horizontal, 10).padding(.vertical, 4)
+    }
+}
+
+/// The visual line of a menu entry. It highlights in the accent colour on hover, as a system menu does.
+/// Used as a button's content, or as the label of a `Menu`.
+private struct MenuLine: View {
     let title: String
-    let symbol: String
+    var value: String?
+    var swatch: NSImage?
+    var leadingSymbol: String?
+    var trailingSymbol: String?
+    var destructive = false
+    @StateObject private var hover = HoverFlag()
+
+    init(_ title: String, value: String? = nil, swatch: NSImage? = nil, leadingSymbol: String? = nil,
+         trailingSymbol: String? = nil, destructive: Bool = false) {
+        self.title = title
+        self.value = value
+        self.swatch = swatch
+        self.leadingSymbol = leadingSymbol
+        self.trailingSymbol = trailingSymbol
+        self.destructive = destructive
+    }
+
+    /// Reserved even without an icon, so every label in the menu starts at the same x position.
+    private static let iconColumn: CGFloat = 16
+
+    @ViewBuilder private var leading: some View {
+        if let swatch { Image(nsImage: swatch).resizable().frame(width: 12, height: 12).clipShape(Circle()) }
+        else if let leadingSymbol { Image(systemName: leadingSymbol) }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            leading.frame(width: Self.iconColumn)
+            Text(title).lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 12)
+            if let value { Text(value).foregroundStyle(hover.on ? Color.white.opacity(0.85) : .secondary) }
+            if let trailingSymbol { Image(systemName: trailingSymbol).font(.caption.weight(.semibold)) }
+        }
+        .foregroundStyle(hover.on ? Color.white : (destructive ? Color.red : Color.primary))
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 5).fill(hover.on ? Color.accentColor : .clear))
+        .contentShape(Rectangle())
+        .onHover { hover.on = $0 }
+    }
+}
+
+/// A full-width menu action. Its shortcut or symbol sits at the trailing edge.
+private struct MenuAction: View {
+    let title: String
     var shortcut: String?
-    var badge: String?
+    var leadingSymbol: String?
+    var trailingSymbol: String?
+    var destructive = false
     let action: () -> Void
 
-    init(_ title: String, symbol: String, shortcut: String? = nil, badge: String? = nil, action: @escaping () -> Void) {
+    init(_ title: String, shortcut: String? = nil, leadingSymbol: String? = nil, trailingSymbol: String? = nil,
+         destructive: Bool = false, action: @escaping () -> Void) {
         self.title = title
-        self.symbol = symbol
         self.shortcut = shortcut
-        self.badge = badge
+        self.leadingSymbol = leadingSymbol
+        self.trailingSymbol = trailingSymbol
+        self.destructive = destructive
         self.action = action
     }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: symbol).frame(width: 18).foregroundStyle(.secondary)
-                Text(title)
-                Spacer()
-                if let badge { Text(badge).font(.caption).foregroundStyle(.secondary) }
-                if let shortcut { Text(shortcut).font(.caption).foregroundStyle(.secondary) }
-            }
-            .contentShape(Rectangle())
+            MenuLine(title, value: shortcut, leadingSymbol: leadingSymbol, trailingSymbol: trailingSymbol, destructive: destructive)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 12).padding(.vertical, 4)
+    }
+}
+
+/// A menu entry that shows a check mark when it is on, the way a system menu shows a choice.
+private struct MenuToggle: View {
+    let title: String
+    var symbol: String?
+    @Binding var isOn: Bool
+
+    init(_ title: String, symbol: String? = nil, isOn: Binding<Bool>) {
+        self.title = title
+        self.symbol = symbol
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        Button { isOn.toggle() } label: {
+            MenuLine(title, leadingSymbol: symbol, trailingSymbol: isOn ? "checkmark" : nil)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

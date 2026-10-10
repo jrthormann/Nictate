@@ -49,6 +49,7 @@ final class StatusPanelModel: ObservableObject {
     var languages: [String] { settings.languages }
     var supportedLanguages: [String] { Recognizer.supportedLanguages }
     var historyEnabled: Bool { settings.historyEnabled }
+    var keepHistory: Bool { settings.historyEnabled }
     var historyCount: Int { history.items.count }
     var historyState: HistoryState { history.state }
     var hotKeyLabel: String { settings.hotKeyLabel }
@@ -61,6 +62,13 @@ final class StatusPanelModel: ObservableObject {
     func cycleHistory() { dismiss(); capture.rotateHistory() }
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
     func setLanguage(_ code: String) { settings.languages = code.isEmpty ? [] : [code] }
+    func setKeepHistory(_ on: Bool) {
+        settings.historyEnabled = on
+        history.refresh()
+        // Asked after the menu has finished updating, so the question is not shown mid-change.
+        if !on { DispatchQueue.main.async { HistoryClearing.historyTurnedOff() } }
+    }
+    func setLaunchAtLogin(_ on: Bool) { LoginItem.shared.set(on) }
     func showPreferences() { dismiss(); windows.showPreferences() }
     func showAbout() { dismiss(); AboutPanel.show() }
     func checkForUpdates() { dismiss(); Task { @MainActor in await UpdateAlert.run() } }
@@ -129,6 +137,8 @@ final class StatusPanelModel: ObservableObject {
         HistoryClearing.confirmClear()
     }
 
+    func openHistory() { screen = .history }
+
     func backToMain() {
         screen = .main
         query = ""
@@ -164,6 +174,8 @@ final class StatusPanel {
             close()
         } else {
             model.reset()
+            // Activating first makes the first click land in the panel, so History opens on one click.
+            NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
