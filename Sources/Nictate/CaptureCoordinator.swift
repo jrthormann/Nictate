@@ -178,7 +178,7 @@ final class CaptureCoordinator {
             status.announce(tr("Couldn't copy text. Try again."))
             return false
         }
-        status.cue(.success)
+        // Silent for sighted users: the panel closes and nothing else appears. VoiceOver still hears the result.
         status.announce(tr("Text copied"))
         return true
     }
