@@ -76,7 +76,7 @@ normal nunca dispara una captura por error. Un atajo solo para códigos es opcio
 ## Privado por diseño.
 
 Sin cuenta. Sin analíticas. Tus capturas se guardan cifradas en tu Mac, con la clave en tu llavero de inicio de
-sesión. La única conexión que hace Nictate es Comprobar actualizaciones, y solo cuando se lo pides.
+sesión. Nictate no hace peticiones de red por su cuenta, salvo Comprobar actualizaciones, que solo se ejecuta cuando lo pides. Un enlace que elijas abrir se entrega a tu navegador, que se conecta como lo haría normalmente.
 
 <br>
 
@@ -88,7 +88,7 @@ sesión. La única conexión que hace Nictate es Comprobar actualizaciones, y so
 | **Tamaño** | Unos 4 MB |
 | **Idiomas** | Inglés y español. El texto se reconoce en todos los idiomas que admite Vision. |
 | **Hecho con** | Swift, AppKit, SwiftUI, Vision y ScreenCaptureKit |
-| **Acceso a la red** | Solo Comprobar actualizaciones, cuando lo pides |
+| **Acceso a la red** | Solo Comprobar actualizaciones, cuando lo pides. Los enlaces se abren en tu navegador solo si los eliges. |
 | **Precio** | Gratis |
 | **Licencia** | MIT |
 

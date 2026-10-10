@@ -74,7 +74,8 @@ ordinary typing is never captured by mistake. A shortcut for codes alone is opti
 ## Private by design.
 
 No account. No analytics. Your captures are stored encrypted on your Mac, with the key in your login Keychain.
-The only network request Nictate ever makes is Check for Updates, and only when you ask it to.
+Nictate makes no network requests of its own, except Check for Updates, which runs only when you ask it to.
+A link you choose to open is handed to your browser, which then connects as it normally would.
 
 <br>
 
@@ -86,7 +87,7 @@ The only network request Nictate ever makes is Check for Updates, and only when 
 | **Size** | About 4 MB |
 | **Languages** | English and Spanish. Text is recognized in every language Vision supports. |
 | **Built with** | Swift, AppKit, SwiftUI, Vision and ScreenCaptureKit |
-| **Network access** | Only Check for Updates, when you ask for it |
+| **Network access** | Only Check for Updates, when you ask for it. Links open in your browser only when you choose. |
 | **Price** | Free |
 | **License** | MIT |
 
