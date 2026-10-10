@@ -58,8 +58,9 @@ Needs are inferred from the design decisions. They stay assumptions until people
 2. **Local by default.** Recognition runs on the Mac. The one network request is Check for Updates, and only when
    the user asks. Links open in the browser only when the user chooses.
 3. **Keep the shape of the text.** Code, tables and lists keep their form. Only ordinary prose is joined.
-4. **Do not take focus, and do not read other people's clipboard.** Focus goes back only to the app the user came
-   from, and only while Nictate is still the active app. Nictate reads back only the text it wrote.
+4. **Do not take focus, and read the clipboard only as needed.** Focus goes back only to the app the user came
+   from, and only while Nictate is still the active app. Nictate confirms each copy by reading back the text it wrote.
+   In Append mode it reads the current clipboard text, and it skips text other apps mark as concealed or transient.
 5. **Say what happened.** A finished capture reports what it copied, or why nothing was copied.
 6. **Few settings, plain defaults.** Each setting answers one of the needs above.
 
@@ -78,7 +79,7 @@ check in [CONTRIBUTING.md](../CONTRIBUTING.md) that covers it.
 | FR-6 | Optional clean-up: code prompts and line numbers removed, curly quotes straightened, hyphenated words joined. | `CodeClean.swift`, `TextCleaner`; tests |
 | FR-7 | Colors, links, emails and phone numbers in the last capture are offered from the menu. | `ContentDetector.swift`, `DetectionUI.swift` |
 | FR-8 | QR codes and barcodes copy their contents. A link inside one opens only when the user chooses. | `LinkPolicy.swift`, `CaptureMode.swift` |
-| FR-9 | Append mode adds each capture to the clipboard with a chosen separator. Copies can be hidden from clipboard managers. | `ClipboardWriter.swift`, `Pasteboard.swift` |
+| FR-9 | Append mode adds each capture to the clipboard with a chosen separator. Copies can be marked transient, so clipboard managers that follow the convention skip them. | `ClipboardWriter.swift`, `Pasteboard.swift` |
 | FR-10 | A copy counts only after the clipboard reads back the text Nictate wrote. | `ClipboardWriter.swift` |
 | FR-11 | Feedback comes as a menu bar cue, a result line beside the selection, and an optional notification. | `ResultPill.swift`, `StatusFlash.swift`, `Notifier.swift` |
 | FR-12 | Up to 15 recent captures can be kept, searched, copied, and cleared. History can be cleared on quit. | `History.swift`, `HistoryStore.swift` |

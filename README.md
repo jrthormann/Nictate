@@ -85,7 +85,7 @@ No account and no analytics. If you turn on Save Captures, the 15 most recent ca
 your Mac. Nictate doesn't encrypt that file, so turn saving off or clear the file whenever you like.
 
 Nictate makes no network requests of its own, except Check for Updates, and only when you ask it to. A link you
-choose to open goes to your browser, which connects the way it normally would.
+choose to open goes to your browser, which connects the way it normally would. To report a security problem, see [SECURITY.md](SECURITY.md).
 
 <br>
 
@@ -108,6 +108,8 @@ choose to open goes to your browser, which connects the way it normally would.
 Nictate 1.0.0-beta.2 is a public test release. It works, and I've tested it on macOS 27. I haven't tried it on
 macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome. The
 [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't.
+
+If you have 1.0.0-beta.1, download beta.2 from the [Releases page](https://github.com/jrthormann/Nictate/releases). Beta.1 reports itself as version 1.0.0, so its Check for Updates can't find beta.2.
 
 ## Install
 
@@ -152,7 +154,7 @@ goes toward maintenance, fixes and whatever comes next.
 Bug reports, ideas and pull requests are all welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report a bug,
 propose a change, build, run the tests and send a pull request. Translations live in `Sources/Nictate/Resources/`,
 one `.lproj` folder per language, and `make strings` makes sure none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-walks through each file. The test releases are on the [Releases page](https://github.com/jrthormann/Nictate/releases).
+walks through each file. The test releases are on the [Releases page](https://github.com/jrthormann/Nictate/releases). Security problems are reported privately, as [SECURITY.md](SECURITY.md) explains.
 
 <br>
 

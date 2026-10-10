@@ -85,7 +85,7 @@ Sin cuenta y sin analíticas. Si activas Guardar capturas, las 15 más recientes
 de tu Mac. Nictate no cifra ese archivo, así que desactiva el guardado o borra el archivo cuando quieras.
 
 Nictate no hace peticiones de red por su cuenta, salvo Comprobar actualizaciones, y solo cuando tú lo pides. Un enlace
-que decides abrir pasa a tu navegador, que se conecta como siempre.
+que decides abrir pasa a tu navegador, que se conecta como siempre. Para reportar un problema de seguridad, consulta [SECURITY.md](../../SECURITY.md).
 
 <br>
 
@@ -108,6 +108,8 @@ que decides abrir pasa a tu navegador, que se conecta como siempre.
 Nictate 1.0.0-beta.2 es una versión de prueba pública. Funciona, y la probé en macOS 27. Todavía no la he probado en
 macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son bienvenidos. El
 [CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no.
+
+Si tienes la 1.0.0-beta.1, descarga la beta.2 desde la página de [Releases](https://github.com/jrthormann/Nictate/releases). La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no encuentra la beta.2.
 
 ## Instalación
 
@@ -153,7 +155,7 @@ Los reportes, las ideas y las pull requests son bienvenidos. [CONTRIBUTING.md](.
 reportar un error, proponer un cambio, compilar, ejecutar las pruebas y enviar una pull request. Las traducciones
 están en `Sources/Nictate/Resources/`, una carpeta `.lproj` por idioma; `make strings` se asegura de que no falte
 ninguna. [docs/ARCHITECTURE.md](../ARCHITECTURE.md) explica cada archivo. La última versión de prueba está en la
-página de [Releases](https://github.com/jrthormann/Nictate/releases).
+página de [Releases](https://github.com/jrthormann/Nictate/releases). Los problemas de seguridad se reportan en privado, como explica [SECURITY.md](../../SECURITY.md).
 
 <br>
 

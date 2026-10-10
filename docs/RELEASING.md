@@ -11,6 +11,9 @@ Apple Developer account.
 ## Checklist
 
 - [ ] The release commit is on `main`, and CI passes on it (`build-and-test` and `macos-14`).
+- [ ] The image is built from that commit: `git status` is clean, and `git rev-parse --short HEAD` matches the tag.
+- [ ] The build number is above the previous release's. `CFBundleVersion` otherwise comes from the commit count, which
+      only goes up with new commits: beta.1 is build 21.
 - [ ] `Sources/Nictate/Resources/Info.plist` has the new `CFBundleShortVersionString`.
 - [ ] `CHANGELOG.md` has a section for that version. Its Tested section lists only what was run.
 - [ ] The Status line in `README.md` and `docs/i18n/README.es.md` names the new version.
@@ -46,8 +49,11 @@ Apple Developer account.
 5. **Build the image.**
 
    ```bash
-   make dmg
+   BUILD_NUMBER=22 make dmg
    ```
+
+   Set `BUILD_NUMBER` to a number above the previous release's build (beta.1 is 21), and use the same number for every
+   build of this release. Without it, the build number is the commit count.
 
    The image is written to `build/Nictate-X.Y.Z.dmg`. The first run may ask to let Terminal control Finder, so the
    window can be styled. Answer that prompt yourself.

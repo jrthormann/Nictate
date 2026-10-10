@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The history loads in the background: a Keychain prompt must never hold up the menu bar. Clearing on quit
+        // The history loads in the background: a slow file read must never hold up the menu bar. Clearing on quit
         // is skipped by a crash or a forced quit, so the launch after one clears instead, once the history is read.
         if BuildIdentity.isTestVariant, UserDefaults.standard.object(forKey: StorageKeys.historyEnabled) == nil {
             // The QA build starts with Save Captures on, so a fresh install gets its fixtures. Only when no choice exists.
