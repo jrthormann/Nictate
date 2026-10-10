@@ -3,10 +3,11 @@
 The disk image people download is built and signed on the maintainer's Mac. CI tests the release commit, and it never
 publishes anything: it does not create releases, upload images, or move tags.
 
-The image carries a fixed local signature, not an ad-hoc one. macOS ties the Screen Recording permission to the code
-signature, and an ad-hoc signature differs on every build, so each update would ask users for Screen Recording again.
-The same identity on every release keeps the permission across updates. The image is not notarized, which needs a paid
-Apple Developer account.
+The image is signed with the local identity `Nictate Local Signing`. That is local code signing, not Apple Developer ID
+signing, and the image is not notarized. Nictate is an independent open-source project, and it does not use the paid
+Apple Developer Program. A fixed local identity gives every release the same signature, which keeps the Screen Recording
+permission across updates (an ad-hoc signature differs on every build). Because the image is not notarized, macOS may
+block its first launch; the README explains how to open it with the system's own controls.
 
 ## Checklist
 
@@ -22,7 +23,9 @@ Apple Developer account.
 - [ ] The new tag points at the release commit. No existing tag was moved.
 - [ ] `make dmg` built the image with the local identity, and the artifact checks pass.
 - [ ] The draft release has the image and `SHA256SUMS`, and its notes are the CHANGELOG section.
-- [ ] The published image installs on a second Mac, and the About window shows the new version.
+- [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
+      untested in the release notes.
+- [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
 
 ## Steps
 
@@ -101,7 +104,9 @@ Apple Developer account.
 
 ## Clean install
 
-Run this on a Mac that has not had Nictate installed, on macOS 14 and on macOS 15 or later. Record the macOS version,
+Run this on a Mac that has not had Nictate installed, on macOS 14 and on macOS 15 or later, wherever you can. A version
+you cannot test is listed as untested in the release notes. For this experimental beta that is a compatibility
+limitation, not a release blocker, as long as the app builds and no known incompatibility exists. Record the macOS version,
 the Mac model, and the image's SHA-256.
 
 - [ ] Download the image and `SHA256SUMS` from the release page. `shasum -a 256 -c SHA256SUMS` prints `OK`.
@@ -117,6 +122,10 @@ the Mac model, and the image's SHA-256.
 - [ ] No system protection was changed to open the app: no `xattr`, no `spctl --master-disable`.
 
 ## Signing identity
+
+This is local code signing. It is not Apple Developer ID signing, and nothing here is notarized or Apple-verified.
+Developer ID signing and notarization need the paid Apple Developer Program. They are a future step, to be taken when
+adoption, contributor interest, or demonstrated demand justifies the cost.
 
 `make setup` creates the "Nictate Local Signing" identity in its own keychain,
 `~/Library/Keychains/nictate-signing.keychain-db`. You choose its password, and nothing stores it. The keychain locks
