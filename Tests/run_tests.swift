@@ -1450,6 +1450,8 @@ final class ScriptedStore: HistoryStore, @unchecked Sendable {
     var saved: HistorySnapshot?
     var loads = 0
     var saves = 0
+    /// False makes every write fail, as a full disk or a withdrawn key would.
+    var writesSucceed = true
     init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
         self.answers = answers
         self.saved = saved
@@ -1461,6 +1463,7 @@ final class ScriptedStore: HistoryStore, @unchecked Sendable {
     }
     func save(_ snapshot: HistorySnapshot) -> Bool {
         saves += 1
+        guard writesSucceed else { return false }
         saved = snapshot
         return true
     }
@@ -1757,6 +1760,25 @@ do {
     History.flushWrites()
     check(secondRead == nil && once.loads == 1 && onceHistory.items == ["old"],
           "state: a second refresh during a read starts no second read and duplicates nothing", "loads \(once.loads)")
+}
+
+// A failed encrypted write never reports the capture as saved: the file keeps its entries, the new capture is
+// dropped, and the history is read again from the file.
+do {
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+    let failing = ScriptedStore(answers: [.loaded(stored), .loaded(stored)], saved: stored)
+    let failingHistory = History(store: failing, retention: { .never })
+    failing.writesSucceed = false
+    failingHistory.add("cannot be saved", at: Date(timeIntervalSince1970: 2_000))
+    var settled = false
+    for _ in 0..<400 where !settled {
+        settled = failingHistory.items == ["old"] && failingHistory.state == .available
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    History.flushWrites()
+    check(settled && failingHistory.items == ["old"] && failing.saved == stored,
+          "available: a failed write drops the new capture, restores the saved entries, and leaves the file as it was",
+          "items \(failingHistory.items), state \(failingHistory.state)")
 }
 
 // Whitespace-only text is never kept in the history, but valid text keeps every space, tab and line break.

@@ -225,9 +225,13 @@ final class History: ObservableObject {
 
     /// A write failed: the captures that were not saved are dropped from memory, not kept as a pending copy,
     /// and the history reports itself unavailable until it can be read again.
+    /// Available means a save can succeed, not that the file is in memory. When a write fails, the capture that
+    /// was shown is dropped, the state drops to unavailable, and the history is read again from the file: the
+    /// saved entries come back as they were, and the new capture is never reported as saved.
     private func persistenceFailed() {
         items = []
         dates = []
         state = .unavailable
+        refresh()
     }
 }
