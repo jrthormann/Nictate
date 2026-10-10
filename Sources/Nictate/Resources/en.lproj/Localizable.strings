@@ -176,3 +176,5 @@
 "Recent changes to saved captures could not be written yet. Nothing was reset." = "Recent changes to saved captures could not be written yet. Nothing was reset.";
 "Reset stopped" = "Reset stopped";
 "Saved captures could not be deleted. Nothing was reset." = "Saved captures could not be deleted. Nothing was reset.";
+"Nictate didn't restart" = "Nictate didn't restart";
+"Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Recent changes to saved captures aren't on disk yet. Try again in a moment.";

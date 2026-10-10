@@ -26,7 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
                 HistoryClearing.clear()
             } else if settings.clearHistoryOnQuit {
-                // A quit that could not clear an unreadable file leaves it for this retry.
+                // A quit that could not clear an unreadable file leaves it for this retry. Notices may show captured text.
+                Notifier.removeAllDelivered()
                 await History.shared.clearUnreadableFile()
             }
             if BuildIdentity.isTestVariant {

@@ -27,6 +27,16 @@ enum AppRestart {
     static func now() {
         // A second press while the new instance is starting would start a third.
         guard !isRestarting else { return }
+        // The new instance reads the history file, so changes still in flight must reach it first.
+        guard History.shared.waitForPendingWrites() else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = tr("Nictate didn't restart")
+            alert.informativeText = tr("Recent changes to saved captures aren't on disk yet. Try again in a moment.")
+            alert.addButton(withTitle: tr("OK"))
+            alert.runModal()
+            return
+        }
         isRestarting = true
         HotKeyManager.shared.suspend()
         let configuration = NSWorkspace.OpenConfiguration()

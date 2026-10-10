@@ -2261,6 +2261,11 @@ do {
     }
 }
 
+// Regression: the Save Captures question is dropped when saving is back on before it is asked.
+check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: false), "switch-off: a decision made after saving is back on is dropped")
+check(HistoryDeletion.shouldAskOnSwitchOff(savedCount: 3, stillOff: true), "switch-off: with saving off and captures kept, the question is asked")
+check(!HistoryDeletion.shouldAskOnSwitchOff(savedCount: 0, stillOff: true), "switch-off: nothing saved, nothing to ask")
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

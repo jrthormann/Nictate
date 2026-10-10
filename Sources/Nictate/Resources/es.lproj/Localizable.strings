@@ -176,3 +176,5 @@
 "Recent changes to saved captures could not be written yet. Nothing was reset." = "Todavía no se pudieron guardar los cambios de tus capturas. No se restableció nada.";
 "Reset stopped" = "Restablecimiento detenido";
 "Saved captures could not be deleted. Nothing was reset." = "No se pudieron borrar las capturas guardadas. No se restableció nada.";
+"Nictate didn't restart" = "Nictate no se reinició";
+"Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Los cambios recientes de tus capturas todavía no están en el disco. Inténtalo de nuevo en un momento.";

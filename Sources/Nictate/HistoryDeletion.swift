@@ -26,6 +26,11 @@ enum HistoryDeletion {
     /// Turning history off asks about what is saved, and only when something is.
     static func asksOnSwitchOff(savedCount: Int) -> Bool { savedCount > 0 }
 
+    /// The question is asked only while saving is still off, and only when something is saved.
+    static func shouldAskOnSwitchOff(savedCount: Int, stillOff: Bool) -> Bool {
+        stillOff && asksOnSwitchOff(savedCount: savedCount)
+    }
+
     /// Captures go only on an explicit Delete; Keep leaves them for a later Clear History.
     static func clearsOnSwitchOff(savedCount: Int, answer: Answer) -> Bool { savedCount > 0 && answer == .delete }
 
@@ -70,7 +75,8 @@ enum HistoryClearing {
     static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) async {
         await history.finishLoading()
         let count = history.items.count
-        guard HistoryDeletion.asksOnSwitchOff(savedCount: count) else { return }
+        // Saving may have been turned back on while the load was in flight: then there is nothing to decide.
+        guard HistoryDeletion.shouldAskOnSwitchOff(savedCount: count, stillOff: !settings.historyEnabled) else { return }
         let answer = HistoryDeletion.Answer(response: run(switchOffAlert(savedCount: count)))
         if answer == .cancel {
             settings.historyEnabled = true

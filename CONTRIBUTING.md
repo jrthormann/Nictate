@@ -50,4 +50,4 @@ Interface strings are in `Sources/Nictate/Resources/<language>.lproj/Localizable
 
 ## Latest release
 
-The current public test release is listed at [Releases](https://github.com/jrthormann/Nictate/releases/latest). Test it, and tell us what you find.
+The current public test release is listed at [Releases](https://github.com/jrthormann/Nictate/releases). Test it, and tell us what you find.
