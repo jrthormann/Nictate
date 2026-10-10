@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await loading?.value
             if BuildIdentity.isTestVariant {
-                Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path, privacy: .public)")
+                Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
                 History.shared.seedFixtures(BuildIdentity.historyFixtures)
             }
             History.shared.pruneExpired()

@@ -56,7 +56,7 @@ enum ImportPreviousHistory {
         case .imported: message = tr("Previous history imported.")
         case .cancelled: message = tr("Import canceled. Nothing was changed.")
         case .failed(let reason):
-            Log.app.error("Legacy import failed: \(reason, privacy: .public)")
+            Log.app.error("Legacy import failed: \(reason)")
             message = tr("Couldn't import your previous history. Your original data has not been changed.")
         }
         let alert = NSAlert()
