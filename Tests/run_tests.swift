@@ -426,17 +426,22 @@ do {
     let history = History(store: store, retention: { .never })
     let t0 = Date(timeIntervalSince1970: 1_000)
     history.add("a", at: t0)
+    History.flushWrites()
     history.add("b", at: t0 + 60)
+    History.flushWrites()
     check(history.items == ["b", "a"] && history.dates == [t0 + 60, t0], "history dates: newest first, each beside its text")
     history.add("a", at: t0 + 120)
+    History.flushWrites()
     check(history.items == ["a", "b"] && history.dates == [t0 + 120, t0 + 60], "history dates: a repeated capture moves to the front with a new time")
     history.remove("b")
+    History.flushWrites()
     check(history.items == ["a"] && history.dates == [t0 + 120], "history dates: removing keeps them aligned")
     check(history.date(for: "a") == t0 + 120 && history.date(for: "nope") == nil, "history dates: lookup by text")
     History.flushWrites()
     let reloaded = History(store: store, retention: { .never })
     check(reloaded.items == ["a"] && reloaded.dates == [t0 + 120], "history dates: texts and times are saved and load back")
     history.clear()
+    History.flushWrites()
     check(history.items.isEmpty && history.dates.isEmpty, "history dates: clear empties both")
 
     check(History.alignedDates(count: 2, stored: [5, 9]) == [Date(timeIntervalSince1970: 5), Date(timeIntervalSince1970: 9)], "history dates: stored times load as they are")
@@ -508,18 +513,27 @@ do {
     let history = History(store: sealedStore("retention"), retention: { settings.historyRetention })
     let now = Date(timeIntervalSince1970: 1_000_000)
     history.add("old", at: now - 7_200)
+    History.flushWrites()
     history.add("fresh", at: now - 600)
+    History.flushWrites()
     history.add("unknown", at: .distantPast)
+    History.flushWrites()
     history.prune(olderThan: nil, now: now)
+    History.flushWrites()
     check(history.items.count == 3, "retention: never expires nothing")
     history.prune(olderThan: 3_600, now: now)
+    History.flushWrites()
     check(history.items == ["unknown", "fresh"] && history.dates.count == 2, "retention: entries past the limit go, unknown-time entries stay, dates stay aligned")
     history.prune(olderThan: 60, now: now)
+    History.flushWrites()
     check(history.items == ["unknown"], "retention: a shorter limit removes more")
     history.clear()
+    History.flushWrites()
     settings.historyRetention = .hour
     history.add("a", at: Date().addingTimeInterval(-7_200))
+    History.flushWrites()
     history.pruneExpired()
+    History.flushWrites()
     check(history.items.isEmpty, "retention: pruneExpired uses the chosen setting")
 }
 
@@ -696,8 +710,10 @@ do {
           "robustness: an unusable image size gives no text instead of a crash")
     let history = History(store: sealedStore("robustness"), retention: { .never })
     history.add(String(repeating: "x", count: History.maxStoredLength + 1))
+    History.flushWrites()
     check(history.items.isEmpty, "robustness: a capture too large for the history file is not stored")
     history.add("short")
+    History.flushWrites()
     check(history.items == ["short"], "robustness: normal captures are stored")
 }
 
@@ -1762,6 +1778,48 @@ do {
           "state: a second refresh during a read starts no second read and duplicates nothing", "loads \(once.loads)")
 }
 
+// Persist first, publish after success: a capture is visible only once its encrypted write has succeeded.
+do {
+    // Not visible before the write completes, visible after it succeeds.
+    let store = sealedStore("publish-after")
+    let history = History(store: store, retention: { .never })
+    history.add("pending capture")
+    check(!history.items.contains("pending capture"), "publish: a capture is not visible before its write completes")
+    History.flushWrites()
+    check(history.items == ["pending capture"] && History(store: store, retention: { .never }).items == ["pending capture"],
+          "publish: a capture is visible once it is written, and it is in the file")
+
+    // An interrupted write (the directory refuses the atomic replacement) never shows the capture and never
+    // changes the file; the next start reads the previous history.
+    let folder = testPreferences.appendingPathComponent("readonly-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let fixed = EncryptedHistoryStore(fileURL: folder.appendingPathComponent("history.sealed"), key: { _ in SymmetricKey(data: Data(repeating: 4, count: 32)) })
+    let base = History(store: fixed, retention: { .never })
+    base.add("kept before")
+    History.flushWrites()
+    let before = (try? Data(contentsOf: fixed.fileURL)) ?? Data()
+    try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+    base.add("interrupted")
+    History.flushWrites()
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+    check(!base.items.contains("interrupted") && base.items == ["kept before"],
+          "publish: an interrupted write never shows the capture", "\(base.items)")
+    check(((try? Data(contentsOf: fixed.fileURL)) ?? Data()) == before
+          && History(store: fixed, retention: { .never }).items == ["kept before"],
+          "publish: an interrupted write leaves the file byte for byte unchanged, and a restart reads the previous history")
+
+    // Rapid captures: each is written in order, the newest is first, nothing duplicates, and the file matches the screen.
+    let rapid = sealedStore("rapid")
+    let fast = History(store: rapid, retention: { .never })
+    for index in 0..<60 { fast.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index))) }
+    History.flushWrites()
+    let expected = (0..<60).reversed().prefix(50).map { "capture \($0)" }
+    check(fast.items == Array(expected) && Set(fast.items).count == fast.items.count,
+          "publish: rapid captures keep their order, nothing duplicates, and the newest is first", "\(fast.items.count)")
+    check(History(store: rapid, retention: { .never }).items == Array(expected),
+          "publish: after a restart the file holds exactly what was on screen")
+}
+
 // A failed encrypted write never reports the capture as saved: the file keeps its entries, the new capture is
 // dropped, and the history is read again from the file.
 do {
@@ -1787,11 +1845,14 @@ do {
     let history = History(store: store, retention: { .never })
     for blank in ["", "   ", "\n", "\t", " \n \t "] {
         history.add(blank)
+        History.flushWrites()
     }
     check(history.items.isEmpty, "blank captures: whitespace-only text is not stored")
     let indented = "    Hello World"
     history.add(indented)
+    History.flushWrites()
     history.add("line one\n\tindented line two\n")
+    History.flushWrites()
     check(history.items == ["line one\n\tindented line two\n", indented],
           "blank captures: valid text keeps its leading spaces, tabs and line breaks exactly", "\(history.items)")
     check(!"x".allSatisfy(\.isWhitespace) && "  x  ".allSatisfy(\.isWhitespace) == false,
