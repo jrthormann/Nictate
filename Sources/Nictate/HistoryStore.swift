@@ -32,6 +32,32 @@ protocol HistoryStore: Sendable {
     func save(_ snapshot: HistorySnapshot) -> Bool
 }
 
+/// The history store the app uses: the encrypted file in production; in the test variant, memory only.
+enum AppHistoryStore {
+    static func make() -> any HistoryStore {
+        BuildIdentity.usesMemoryHistory ? MemoryHistoryStore() : EncryptedHistoryStore.standard
+    }
+}
+
+/// A history kept in memory for the QA app. Nothing is written anywhere; each launch starts empty and is seeded.
+final class MemoryHistoryStore: HistoryStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var snapshot: HistorySnapshot?
+
+    func load() -> HistoryLoad {
+        lock.lock()
+        defer { lock.unlock() }
+        return snapshot.map { .loaded($0) } ?? .empty
+    }
+
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        self.snapshot = snapshot
+        return true
+    }
+}
+
 /// The history as one AES-GCM sealed file in the app's container. The key comes from `key`: the Keychain in
 /// the app, a fixed key in tests. No plaintext copy is written.
 struct EncryptedHistoryStore: HistoryStore, Sendable {

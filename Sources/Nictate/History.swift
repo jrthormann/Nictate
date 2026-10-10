@@ -35,7 +35,7 @@ enum HistoryState: Equatable {
 @MainActor
 final class History: ObservableObject {
     /// The app's history. It loads in the background (see `refresh`), never on the main thread.
-    static let shared = History(loadsNow: false)
+    static let shared = History(store: AppHistoryStore.make(), loadsNow: false)
     private let limit = 50
     /// Longer captures are still copied but not kept: the whole history lives in one preferences file
     /// that is rewritten on every capture. A screen of text is a few thousand characters.

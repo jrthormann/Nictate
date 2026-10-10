@@ -6,6 +6,8 @@
 /// place, with its own bundle identifier, Keychain service, history folder and fixtures. Nothing else differs.
 enum BuildIdentity {
     static let isTestVariant = false
+    /// True only in the test variant: its history lives in memory, so the QA app never touches the Keychain.
+    static let usesMemoryHistory = false
     /// The Keychain service of the history key. Its account is `HistoryKeychain`'s own.
     static let keychainService = "app.nictate.history"
     /// The folder under Application Support that holds `history.sealed`.
