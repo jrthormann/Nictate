@@ -13,15 +13,17 @@ block its first launch; the README explains how to open it with the system's own
 
 - [ ] The release commit is on `main`, and CI passes on it (`build-and-test` and `macos-14`).
 - [ ] The image is built from that commit: `git status` is clean, and `git rev-parse --short HEAD` matches the tag.
-- [ ] The build number is above the previous release's. `CFBundleVersion` otherwise comes from the commit count, which
-      only goes up with new commits: beta.1 is build 21.
+- [ ] `BUILD_NUMBER` is set and is above the previous release's build: beta.1 is 21, beta.2 is 22. The commit count is
+      not a release number, since the history restarted when the project moved to `jrthormann/Nictate`. CI builds use
+      the run number, which is not a release number either.
 - [ ] `Sources/Nictate/Resources/Info.plist` has the new `CFBundleShortVersionString`.
 - [ ] `CHANGELOG.md` has a section for that version. Its Tested section lists only what was run.
 - [ ] The Status line in `README.md` and `docs/i18n/README.es.md` names the new version.
 - [ ] `make check` and `make build` pass on the release commit, with no warnings.
 - [ ] The six manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build (`make test-app`).
 - [ ] The new tag points at the release commit. No existing tag was moved.
-- [ ] `make dmg` built the image with the local identity, and the artifact checks pass.
+- [ ] `BUILD_NUMBER=<n> make dmg` built the image in a new `build/release/<version>/` folder with the local identity, and
+      the artifact checks in step 6 pass.
 - [ ] The draft release has the image and `SHA256SUMS`, and its notes are the CHANGELOG section.
 - [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
       untested in the release notes.
@@ -55,23 +57,29 @@ block its first launch; the README explains how to open it with the system's own
    BUILD_NUMBER=22 make dmg
    ```
 
-   Set `BUILD_NUMBER` to a number above the previous release's build (beta.1 is 21), and use the same number for every
-   build of this release. Without it, the build number is the commit count.
+   `make dmg` builds one committed revision: `HEAD` by default, or `COMMIT=<sha>`. It never builds the working tree.
+   The app's version comes from `Info.plist`, and the output goes to a new folder named after that version:
 
-   The image is written to `build/Nictate-X.Y.Z.dmg`. The first run may ask to let Terminal control Finder, so the
-   window can be styled. Answer that prompt yourself.
+   - `build/release/X.Y.Z/Nictate-X.Y.Z.dmg`, the image
+   - `build/release/X.Y.Z/SHA256SUMS`, its checksum, listing only the image's name
+
+   `make dmg` stops before building if `BUILD_NUMBER` is missing or is not a whole number, if the working tree has
+   changes, if `CHANGELOG.md` has no section for the version, or if `build/release/X.Y.Z/` already exists. It never
+   reuses or overwrites a release folder, so an image or checksum from an earlier release is never replaced. To write
+   elsewhere, set `OUT_DIR=<dir>`. Use the same `BUILD_NUMBER` for every build of this release.
+
+   The first run may ask to let Terminal control Finder, so the window can be styled. Answer that prompt yourself.
 
    The build signs with the identity in the dedicated keychain once `make setup` has created it. Until then it uses the
    older identity in the login keychain, which is also stable. If the signing keychain is locked, the build asks for
-   its password in the terminal; enter it. Read the output before you publish: a warning about signing means the build
-   did not use the identity you intended. `make dmg` refuses an ad-hoc build, but it cannot tell which stable identity
-   was used, so the output is the check.
+   its password in the terminal; enter it. The build refuses any app that is not signed with `Nictate Local Signing`,
+   so a successful build used the identity it should have.
 
 6. **Check the image.**
 
    ```bash
-   hdiutil verify build/Nictate-X.Y.Z.dmg
-   hdiutil attach -readonly -nobrowse build/Nictate-X.Y.Z.dmg
+   hdiutil verify build/release/X.Y.Z/Nictate-X.Y.Z.dmg
+   hdiutil attach -readonly -nobrowse build/release/X.Y.Z/Nictate-X.Y.Z.dmg
    codesign --verify --strict /Volumes/Nictate/Nictate.app
    codesign -dv /Volumes/Nictate/Nictate.app 2>&1 | grep -E 'Authority|Signature'
    /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" /Volumes/Nictate/Nictate.app/Contents/Info.plist
@@ -81,10 +89,10 @@ block its first launch; the README explains how to open it with the system's own
    The version must equal the tag without the `v`. The signature must list `Authority=Nictate Local Signing`, and
    must not show `Signature=adhoc`.
 
-7. **Write the checksum**, so the file holds only the image's name.
+7. **Verify the checksum.** `make dmg` wrote `SHA256SUMS` next to the image. Check that it matches the image.
 
    ```bash
-   (cd build && shasum -a 256 Nictate-X.Y.Z.dmg > SHA256SUMS)
+   (cd build/release/X.Y.Z && shasum -a 256 -c SHA256SUMS)
    ```
 
 8. **Create the draft, upload, and publish.** The notes are the CHANGELOG section for the version.
@@ -92,7 +100,7 @@ block its first launch; the README explains how to open it with the system's own
    ```bash
    awk -v v="X.Y.Z" '$0 ~ "^## \\[" v "\\]" {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md > release-notes.md
    gh release create vX.Y.Z --draft --prerelease --verify-tag --title "Nictate X.Y.Z" --notes-file release-notes.md
-   gh release upload vX.Y.Z build/Nictate-X.Y.Z.dmg build/SHA256SUMS
+   gh release upload vX.Y.Z build/release/X.Y.Z/Nictate-X.Y.Z.dmg build/release/X.Y.Z/SHA256SUMS
    gh release edit vX.Y.Z --draft=false
    ```
 

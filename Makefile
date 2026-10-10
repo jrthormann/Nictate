@@ -43,6 +43,6 @@ install: build  ## Build, quit Nictate, put the new copy in /Applications and la
 	rm -rf /Applications/Nictate.app && mv /Applications/Nictate.app.new /Applications/Nictate.app
 	open /Applications/Nictate.app
 
-dmg:        ## Build build/Nictate-<version>.dmg, signed with the local identity (see docs/RELEASING.md)
+dmg:        ## Build build/release/<version>/Nictate-<version>.dmg from a commit; BUILD_NUMBER required (docs/RELEASING.md)
 	./scripts/build-dmg.sh
 
