@@ -38,6 +38,11 @@ enum HistoryDeletion {
     /// was turned off, so they can always be deleted.
     static func showsClearControl(historyEnabled: Bool, savedCount: Int) -> Bool { historyEnabled || savedCount > 0 }
 
+    /// The History row of the panel: while saving is on, while captures are kept, and whenever the file needs recovery.
+    static func showsHistoryRow(historyEnabled: Bool, savedCount: Int, unreadable: Bool) -> Bool {
+        historyEnabled || savedCount > 0 || unreadable
+    }
+
     /// Clear History asks once, when there is something to delete.
     static func asksBeforeClear(savedCount: Int) -> Bool { savedCount > 0 }
 

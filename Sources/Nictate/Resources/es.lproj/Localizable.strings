@@ -187,3 +187,4 @@
 "Discard" = "Descartar";
 "Discard didn't work" = "No se pudo descartar";
 "The file couldn't be replaced, so it was left unchanged." = "No se pudo reemplazar el archivo, así que no se modificó.";
+"Unreadable history" = "Historial ilegible";

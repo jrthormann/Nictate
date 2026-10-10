@@ -64,7 +64,10 @@ final class CaptureCoordinator {
                 return
             }
             // Esc or a click without a drag: nothing to copy.
-            guard let region = await SelectionOverlay.select(stills) else { return }
+            guard let region = await SelectionOverlay.select(stills) else {
+                FocusReturn.shared.returnIfStillActive()
+                return
+            }
             // "Reading…" appears only when recognition is slow enough to notice.
             let reading = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
@@ -104,6 +107,7 @@ final class CaptureCoordinator {
         for effect in effects { perform(effect) }
         let copied = effects.contains { if case .copy = $0 { true } else { false } }
         showResult(capture, mode: mode, copied: copied, region: region)
+        if copied { FocusReturn.shared.returnIfStillActive() }
     }
 
     /// The pill beside the selection: the word count when text was copied, otherwise what was missing.

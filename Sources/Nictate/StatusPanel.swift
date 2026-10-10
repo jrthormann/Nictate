@@ -80,7 +80,9 @@ final class StatusPanelModel: ObservableObject {
 
     func captureText() { dismiss(); capture.capture(mode: .text) }
     func captureCode() { dismiss(); capture.capture(mode: .code) }
-    func cycleHistory() { dismiss(); capture.rotateHistory() }
+    func cycleHistory() { dismiss(); capture.rotateHistory(); FocusReturn.shared.returnIfStillActive() }
+    /// Escape closes the panel and gives focus back to the app the user came from.
+    func closeReturningFocus() { dismiss(); FocusReturn.shared.returnIfStillActive() }
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
     func setLanguage(_ code: String) { settings.languages = code.isEmpty ? [] : [code] }
     func setKeepHistory(_ on: Bool) {
@@ -101,7 +103,7 @@ final class StatusPanelModel: ObservableObject {
         set { settings.appendMode = newValue }
     }
 
-    func copyDetected(_ value: String) { dismiss(); capture.copyDetected(value) }
+    func copyDetected(_ value: String) { dismiss(); capture.copyDetected(value); FocusReturn.shared.returnIfStillActive() }
     func openDetected(_ url: URL) { dismiss(); capture.openLink(url) }
 
     // MARK: History screen
@@ -155,6 +157,7 @@ final class StatusPanelModel: ObservableObject {
         if capture.copyCapture(text) {
             copyError = nil
             dismiss()
+            FocusReturn.shared.returnIfStillActive()
         } else {
             copyError = tr("Couldn't copy text. Try again.")
         }
@@ -209,6 +212,8 @@ final class StatusPanel {
             close()
         } else {
             model.reset()
+            // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
+            FocusReturn.shared.remember()
             // Activating first makes the first click land in the panel, so History opens on one click.
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

@@ -46,6 +46,11 @@ struct GeneralTab: View {
                     }
                     SettingCaption("Import captures saved by an earlier version of Nictate.")
                 }
+                if history.fileIsUnreadable {
+                    SettingRow("Unreadable history") {
+                        Button("Discard Unreadable History…") { HistoryClearing.confirmDiscardUnreadable() }
+                    }
+                }
                 if HistoryDeletion.showsClearControl(historyEnabled: settings.historyEnabled, savedCount: history.items.count) {
                     SettingRow("Saved captures") {
                         Button("Clear History…") { HistoryClearing.confirmClear() }

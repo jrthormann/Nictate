@@ -187,3 +187,4 @@
 "Discard" = "Discard";
 "Discard didn't work" = "Discard didn't work";
 "The file couldn't be replaced, so it was left unchanged." = "The file couldn't be replaced, so it was left unchanged.";
+"Unreadable history" = "Unreadable history";

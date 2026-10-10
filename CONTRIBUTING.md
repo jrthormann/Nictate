@@ -44,6 +44,18 @@ make check        # unit tests, UI tests, string and source checks
 
 Keep changes small enough to review in one sitting. Tell us when something is untested.
 
+## Manual checks
+
+Focus and the desktop cannot be tested headlessly, so `make check` does not cover them. Before a release, check these
+on a Mac. Use the QA build (`make test-app`), so your own captures and history are not touched.
+
+1. **Copy from the panel:** open a history entry with Return. The app you were in should be frontmost, and ⌘V should paste there.
+2. **Capture:** press the capture shortcut in another app, drag over some text, and ⌘V in that app. The text should paste.
+3. **Escape:** open the panel and press Escape. The app you came from should be frontmost.
+4. **Settings:** open Settings from the panel. Its window should stay in front.
+5. **Switch away:** start a capture, switch to another app before it finishes, and check that focus is not taken back.
+6. **Unreadable history:** put junk in `history.json` in the QA build's history folder while Save Captures is off. The History row should still appear, with Discard Unreadable History.
+
 ## Translations
 
 Interface strings are in `Sources/Nictate/Resources/<language>.lproj/Localizable.strings`. Every key must exist in every language. `make strings` checks that.

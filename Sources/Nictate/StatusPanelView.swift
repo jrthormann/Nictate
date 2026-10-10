@@ -24,7 +24,7 @@ struct StatusPanelView: View {
         switch model.screen {
         case .history where !model.query.isEmpty: model.searchChanged("")
         case .history: model.backToMain()
-        case .main: model.dismiss()
+        case .main: model.closeReturningFocus()
         }
     }
 }
@@ -51,7 +51,8 @@ private struct MainScreen: View {
                     MenuAction(tr("Cycle History"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "arrow.triangle.2.circlepath", action: model.cycleHistory)
                 }
                 // Saved captures stay reachable while saving is off, so they can be read or deleted.
-                if model.historyEnabled || model.historyCount > 0 {
+                if HistoryDeletion.showsHistoryRow(historyEnabled: model.historyEnabled, savedCount: model.historyCount,
+                                                   unreadable: model.historyFileUnreadable) {
                     MenuAction(tr("History"), leadingSymbol: "clock.arrow.circlepath", trailingSymbol: "chevron.right", action: model.openHistory)
                 }
                 MenuDivider()

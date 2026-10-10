@@ -2343,6 +2343,32 @@ do {
           "switch-off: the decision waits for a queued write, so it counts the capture", "\(history.items)")
 }
 
+// Focus: the app the user came from gets focus back only while Nictate is still the active app, and only if it runs.
+check(FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: false),
+      "focus: returns to the app the user came from while Nictate is still active")
+check(!FocusReturn.shouldReturn(nictateIsActive: false, hasTarget: true, targetRunning: true, targetIsNictate: false),
+      "focus: never takes focus from an app the user has since selected")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: false, targetRunning: true, targetIsNictate: false),
+      "focus: nothing remembered, nothing to return to")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: false, targetIsNictate: false),
+      "focus: a terminated app is never activated")
+check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: true),
+      "focus: never returns to Nictate itself")
+
+// Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
+check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),
+      "recovery: an unreadable file keeps the History row, with saving off and nothing listed")
+check(!HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: false),
+      "recovery: with nothing to recover and saving off, the History row is not shown")
+check(HistoryDeletion.showsHistoryRow(historyEnabled: true, savedCount: 0, unreadable: false)
+      && HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 2, unreadable: false),
+      "recovery: the History row is shown while saving is on or captures are kept")
+do {
+    let flags = [ScriptedStore(answers: [.corrupt]), ScriptedStore(answers: [.empty]), ScriptedStore(answers: [.loaded(.empty)])]
+        .map { History(store: $0, isEnabled: alwaysSaving).fileIsUnreadable }
+    check(flags == [true, false, false], "recovery: the discard is offered only when the file was detected unreadable", "\(flags)")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {
