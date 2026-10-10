@@ -12,30 +12,30 @@ Download 1.0.0-beta.2 from the [releases page](https://github.com/jrthormann/Nic
 From beta.2 on, Check for Updates offers newer betas and the stable release.
 
 ### Added
-- SECURITY.md, with private vulnerability reporting, and a Code of Conduct.
+- SECURITY.md, which explains how to report a vulnerability privately, and a Code of Conduct.
 - Manual checks for focus and unreadable history in CONTRIBUTING.md.
 - README badges, a Support section, and FUNDING.yml.
 
 ### Changed
-- Focus returns to the app you came from after a copy, a capture, a cycle, a cancelled capture, or Escape. It does so only while Nictate is still active and that app is still running.
-- Clear on Quit waits until the history store confirms the deletion, so pending writes cannot bring cleared captures back.
-- A capture appears in History only after the store has saved it.
-- Reset Nictate: with "Also delete saved captures" ticked, the deletion is confirmed before the settings are reset and the app restarts. If it cannot be confirmed, history stays closed and Nictate says so. Launch at Login is unchanged.
-- Turning Save Captures back on keeps the next capture at once. The question about turning it off waits for queued writes.
-- An unreadable history file is never overwritten, at startup or by a capture. Discard Unreadable History appears only when the file is detected as unreadable, behind a confirmation whose default is Cancel.
-- Check for Updates follows the release channel: stable users are offered stable releases, and beta users are also offered newer betas. A version that is not newer is never offered.
-- A copy is confirmed by reading back only the text Nictate wrote. Nictate no longer keeps or restores the previous clipboard.
-- In Append mode, Nictate reads the current clipboard text to add the new capture to it. Text other apps mark as concealed or transient is skipped, and that existing text is not saved to history.
-- The History list keeps the highlighted row in view. Command-F focuses the search field.
-- Importing an earlier encrypted history keeps every capture, even when its stored times do not match the texts.
+- **Safer history.** A capture appears in History only after the store has saved it, and every save is read back and checked before Nictate reports success.
+- **Unreadable history is never overwritten.** Nictate leaves an unreadable history file alone, at startup and when a capture is saved. Discard Unreadable History appears only then, behind a confirmation whose default is Cancel.
+- **Clear on Quit is reliable.** Nictate waits for the history store to confirm the deletion, so a capture that was still being written cannot come back.
+- **Reset is clearer.** Reset waits for pending history writes. With "Also delete saved captures" ticked, the deletion is confirmed before the settings are reset and Nictate restarts. If it cannot be confirmed, History stays closed and Nictate says so. Launch at Login is kept.
+- **Save Captures.** Turning it back on takes effect at once. The question about turning it off waits for queued writes.
+- **Focus returns to where you were.** After a copy, a capture, a cancelled capture, or Escape, focus goes back to the app you came from. It does so only while Nictate is still active and that app is still running.
+- **Keyboard.** The highlighted row in History stays in view as you move through the list, and Command-F focuses the search field.
+- **Update checks follow your channel.** Stable users are offered stable releases, and beta users are also offered newer betas. A version that is not newer than the one you run is never offered.
+- **Localization.** The Reset explanation in English and Spanish now says that Launch at Login is kept.
+- **Simpler History.** The separate History window is gone. History lives in the menu bar panel. The age-based retention setting, which nothing set, and unused text are removed.
 
-### Removed
-- The separate History window. History is in the menu bar panel.
-- The age-based retention setting, which nothing set, along with retired settings and unused strings.
+### Security and privacy
+- Nictate no longer keeps or restores the clipboard you had before a copy. A copy is confirmed by reading back only the text Nictate wrote.
+- In Append mode, Nictate adds the current clipboard text to a new capture, but leaves out text that another app marks as concealed or transient, as password managers do.
+- SECURITY.md explains how to report a vulnerability privately.
 
 ### Tested
-- Automated, in CI: unit tests, UI smoke tests, the localization and source checks, and the prebuilt tests on macOS 14.
-- Manual, on the QA build on the maintainer's Mac (macOS 27): the focus checks and the unreadable-history check.
+- Automated: `make check` (unit tests, UI smoke tests, the localization and source checks) and `make build`, on the release commit, on the maintainer's Mac. The app code is the same as commit `25e13c2`, whose CI jobs `build-and-test` and `macos-14` passed on GitHub. The `macos-14` job runs the prebuilt tests on a macOS 14 runner.
+- Manual, recorded by the maintainer for the QA build on macOS 27: the focus checks and the unreadable-history check. Not run again for this release.
 
 ### Not yet tested
 - macOS 14, 15 and 26 beyond the CI runs ([#2](https://github.com/jrthormann/Nictate/issues/2)).
