@@ -15,11 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var expiryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Clearing on quit is skipped by a crash or a forced quit, so the launch after one clears instead.
-        if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
-            HistoryClearing.clear()
+        // The history loads in the background: a Keychain prompt must never hold up the menu bar. Clearing on quit
+        // is skipped by a crash or a forced quit, so the launch after one clears instead, once the history is read.
+        let loading = History.shared.refresh()
+        Task { @MainActor in
+            await loading?.value
+            if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
+                HistoryClearing.clear()
+            }
+            History.shared.pruneExpired()
         }
-        History.shared.pruneExpired()
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
         // Captures expire while the app keeps running, not only at the next launch or menu click.
         expiryTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in

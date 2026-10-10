@@ -94,6 +94,7 @@ struct GeneralTab: View {
     private var keepHistory: Binding<Bool> {
         Binding(get: { settings.historyEnabled }, set: { on in
             settings.historyEnabled = on
+            History.shared.refresh()
             if !on { DispatchQueue.main.async { HistoryClearing.historyTurnedOff() } }
         })
     }

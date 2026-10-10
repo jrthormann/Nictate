@@ -19,10 +19,18 @@ enum HistoryRetention: String, CaseIterable {
     }
 }
 
+/// Whether the history can be read and written right now.
+/// `loading` covers the time the key may take to authorize; nothing is written during it.
+/// `unavailable` means the file or key could not be read: captures stay in memory and nothing on disk changes.
+enum HistoryState: Equatable {
+    case loading, available, disabled, unavailable
+}
+
 /// Last captured texts, newest first, each with the time it was captured. Kept in the sealed `HistoryStore`.
 @MainActor
 final class History: ObservableObject {
-    static let shared = History()
+    /// The app's history. It loads in the background (see `refresh`), never on the main thread.
+    static let shared = History(loadsNow: false)
     private let limit = 50
     /// Longer captures are still copied but not kept: the whole history lives in one preferences file
     /// that is rewritten on every capture. A screen of text is a few thousand characters.
@@ -32,6 +40,7 @@ final class History: ObservableObject {
     /// The capture time of each item, same order and length. `.distantPast` means unknown (captures saved
     /// before times were kept).
     @Published private(set) var dates: [Date]
+    @Published private(set) var state: HistoryState
     @Published var query = ""
 
     var filtered: [String] {
@@ -39,46 +48,96 @@ final class History: ObservableObject {
     }
 
     private let store: any HistoryStore
-    /// False while the key is unavailable: saving then would replace a file that may still be readable.
-    private var mayWrite = true
+    /// Removals made while the file could not be read. They are applied to the file once it can be read, so
+    /// a deletion is not undone by the older copy on disk.
+    private var pendingRemovals: Set<String> = []
+    private var pendingClear = false
+    /// True from the start of a read until its result is applied, so a second refresh does not read again.
+    private var loadInFlight = false
     /// The retention the user chose, read each time captures are pruned.
     private let retention: @MainActor () -> HistoryRetention
+    /// Whether the history is switched on. Read by `refresh`, so a disabled history never touches the Keychain.
+    private let isEnabled: @MainActor () -> Bool
+
+    /// Every file operation runs here, serially and off the main thread, so a Keychain prompt cannot freeze
+    /// the menu bar and writes happen in the order they were made.
+    private static let io = DispatchQueue(label: "app.nictate.history.io", qos: .utility)
 
     /// The app uses `shared`, with the sealed file, the standard defaults and the retention in `Settings`.
-    /// Tests pass a store and a retention of their own, so they never touch the user's captures.
+    /// Tests pass a store and a retention of their own, so they never touch the user's captures. With
+    /// `loadsNow` the file is read at once, on the calling thread; the app loads in the background instead.
     init(store: any HistoryStore = EncryptedHistoryStore.standard,
-         retention: @escaping @MainActor () -> HistoryRetention = { Settings.shared.historyRetention }) {
+         retention: @escaping @MainActor () -> HistoryRetention = { Settings.shared.historyRetention },
+         isEnabled: @escaping @MainActor () -> Bool = { Settings.shared.historyEnabled },
+         loadsNow: Bool = true) {
         self.store = store
         self.retention = retention
-        let snapshot: HistorySnapshot
-        switch store.load() {
-        case .loaded(let stored):
-            snapshot = stored
-        case .empty, .corrupt:
-            snapshot = .empty
-        case .unavailable:
-            snapshot = .empty
-            mayWrite = false
-        }
-        items = snapshot.texts
-        dates = Self.alignedDates(count: snapshot.texts.count, stored: snapshot.dates)
+        self.isEnabled = isEnabled
+        items = []
+        dates = []
+        state = .loading
+        if loadsNow { apply(store.load()) }
     }
 
-    /// Tries the store again once the key may be back. Captures taken while it was unavailable are merged with
-    /// what the file holds, so neither side is lost.
-    private func reopen() {
-        switch store.load() {
-        case .unavailable:
-            return
-        case .loaded(let stored):
-            let known = Set(stored.texts)
-            let fresh = zip(items, dates).filter { !known.contains($0.0) }
-            items = Array((fresh.map(\.0) + stored.texts).prefix(limit))
-            dates = Array((fresh.map(\.1) + Self.alignedDates(count: stored.texts.count, stored: stored.dates)).prefix(limit))
-        case .empty, .corrupt:
-            break
+    /// Starts or retries loading. Called at launch, when the panel opens, and when Keep History is turned on.
+    /// Does nothing while the history is switched off, so no Keychain access happens for it.
+    @discardableResult func refresh() -> Task<Void, Never>? {
+        guard isEnabled() else {
+            state = .disabled
+            return nil
         }
-        mayWrite = true
+        guard state != .available, !loadInFlight else { return nil }
+        loadInFlight = true
+        state = .loading
+        return Task { await reload() }
+    }
+
+    /// Reads the file and key on the I/O queue, then applies the result here on the main actor.
+    func reload() async {
+        let store = self.store
+        let result = await withCheckedContinuation { (continuation: CheckedContinuation<HistoryLoad, Never>) in
+            Self.io.async { continuation.resume(returning: store.load()) }
+        }
+        apply(result)
+    }
+
+    /// Waits until every queued write has finished. Tests use it before reading the file back.
+    static func flushWrites() {
+        io.sync {}
+    }
+
+    /// Applies what a load found. Captures taken meanwhile are merged with the file, so neither side is lost.
+    private func apply(_ result: HistoryLoad) {
+        loadInFlight = false
+        var changed = false
+        switch result {
+        case .loaded(let stored):
+            var texts = stored.texts
+            var times = Self.alignedDates(count: stored.texts.count, stored: stored.dates)
+            let kept = zip(texts, times).filter { !pendingRemovals.contains($0.0) }
+            texts = pendingClear ? [] : kept.map(\.0)
+            times = pendingClear ? [] : kept.map(\.1)
+            changed = texts.count != stored.texts.count
+            let fresh = zip(items, dates).filter { !texts.contains($0.0) && !pendingRemovals.contains($0.0) }
+            changed = changed || !fresh.isEmpty
+            items = Array((fresh.map(\.0) + texts).prefix(limit))
+            dates = Array((fresh.map(\.1) + times).prefix(limit))
+        case .empty:
+            // No file yet: the captures in memory are the whole history. Nothing is written when there are none.
+            let kept = zip(items, dates).filter { !pendingRemovals.contains($0.0) }
+            changed = !kept.isEmpty
+            items = Array(kept.map(\.0).prefix(limit))
+            dates = Array(kept.map(\.1).prefix(limit))
+        case .corrupt, .unavailable:
+            // Keep the captures in memory and the removals pending. Nothing is written over the file.
+            state = .unavailable
+            Log.app.error("History is unavailable; captures stay in memory until it can be read")
+            return
+        }
+        pendingRemovals = []
+        pendingClear = false
+        state = .available
+        if changed { save() }
     }
 
     /// Times that line up with `count` texts. If the stored list is not the same length it cannot be trusted
@@ -129,6 +188,7 @@ final class History: ObservableObject {
     }
 
     func remove(_ text: String) {
+        pendingRemovals.insert(text)
         let kept = zip(items, dates).filter { $0.0 != text }
         items = kept.map(\.0)
         dates = kept.map(\.1)
@@ -136,16 +196,21 @@ final class History: ObservableObject {
     }
 
     func clear() {
+        pendingClear = true
         items = []
         dates = []
         save()
     }
 
+    /// Writes the history when it is known to be readable. While it is loading or unavailable nothing is written.
     private func save() {
-        if !mayWrite { reopen() }
-        guard mayWrite else { return }
-        if !store.save(HistorySnapshot(texts: items, dates: dates.map(\.timeIntervalSince1970))) {
-            Log.app.error("History was not saved; it is kept for this session only")
+        guard state == .available else { return }
+        let snapshot = HistorySnapshot(texts: items, dates: dates.map(\.timeIntervalSince1970))
+        let store = self.store
+        Self.io.async {
+            if !store.save(snapshot) {
+                Log.app.error("History was not saved; it is kept for this session only")
+            }
         }
     }
 }

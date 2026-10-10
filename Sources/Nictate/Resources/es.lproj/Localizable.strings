@@ -169,3 +169,5 @@
 "Copies the whole capture" = "Copia la captura completa";
 "No matches" = "Sin coincidencias";
 "Search history" = "Buscar en el historial";
+"Loading history…" = "Cargando historial…";
+"History is unavailable right now. New captures are still copied." = "El historial no está disponible ahora. Las nuevas capturas se siguen copiando.";

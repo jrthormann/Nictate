@@ -27,6 +27,7 @@ final class StatusPanelModel: ObservableObject {
         screen = .main
         query = ""
         History.shared.query = ""
+        History.shared.refresh()
         History.shared.pruneExpired()
     }
 
@@ -37,6 +38,7 @@ final class StatusPanelModel: ObservableObject {
     var supportedLanguages: [String] { Recognizer.supportedLanguages }
     var historyEnabled: Bool { settings.historyEnabled }
     var historyCount: Int { History.shared.items.count }
+    var historyState: HistoryState { History.shared.state }
     var hotKeyLabel: String { settings.hotKeyLabel }
     var rotateHotKeyLabel: String { settings.rotateHotKeyLabel }
     var codeHotKeyLabel: String? { settings.shortcut(for: .captureCode)?.label }

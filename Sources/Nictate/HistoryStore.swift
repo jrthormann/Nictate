@@ -13,8 +13,9 @@ struct HistorySnapshot: Codable, Equatable, Sendable {
     static let empty = HistorySnapshot(texts: [], dates: [])
 }
 
-/// What a store found. `corrupt` means the file is there but cannot be opened: the next save replaces it.
-/// `unavailable` means the key could not be read: nothing may be written, or the file would be lost.
+/// What a store found. `corrupt` means the file is there but cannot be opened. `unavailable` means the key
+/// could not be read (not authorized yet, denied, or another error). Neither may be written over: the file is
+/// the user's history, and only a successful load says what it holds.
 enum HistoryLoad: Equatable {
     case empty
     case loaded(HistorySnapshot)
@@ -23,7 +24,7 @@ enum HistoryLoad: Equatable {
 }
 
 /// Where the history lives between launches. `save` returns false when nothing could be written.
-protocol HistoryStore {
+protocol HistoryStore: Sendable {
     func load() -> HistoryLoad
     func save(_ snapshot: HistorySnapshot) -> Bool
 }
@@ -32,9 +33,10 @@ protocol HistoryStore {
 /// the app, a fixed key in tests. No plaintext copy is written.
 struct EncryptedHistoryStore: HistoryStore, Sendable {
     let fileURL: URL
-    let key: @Sendable () throws -> SymmetricKey
+    /// `mayCreate` is true only when there is no history file yet. An existing file never gets a new key.
+    let key: @Sendable (_ mayCreate: Bool) throws -> SymmetricKey
 
-    static let standard = EncryptedHistoryStore(fileURL: standardURL, key: { try HistoryKeychain.key() })
+    static let standard = EncryptedHistoryStore(fileURL: standardURL, key: { try HistoryKeychain.key(mayCreate: $0) })
 
     /// `history.sealed` in Application Support, which is inside the sandbox container.
     static var standardURL: URL {
@@ -48,7 +50,7 @@ struct EncryptedHistoryStore: HistoryStore, Sendable {
         guard let sealed = try? Data(contentsOf: fileURL) else { return .unavailable }
         let symmetric: SymmetricKey
         do {
-            symmetric = try key()
+            symmetric = try key(false)
         } catch {
             Log.app.error("History key unavailable: \(error.localizedDescription, privacy: .public)")
             return .unavailable
@@ -57,7 +59,7 @@ struct EncryptedHistoryStore: HistoryStore, Sendable {
             let plain = try HistoryCipher.open(sealed, key: symmetric)
             return .loaded(try JSONDecoder().decode(HistorySnapshot.self, from: plain))
         } catch {
-            Log.app.error("History file rejected; the next save replaces it")
+            Log.app.error("History file could not be opened; it is kept unchanged")
             return .corrupt
         }
     }
@@ -65,7 +67,7 @@ struct EncryptedHistoryStore: HistoryStore, Sendable {
     func save(_ snapshot: HistorySnapshot) -> Bool {
         do {
             let plain = try JSONEncoder().encode(snapshot)
-            let sealed = try HistoryCipher.seal(plain, key: try key())
+            let sealed = try HistoryCipher.seal(plain, key: try key(!FileManager.default.fileExists(atPath: fileURL.path)))
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try sealed.write(to: fileURL, options: .atomic)
             return true
@@ -96,7 +98,9 @@ enum HistoryKeychain {
     private static let service = "app.nictate.history"
     private static let account = "history-key"
 
-    static func key() throws -> SymmetricKey {
+    /// The stored key. Without `mayCreate` a missing key is an error, never a new key: a new key could not open
+    /// the file that exists, and the next save would replace it.
+    static func key(mayCreate: Bool) throws -> SymmetricKey {
         let query: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service,
                                       kSecAttrAccount: account, kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]
         var found: CFTypeRef?
@@ -105,6 +109,7 @@ enum HistoryKeychain {
             guard let data = found as? Data, data.count == 32 else { throw Failure.malformed }
             return SymmetricKey(data: data)
         case errSecItemNotFound:
+            guard mayCreate else { throw Failure.status(errSecItemNotFound) }
             let fresh = SymmetricKey(size: .bits256)
             let add: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service,
                                         kSecAttrAccount: account, kSecValueData: fresh.withUnsafeBytes { Data($0) },
@@ -113,6 +118,7 @@ enum HistoryKeychain {
             guard status == errSecSuccess else { throw Failure.status(status) }
             return fresh
         case let status:
+            Log.app.error("History key: Security status \(status, privacy: .public)")
             throw Failure.status(status)
         }
     }

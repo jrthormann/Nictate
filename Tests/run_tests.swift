@@ -60,7 +60,7 @@ var testSuites: [TestSuite] = []
 /// A sealed history file of its own under the test folder, with a fixed key.
 func sealedStore(_ tag: String) -> EncryptedHistoryStore {
     EncryptedHistoryStore(fileURL: testPreferences.appendingPathComponent("\(tag)-\(UUID().uuidString).sealed"),
-                          key: { SymmetricKey(data: Data(repeating: 9, count: 32)) })
+                          key: { _ in SymmetricKey(data: Data(repeating: 9, count: 32)) })
 }
 @MainActor
 func freshSuite(_ tag: String) -> TestSuite {
@@ -433,6 +433,7 @@ do {
     history.remove("b")
     check(history.items == ["a"] && history.dates == [t0 + 120], "history dates: removing keeps them aligned")
     check(history.date(for: "a") == t0 + 120 && history.date(for: "nope") == nil, "history dates: lookup by text")
+    History.flushWrites()
     let reloaded = History(store: store, retention: { .never })
     check(reloaded.items == ["a"] && reloaded.dates == [t0 + 120], "history dates: texts and times are saved and load back")
     history.clear()
@@ -1408,17 +1409,19 @@ do {
     let store = sealedStore("sealed")
     let history = History(store: store, retention: { .never })
     history.add("secret phrase quartz", at: Date(timeIntervalSince1970: 1_000))
+    History.flushWrites()
     let bytes = (try? Data(contentsOf: store.fileURL)) ?? Data()
     check(!bytes.isEmpty && bytes.range(of: Data("secret phrase quartz".utf8)) == nil, "sealed: the file holds no readable capture")
     check(History(store: store, retention: { .never }).items == ["secret phrase quartz"], "sealed: captures open again with the same key")
 
-    let locked = EncryptedHistoryStore(fileURL: store.fileURL, key: { throw CocoaError(.fileReadNoPermission) })
+    let locked = EncryptedHistoryStore(fileURL: store.fileURL, key: { _ in throw CocoaError(.fileReadNoPermission) })
     let blocked = History(store: locked, retention: { .never })
     blocked.add("not written")
+    History.flushWrites()
     check(blocked.items == ["not written"] && History(store: store, retention: { .never }).items == ["secret phrase quartz"],
           "sealed: with the key locked, nothing is written and the file is kept")
 
-    let wrong = EncryptedHistoryStore(fileURL: store.fileURL, key: { SymmetricKey(data: Data(repeating: 1, count: 32)) })
+    let wrong = EncryptedHistoryStore(fileURL: store.fileURL, key: { _ in SymmetricKey(data: Data(repeating: 1, count: 32)) })
     check(History(store: wrong, retention: { .never }).items.isEmpty, "sealed: a wrong key shows nothing")
 
     var tampered = bytes
@@ -1426,32 +1429,114 @@ do {
     try? tampered.write(to: store.fileURL)
     let rejected = History(store: store, retention: { .never })
     check(rejected.items.isEmpty, "sealed: a changed byte is rejected and the history starts empty")
+    check(rejected.state == .unavailable, "sealed: a file that cannot be opened leaves the history unavailable")
     rejected.add("after tamper")
-    check(History(store: store, retention: { .never }).items == ["after tamper"], "sealed: the next save replaces the rejected file")
+    History.flushWrites()
+    check((try? Data(contentsOf: store.fileURL)) == tampered, "sealed: a file that cannot be opened is never overwritten")
 
 }
 
-// Sealed history waits for a key that is not there yet, then merges what was captured meanwhile with the file.
-do {
-    final class LaterKeyStore: HistoryStore {
-        var keyReady = false
-        var saved = HistorySnapshot(texts: ["old"], dates: [1_000])
-        func load() -> HistoryLoad { keyReady ? .loaded(saved) : .unavailable }
-        func save(_ snapshot: HistorySnapshot) -> Bool {
-            guard keyReady else { return false }
-            saved = snapshot
-            return true
-        }
+/// Runs an async History call to completion from the test's main thread.
+@MainActor func settle(_ work: @escaping @MainActor () async -> Void) {
+    var finished = false
+    Task { await work(); finished = true }
+    while !finished { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+}
+
+/// A store whose answers the test scripts: each load returns the next scripted result, and saves are counted.
+/// Only the test's main thread changes it, and only after the I/O queue has been flushed.
+final class ScriptedStore: HistoryStore, @unchecked Sendable {
+    var answers: [HistoryLoad]
+    var saved: HistorySnapshot?
+    var loads = 0
+    var saves = 0
+    init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
+        self.answers = answers
+        self.saved = saved
     }
-    let later = LaterKeyStore()
-    let history = History(store: later, retention: { .never })
-    history.add("new", at: Date(timeIntervalSince1970: 2_000))
-    check(later.saved.texts == ["old"], "reopen: nothing is written while the key is unavailable")
-    later.keyReady = true
-    history.add("newer", at: Date(timeIntervalSince1970: 3_000))
-    check(history.items == ["newer", "new", "old"] && later.saved.texts == ["newer", "new", "old"],
-          "reopen: captures from the unavailable period are merged with the stored ones", "\(history.items)")
-    check(history.dates.count == 3 && later.saved.dates.count == 3, "reopen: times stay aligned after the merge")
+    func load() -> HistoryLoad {
+        loads += 1
+        guard answers.count > 1 else { return answers.first ?? .unavailable }
+        return answers.removeFirst()
+    }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        saves += 1
+        saved = snapshot
+        return true
+    }
+}
+
+// Sealed history: authorization can be denied, delayed or restored, and none of those states writes over the
+// file, shows an empty history by mistake, or blocks the caller. The one thing it may do is read the file again.
+do {
+    let stored = HistorySnapshot(texts: ["old"], dates: [1_000])
+
+    // Denied: unavailable, captures stay in memory, the file is never written.
+    let denied = ScriptedStore(answers: [.unavailable], saved: stored)
+    let deniedHistory = History(store: denied, retention: { .never })
+    deniedHistory.add("new", at: Date(timeIntervalSince1970: 2_000))
+    History.flushWrites()
+    check(deniedHistory.state == .unavailable && deniedHistory.items == ["new"],
+          "authorization: denied shows unavailable, keeps new captures in memory")
+    check(denied.saves == 0 && denied.saved == stored, "authorization: denied never writes the file")
+
+    // Delayed, then granted: loading, then the stored history merged with what was captured meanwhile.
+    let delayed = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let delayedHistory = History(store: delayed, retention: { .never })
+    delayedHistory.add("while waiting", at: Date(timeIntervalSince1970: 2_000))
+    settle { await delayedHistory.reload() }
+    History.flushWrites()
+    check(delayedHistory.state == .available && delayedHistory.items == ["while waiting", "old"],
+          "authorization: granted later merges the stored history with the captures made meanwhile",
+          "\(delayedHistory.items)")
+    check(delayed.saved?.texts == ["while waiting", "old"], "authorization: the merged history is written once readable")
+
+    // Recovery: after a denial the original history loads again, unchanged.
+    let recovered = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let recoveredHistory = History(store: recovered, retention: { .never })
+    settle { await recoveredHistory.reload() }
+    check(recoveredHistory.items == ["old"] && recoveredHistory.state == .available && recovered.saves == 0,
+          "authorization: recovery shows the original history and writes nothing new")
+
+    // A removal made while unavailable is not undone by the older copy on disk.
+    let removal = ScriptedStore(answers: [.unavailable, .loaded(stored)], saved: stored)
+    let removalHistory = History(store: removal, retention: { .never })
+    removalHistory.remove("old")
+    settle { await removalHistory.reload() }
+    History.flushWrites()
+    check(removalHistory.items.isEmpty && removal.saved?.texts == [],
+          "authorization: a removal made while unavailable is applied once the file can be read")
+
+    // Corrupt: the file is kept as it is, and the history is unavailable rather than empty.
+    let corrupt = ScriptedStore(answers: [.corrupt], saved: stored)
+    let corruptHistory = History(store: corrupt, retention: { .never })
+    corruptHistory.add("kept", at: Date(timeIntervalSince1970: 2_000))
+    History.flushWrites()
+    check(corruptHistory.state == .unavailable && corrupt.saves == 0 && corrupt.saved == stored,
+          "authorization: a corrupt file is never overwritten")
+
+    // Disabled: no load at all, so no Keychain access.
+    let disabled = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let disabledHistory = History(store: disabled, retention: { .never }, isEnabled: { false }, loadsNow: false)
+    disabledHistory.refresh()
+    check(disabledHistory.state == .disabled && disabled.loads == 0,
+          "authorization: a disabled history never reads the file or the key")
+
+    // Loading from the app's path does not run the read on the main thread, and the caller gets control back.
+    let slow = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let slowHistory = History(store: slow, retention: { .never }, loadsNow: false)
+    check(slowHistory.state == .loading && slowHistory.items.isEmpty && slow.loads == 0,
+          "authorization: the app's history starts loading without reading the file at launch")
+    settle { await slowHistory.reload() }
+    check(slowHistory.items == ["old"] && slowHistory.state == .available, "authorization: the background load shows the history")
+
+    // Launch regression: a history that starts in `loading` must still start its read when the app asks.
+    let launched = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let launchedHistory = History(store: launched, retention: { .never }, isEnabled: { true }, loadsNow: false)
+    settle { await launchedHistory.refresh()?.value }
+    check(launched.loads == 1 && launchedHistory.items == ["old"] && launchedHistory.state == .available,
+          "authorization: refresh at launch starts the read, which had been skipped while the state was loading",
+          "loads \(launched.loads), state \(launchedHistory.state)")
 }
 
 // Rendered corpus: 16 captures (4 per kind) drawn as images, read through Vision, then classified. Written once,

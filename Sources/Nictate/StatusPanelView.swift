@@ -142,6 +142,7 @@ private struct HistoryScreen: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
                 .padding(.horizontal, 12)
+            stateNote
             content
             if model.historyCount > 0 {
                 Button(tr("Clear History…"), role: .destructive, action: model.clearHistory)
@@ -151,9 +152,26 @@ private struct HistoryScreen: View {
         .onAppear { searchFocused = true }
     }
 
+    /// Says when the saved captures are not shown, so an empty list is never mistaken for an empty history.
+    @ViewBuilder private var stateNote: some View {
+        switch model.historyState {
+        case .loading:
+            Text(tr("Loading history…")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
+        case .unavailable:
+            Text(tr("History is unavailable right now. New captures are still copied."))
+                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12)
+        case .available, .disabled:
+            EmptyView()
+        }
+    }
+
     @ViewBuilder private var content: some View {
         let entries = model.entries
-        if model.historyCount == 0 {
+        // While the history loads, or cannot be read, the note above says so: "No captures yet" would be false.
+        let waiting = model.historyCount == 0 && (model.historyState == .loading || model.historyState == .unavailable)
+        if waiting {
+            EmptyView()
+        } else if model.historyCount == 0 {
             VStack(spacing: 4) {
                 Text(tr("No captures yet")).font(.headline)
                 Text(tr("Press %@, then drag to select an area.", model.hotKeyLabel))

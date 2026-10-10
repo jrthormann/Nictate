@@ -267,10 +267,14 @@ MainActor.assumeIsolated {
                                               ("z", Selector(("undo:"))), ("w", #selector(NSWindow.performClose(_:))),
                                               ("m", #selector(NSWindow.performMiniaturize(_:)))]
         for (key, action) in expected {
-            let item = allItems(mainMenu.menu).first { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == .command }
-            check(item?.action == action && item?.target == nil,
-                  "main menu: ⌘\(key.uppercased()) sends \(NSStringFromSelector(action)) along the responder chain",
-                  item.map { "\($0.action.map(NSStringFromSelector) ?? "nil")" } ?? "missing")
+            let command: NSEvent.ModifierFlags = .command
+            let item: NSMenuItem? = allItems(mainMenu.menu).first(where: { (candidate: NSMenuItem) -> Bool in
+                candidate.keyEquivalent == key && candidate.keyEquivalentModifierMask == command
+            })
+            let sent: Bool = item?.action == action && item?.target == nil
+            let name: String = NSStringFromSelector(action)
+            let detail: String = item.map { (menuItem: NSMenuItem) -> String in menuItem.action.map { NSStringFromSelector($0) } ?? "nil" } ?? "missing"
+            check(sent, "main menu: ⌘\(key.uppercased()) sends \(name) along the responder chain", detail)
         }
         let windows = WindowCoordinator()
         windows.showHistory()
@@ -339,7 +343,7 @@ MainActor.assumeIsolated {
               "history deletion: Clear History has no key, so Return cannot delete")
         // With nothing saved, neither path shows an alert (a modal here would hang the run until the timeout).
         let empty = History(store: EncryptedHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).sealed"),
-                                                         key: { SymmetricKey(data: Data(repeating: 3, count: 32)) }),
+                                                         key: { _ in SymmetricKey(data: Data(repeating: 3, count: 32)) }),
                             retention: { .never })
         HistoryClearing.confirmClear(empty)
         HistoryClearing.historyTurnedOff(empty)
