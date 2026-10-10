@@ -387,5 +387,30 @@ do {
     check(model.screen == .main, "panel: Back returns to the main screen without closing the panel")
 }
 
+// MARK: Status panel anchoring: the panel opens below its button and does not rise over the menu bar
+do {
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    let panel = StatusPanel(model: model)
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    // A stand-in for the status item, placed just under the top edge the way the menu bar's icon sits.
+    let anchor = NSWindow(contentRect: NSRect(x: screen.frame.midX, y: screen.frame.maxY - 60, width: 40, height: 40),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+    let button = NSButton(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+    anchor.contentView?.addSubview(button)
+    anchor.orderFrontRegardless()
+    panel.toggle(relativeTo: button)
+    _ = waitUntil { panel.isShown && panel.window != nil }
+    waitPast(0.5)
+    let buttonBottom = anchor.convertToScreen(button.convert(button.bounds, to: nil)).minY
+    let frame = panel.window?.frame ?? .zero
+    check(panel.isShown, "panel: opens from its status button")
+    check(frame.maxY <= buttonBottom + 1 && frame.height > 200,
+          "panel: opens below its button and stays clear of the menu bar",
+          "panel top \(frame.maxY), button bottom \(buttonBottom), height \(frame.height)")
+    panel.close()
+    anchor.orderOut(nil)
+}
+
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -109,10 +109,16 @@ final class StatusPanel {
         model.dismiss = { [weak self] in self?.close() }
         popover.behavior = .transient
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        popover.contentViewController = NSHostingController(rootView: StatusPanelView(model: model))
+        // The popover places itself from the content size it knows when it opens. Without this, SwiftUI's later
+        // growth moves the bottom edge and the panel rises over the menu bar.
+        let host = NSHostingController(rootView: StatusPanelView(model: model))
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
     }
 
     var isShown: Bool { popover.isShown }
+    /// The window that draws the panel, once it is shown.
+    var window: NSWindow? { popover.contentViewController?.view.window }
 
     func toggle(relativeTo button: NSView) {
         if popover.isShown {
