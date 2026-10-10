@@ -105,7 +105,7 @@ que decides abrir pasa a tu navegador, que se conecta como siempre.
 
 ## Estado
 
-Nictate 1.0.0-beta.1 es una versión de prueba pública. Funciona, y la probé en macOS 27. Todavía no la he probado en
+Nictate 1.0.0-beta.2 es una versión de prueba pública. Funciona, y la probé en macOS 27. Todavía no la he probado en
 macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son bienvenidos. El
 [CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no.
 
