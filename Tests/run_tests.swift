@@ -2073,6 +2073,132 @@ do {
           "import hold: after the import the file's merged captures are shown", "\(history.items)")
 }
 
+// Clear on Quit: stores that stand in for a slow read, a hung disk and a failing disk.
+final class SlowReadStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    let readDelay: Double
+    var saved: HistorySnapshot?
+    init(stored: HistorySnapshot, readDelay: Double) {
+        self.stored = stored
+        self.readDelay = readDelay
+    }
+    func load() -> HistoryLoad {
+        Thread.sleep(forTimeInterval: readDelay)
+        return .loaded(stored)
+    }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        saved = snapshot
+        return true
+    }
+}
+
+final class HungWriteStore: HistoryStore, @unchecked Sendable {
+    let stored: HistorySnapshot
+    init(stored: HistorySnapshot) { self.stored = stored }
+    func load() -> HistoryLoad { .loaded(stored) }
+    func save(_ snapshot: HistorySnapshot) -> Bool {
+        Thread.sleep(forTimeInterval: 1.0)
+        return true
+    }
+}
+
+// Regression: a slow read that finishes after Clear on Quit cannot bring the captures back.
+do {
+    let stored = HistorySnapshot(texts: ["one", "two"], dates: [1_000, 2_000])
+    let store = SlowReadStore(stored: stored, readDelay: 0.6)
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: a slow load during quit is cleared and the empty file is confirmed", "confirmed \(confirmed), file \(store.saved?.texts ?? [])")
+}
+
+// Regression: writes queued before Clear on Quit land before the empty write, and nothing is written after it.
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving)
+    history.add("pending one")
+    history.add("pending two")
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: pending writes are followed by the empty write, which is what remains", "file \(store.saved?.texts ?? [])")
+    history.add("after the clear")
+    History.flushWrites()
+    check(store.saved?.texts.isEmpty == true, "quit: a capture made after the clear is not written")
+}
+
+// Regression: a read already queued when Clear on Quit runs does not apply its captures afterwards.
+do {
+    let stored = HistorySnapshot(texts: ["restored?"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+          "quit: a late read does not restore the captures", "items \(history.items)")
+}
+
+// Corrupt and unreadable files are overwritten by Clear on Quit, which is approved for an explicit choice.
+for (name, answer) in [("corrupt", HistoryLoad.corrupt), ("unreadable", HistoryLoad.unavailable)] {
+    let store = ScriptedStore(answers: [answer])
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving)
+    let confirmed = history.clearForQuit()
+    check(confirmed && store.saved?.texts.isEmpty == true,
+          "quit: a \(name) file is overwritten with an empty history and the write is confirmed", "file \(store.saved?.texts ?? [])")
+}
+
+// A failed write is not claimed: the file and the list keep the captures, and the call reports false.
+do {
+    let stored = HistorySnapshot(texts: ["keep me"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    store.writesSucceed = false
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving)
+    let confirmed = history.clearForQuit()
+    History.flushWrites()
+    check(!confirmed && history.items == ["keep me"] && store.saved?.texts == ["keep me"],
+          "quit: a failed write is not reported as a deletion", "confirmed \(confirmed), items \(history.items)")
+}
+
+// A write that never finishes is abandoned after the timeout, and nothing is claimed.
+do {
+    let stored = HistorySnapshot(texts: ["stuck"], dates: [1_000])
+    let history = History(store: HungWriteStore(stored: stored), retention: { .never }, isEnabled: alwaysSaving)
+    let started = Date()
+    let confirmed = history.clearForQuit(timeout: 0.2)
+    let elapsed = Date().timeIntervalSince(started)
+    check(!confirmed && history.items == ["stuck"] && elapsed < 0.9,
+          "quit: a hung disk does not hold quit past its timeout, and nothing is claimed", "elapsed \(elapsed), confirmed \(confirmed)")
+}
+
+// A corrupt file at launch with Clear on Quit on is overwritten and then read back as an empty history.
+do {
+    let store = ScriptedStore(answers: [.corrupt, .empty])
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving)
+    check(history.state == .unavailable, "launch: a corrupt file starts unavailable")
+    settle {
+        await history.clearUnreadableFile()
+        while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
+    }
+    check(store.saved?.texts.isEmpty == true && history.state == .available,
+          "launch: the corrupt file is overwritten and then read as empty", "state \(history.state)")
+}
+
+// Clear on Quit off: quitting writes what is pending and does not clear anything.
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving)
+    history.add("kept")
+    history.settleForQuit()
+    check(store.saved?.texts == ["kept"], "quit without Clear on Quit: the pending capture is written before quit")
+    history.add("still saving")
+    History.flushWrites()
+    check(history.items == ["still saving", "kept"] && store.saved?.texts == ["still saving", "kept"],
+          "quit without Clear on Quit: the history keeps working afterwards")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

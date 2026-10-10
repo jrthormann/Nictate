@@ -68,6 +68,10 @@ final class History: ObservableObject {
     private var canWriteExisting: Bool { !importing && (state == .available || (state == .disabled && hasLoadedFile)) }
     /// True from `beginImport` to `endImport`. Reads that finish meanwhile are stale, so they are ignored.
     private var importing = false
+    /// True once `clearForQuit` has been called. From then on no read is applied and no write is started.
+    private var closed = false
+    /// The longest the app waits on the file at quit. Past it, nothing is claimed as written.
+    static let quitTimeout: TimeInterval = 3
     /// Numbers each write. A write's result is published only if it is newer than the last one published.
     private var writeCount = 0
     private var publishedWrite = 0
@@ -102,7 +106,7 @@ final class History: ObservableObject {
     /// Starts or retries loading. Called at launch, when the panel opens, and when Keep History is turned on.
     /// Does nothing while the history is switched off, so no Keychain access happens for it.
     @discardableResult func refresh() -> Task<Void, Never>? {
-        guard !importing else { return nil }
+        guard !importing, !closed else { return nil }
         guard isEnabled() else {
             // Saving is off: no new captures are recorded. The saved ones stay loaded, so they can still be
             // shown, copied and deleted, and a deletion is written straight away.
@@ -159,14 +163,68 @@ final class History: ObservableObject {
         reloadFromFile()
     }
 
-    /// Quit path: waits, for at most `timeout`, until a read in flight has been applied and every queued write has
-    /// finished. A clear requested while the history was still loading is then written before the process ends.
-    /// Bounded so that a stuck read cannot hold up quit; the next launch clears again when Clear on Quit is on.
-    func settleForQuit(timeout: TimeInterval = 2) {
+    /// Waits until everything queued on the I/O queue before this call has run, or until `deadline`. False means it
+    /// did not finish in time.
+    static func drainIO(until deadline: Date) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        io.async { done.signal() }
+        return done.wait(timeout: .now() + max(0, deadline.timeIntervalSinceNow)) == .success
+    }
+
+    /// Quit with Clear on Quit off: waits, at most `timeout`, until a read in flight is applied and every queued
+    /// write has finished, so changes made just before quit are on disk. Bounded, so a slow disk cannot hold up quit.
+    func settleForQuit(timeout: TimeInterval = History.quitTimeout) {
         let deadline = Date().addingTimeInterval(timeout)
-        repeat {
-            History.flushWrites()
-        } while (loadInFlight || writesInFlight > 0) && Date() < deadline
+        while loadInFlight || writesInFlight > 0 {
+            guard Date() < deadline, History.drainIO(until: deadline) else { return }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+        }
+    }
+
+    /// Clear on Quit. From this call on, a read that finishes is ignored and no write starts, so a load still running
+    /// cannot bring captures back. The empty history is written on the serial I/O queue, after everything queued
+    /// before it, and the call waits at most `timeout` for the store's answer. It returns true only when the store
+    /// confirmed the empty history is on disk. Only then is the in-memory list cleared. A false result claims nothing.
+    func clearForQuit(timeout: TimeInterval = History.quitTimeout) -> Bool {
+        closed = true
+        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
+        items = []
+        dates = []
+        intendedTexts = []
+        intendedDates = []
+        return true
+    }
+
+    /// Clear on Quit is on and the file could not be read (corrupt or unreadable): it is overwritten with an empty
+    /// history, off the main thread, so a stuck disk cannot freeze the menu bar. A failure is retried next launch.
+    func clearUnreadableFile() async {
+        guard state == .unavailable, !closed else { return }
+        let store = self.store
+        let saved = await History.performFileWork { store.save(HistorySnapshot(texts: [], dates: [])) }
+        guard saved else {
+            Log.app.error("Clear on Quit: the unreadable history could not be overwritten; it is retried on the next launch")
+            return
+        }
+        reloadFromFile()
+    }
+
+    /// Queues the empty history behind everything already queued, and waits until `deadline` for the store's answer.
+    private func writeEmpty(until deadline: Date) -> Bool {
+        let store = self.store
+        let outcome = WriteOutcome()
+        let finished = DispatchSemaphore(value: 0)
+        Self.io.async {
+            outcome.saved = store.save(HistorySnapshot(texts: [], dates: []))
+            finished.signal()
+        }
+        guard finished.wait(timeout: .now() + max(0, deadline.timeIntervalSinceNow)) == .success else {
+            Log.app.error("Clear on Quit: the history write did not finish in time; nothing is claimed as cleared")
+            return false
+        }
+        if !outcome.saved {
+            Log.app.error("Clear on Quit: the history could not be cleared; the choice stays on for the next launch")
+        }
+        return outcome.saved
     }
 
     /// Reads the file again, after something outside History changed it (an import). Captures are then shown as
@@ -189,7 +247,7 @@ final class History: ObservableObject {
     /// Applies what a read found. Only what the file holds is shown; a removal that was made while the file
     /// could not be written is applied now and written back.
     private func apply(_ result: HistoryLoad) {
-        guard !importing else { return }
+        guard !importing, !closed else { return }
         loadInFlight = false
         switch result {
         case .loaded(let file):
@@ -304,6 +362,8 @@ final class History: ObservableObject {
     /// Writes the whole intended history on the I/O queue. The visible list changes only when this write has
     /// succeeded (see `writeFinished`). Nothing is written while the history is not available.
     private func commit(_ texts: [String], _ dates: [Date]) {
+        // After Clear on Quit nothing new is written: a late capture or deletion must not restore captures.
+        guard !closed else { return }
         intendedTexts = texts
         intendedDates = dates
         guard canWriteExisting else { return }
@@ -323,7 +383,8 @@ final class History: ObservableObject {
     /// again so that it, not memory, decides what is shown.
     private func writeFinished(_ number: Int, _ snapshot: HistorySnapshot, _ saved: Bool) {
         writesInFlight -= 1
-        guard number > publishedWrite else { return }
+        // After Clear on Quit the list is the empty one; a write that finishes later must not bring captures back into it.
+        guard !closed, number > publishedWrite else { return }
         guard saved else {
             Log.app.error("History was not saved; the change is not shown and the file is unchanged")
             intendedTexts = items

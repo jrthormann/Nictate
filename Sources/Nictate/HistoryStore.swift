@@ -77,3 +77,9 @@ enum AppHistoryStore {
         JSONHistoryStore(fileURL: JSONHistoryStore.standardURL)
     }
 }
+
+/// Carries a store's answer from the I/O queue to the caller that waits for it. The caller reads it only after the
+/// semaphore has been signalled, so the write and the read never overlap.
+final class WriteOutcome: @unchecked Sendable {
+    var saved = false
+}

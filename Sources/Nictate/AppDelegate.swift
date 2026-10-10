@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await loading?.value
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
                 HistoryClearing.clear()
+            } else if settings.clearHistoryOnQuit {
+                // A quit that could not clear an unreadable file leaves it for this retry.
+                await History.shared.clearUnreadableFile()
             }
             if BuildIdentity.isTestVariant {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
@@ -63,13 +66,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Quit first lets a history read that is still running finish, so a clear requested while it was loading is not
-    /// lost. Then Clear on Quit clears the history, and the queued writes are flushed so the change is on disk before
-    /// the process ends.
+    /// With Clear on Quit on, the history is cleared and the store's confirmation awaited before the process ends. A
+    /// failure is logged by History and the choice stays on, so the next launch tries again. Without it, queued
+    /// changes are written, waiting at most a few seconds.
     func applicationWillTerminate(_ notification: Notification) {
-        History.shared.settleForQuit()
-        if settings.clearHistoryOnQuit { HistoryClearing.clear() }
-        History.flushWrites()
+        if settings.clearHistoryOnQuit {
+            // Notices may still show captured text, so they go whatever the outcome of the history write.
+            Notifier.removeAllDelivered()
+            _ = History.shared.clearForQuit()
+        } else {
+            History.shared.settleForQuit()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
