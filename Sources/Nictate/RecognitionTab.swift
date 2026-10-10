@@ -27,20 +27,24 @@ struct RecognitionTab: View {
             }
 
             DisclosureGroup("Advanced", isExpanded: $advancedExpanded) {
-                    VStack(alignment: .leading, spacing: Design.Space.row) {
-                        SettingToggle("Keep Line Breaks", isOn: $settings.keepLineBreaks)
-                        SettingToggle("Detect Text Columns", isOn: $settings.detectColumns)
-                        SettingToggle("Separate Table Cells with Tabs", isOn: $settings.tablesAsTabs)
-                        SettingToggle("Join Split Words", isOn: $settings.cleanText)
-                        SettingToggle("Code Cleanup", isOn: $settings.codeClean)
-                        SettingCaption("Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation.")
-                        if faithful {
-                            SettingCaption("Preserve Original Formatting ignores these settings, except Code Cleanup.")
-                        }
+                VStack(alignment: .leading, spacing: Design.Space.row) {
+                    // Preserve Original Formatting overrides these four; Code Cleanup still applies in that mode.
+                    SettingToggle("Keep Line Breaks", isOn: $settings.keepLineBreaks)
+                        .dimmed(when: faithful)
+                    SettingToggle("Detect Text Columns", isOn: $settings.detectColumns)
+                        .dimmed(when: faithful)
+                    SettingToggle("Separate Table Cells with Tabs", isOn: $settings.tablesAsTabs)
+                        .dimmed(when: faithful)
+                    SettingToggle("Join Split Words", isOn: $settings.cleanText)
+                        .dimmed(when: faithful)
+                    SettingToggle("Code Cleanup", isOn: $settings.codeClean)
+                    SettingCaption("Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation.")
+                    if faithful {
+                        SettingCaption("Preserve Original Formatting ignores these settings, except Code Cleanup.")
                     }
-                    .padding(.top, Design.Space.row)
+                }
+                .padding(.top, Design.Space.row)
             }
-            .dimmed(when: faithful)
         }
     }
 

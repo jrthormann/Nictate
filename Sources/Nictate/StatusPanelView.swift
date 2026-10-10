@@ -33,6 +33,8 @@ struct StatusPanelView: View {
 private enum Panel {
     static let width: CGFloat = 260
     static let verticalInset: CGFloat = 6
+    /// The most the main screen takes before it scrolls.
+    static let maximumMainHeight: CGFloat = 520
 }
 
 private struct MainScreen: View {
@@ -40,27 +42,34 @@ private struct MainScreen: View {
     @ObservedObject private var login = LoginItem.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MenuAction(tr("Capture Text"), shortcut: model.hotKeyLabel, leadingSymbol: "text.viewfinder", action: model.captureText)
-            MenuAction(tr("Capture QR Code or Barcode"), shortcut: model.codeHotKeyLabel, leadingSymbol: "qrcode.viewfinder", action: model.captureCode)
-            if model.historyEnabled {
-                MenuAction(tr("Cycle History"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "arrow.triangle.2.circlepath", action: model.cycleHistory)
-                MenuAction(tr("History"), leadingSymbol: "clock.arrow.circlepath", trailingSymbol: "chevron.right", action: model.openHistory)
+        // Scrolls when many detections are listed, so Settings and Quit stay reachable on short displays.
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 0) {
+                MenuAction(tr("Capture Text"), shortcut: model.hotKeyLabel, leadingSymbol: "text.viewfinder", action: model.captureText)
+                MenuAction(tr("Capture QR Code or Barcode"), shortcut: model.codeHotKeyLabel, leadingSymbol: "qrcode.viewfinder", action: model.captureCode)
+                if model.historyEnabled {
+                    MenuAction(tr("Cycle History"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "arrow.triangle.2.circlepath", action: model.cycleHistory)
+                }
+                // Saved captures stay reachable while saving is off, so they can be read or deleted.
+                if model.historyEnabled || model.historyCount > 0 {
+                    MenuAction(tr("History"), leadingSymbol: "clock.arrow.circlepath", trailingSymbol: "chevron.right", action: model.openHistory)
+                }
+                MenuDivider()
+                detections
+                captureOptions
+                MenuDivider()
+                MenuToggle(tr("Save Captures"), symbol: "clock", isOn: Binding(get: { model.keepHistory }, set: { model.setKeepHistory($0) }))
+                MenuToggle(tr("Launch at Login"), symbol: "power", isOn: Binding(get: { login.enabled }, set: { model.setLaunchAtLogin($0) }))
+                MenuDivider()
+                MenuAction(tr("Settings…"), shortcut: "⌘,", leadingSymbol: "gearshape", action: model.showPreferences)
+                MenuAction(tr("About Nictate"), leadingSymbol: "info.circle", action: model.showAbout)
+                MenuAction(tr("Check for Updates…"), leadingSymbol: "arrow.down.circle", action: model.checkForUpdates)
+                MenuDivider()
+                MenuAction(tr("Quit Nictate"), shortcut: "⌘Q", action: model.quit)
             }
-            MenuDivider()
-            detections
-            captureOptions
-            MenuDivider()
-            MenuToggle(tr("Save Captures"), symbol: "clock", isOn: Binding(get: { model.keepHistory }, set: { model.setKeepHistory($0) }))
-            MenuToggle(tr("Launch at Login"), symbol: "power", isOn: Binding(get: { login.enabled }, set: { model.setLaunchAtLogin($0) }))
-            MenuDivider()
-            MenuAction(tr("Settings…"), shortcut: "⌘,", leadingSymbol: "gearshape", action: model.showPreferences)
-            MenuAction(tr("About Nictate"), leadingSymbol: "info.circle", action: model.showAbout)
-            MenuAction(tr("Check for Updates…"), leadingSymbol: "arrow.down.circle", action: model.checkForUpdates)
-            MenuDivider()
-            MenuAction(tr("Quit Nictate"), shortcut: "⌘Q", action: model.quit)
+            .padding(.horizontal, Panel.verticalInset)
         }
-        .padding(.horizontal, Panel.verticalInset)
+        .frame(maxHeight: Panel.maximumMainHeight)
     }
 
     @ViewBuilder private var detections: some View {

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
 import AppKit
+import Combine
 import SwiftUI
 
 /// What the menu bar panel shows and does. The history is a second screen of the same panel, never a window.
@@ -27,10 +28,15 @@ final class StatusPanelModel: ObservableObject {
     /// The history the panel shows. The app passes `History.shared`; tests pass a disposable one.
     private let history: History
 
+    /// Changes to the history and the settings redraw the panel, not only changes to its own properties.
+    private var observers = Set<AnyCancellable>()
+
     init(capture: CaptureCoordinator, windows: WindowCoordinator, history: History = .shared) {
         self.capture = capture
         self.windows = windows
         self.history = history
+        history.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
+        Settings.shared.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
     }
 
     /// Called each time the panel opens: the main screen, with a fresh search.

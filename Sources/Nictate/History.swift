@@ -62,6 +62,10 @@ final class History: ObservableObject {
     private var pendingClear = false
     /// True from the start of a read until its result is applied, so a second refresh does not read again.
     private var loadInFlight = false
+    /// True once the file has been read (and is not unreadable), so its entries are known and can be changed.
+    private var hasLoadedFile = false
+    /// Changes to saved entries can be written: the file is readable, whether or not saving is on.
+    private var canWriteExisting: Bool { state == .available || (state == .disabled && hasLoadedFile) }
     /// Numbers each write. A write's result is published only if it is newer than the last one published.
     private var writeCount = 0
     private var publishedWrite = 0
@@ -95,8 +99,12 @@ final class History: ObservableObject {
     /// Does nothing while the history is switched off, so no Keychain access happens for it.
     @discardableResult func refresh() -> Task<Void, Never>? {
         guard isEnabled() else {
+            // Saving is off: no new captures are recorded. The saved ones stay loaded, so they can still be
+            // shown, copied and deleted, and a deletion is written straight away.
             state = .disabled
-            return nil
+            guard !hasLoadedFile, !loadInFlight else { return nil }
+            loadInFlight = true
+            return Task { await reload() }
         }
         guard state != .available, !loadInFlight else { return nil }
         loadInFlight = true
@@ -153,6 +161,7 @@ final class History: ObservableObject {
         loadInFlight = false
         switch result {
         case .loaded(let file):
+            hasLoadedFile = true
             let stored = file.capped()
             let times = Self.alignedDates(count: stored.texts.count, stored: stored.dates)
             let kept = pendingClear ? [] : zip(stored.texts, times).filter { !pendingRemovals.contains($0.0) }
@@ -161,22 +170,24 @@ final class History: ObservableObject {
             let changed = texts.count != stored.texts.count
             pendingRemovals = []
             pendingClear = false
-            state = .available
+            state = isEnabled() ? .available : .disabled
             items = texts
             self.dates = dates
             intendedTexts = texts
             intendedDates = dates
             if changed { commit(texts, dates) }
         case .empty:
+            hasLoadedFile = true
             pendingRemovals = []
             pendingClear = false
-            state = .available
+            state = isEnabled() ? .available : .disabled
             items = []
             dates = []
             intendedTexts = []
             intendedDates = []
         case .corrupt, .unavailable:
             // Nothing is shown from a file that cannot be read, and nothing is written over it.
+            hasLoadedFile = false
             state = .unavailable
             items = []
             dates = []
@@ -222,7 +233,7 @@ final class History: ObservableObject {
     /// Removes captures older than `limit` seconds. A capture with an unknown time (saved before times were
     /// kept) stays: its age cannot be judged.
     func prune(olderThan limit: TimeInterval?, now: Date = Date()) {
-        guard let limit, state == .available else { return }
+        guard let limit, canWriteExisting else { return }
         let kept = zip(intendedTexts, intendedDates).filter { $0.1 == .distantPast || now.timeIntervalSince($0.1) <= limit }
         guard kept.count != intendedTexts.count else { return }
         commit(kept.map(\.0), kept.map(\.1))
@@ -234,7 +245,7 @@ final class History: ObservableObject {
     }
 
     func remove(_ text: String) {
-        guard state == .available else {
+        guard canWriteExisting else {
             // Not writable now: hide it here and apply the removal to the file once it can be written.
             pendingRemovals.insert(text)
             let kept = zip(items, dates).filter { $0.0 != text }
@@ -247,7 +258,7 @@ final class History: ObservableObject {
     }
 
     func clear() {
-        guard state == .available else {
+        guard canWriteExisting else {
             pendingClear = true
             items = []
             dates = []
@@ -263,7 +274,7 @@ final class History: ObservableObject {
     private func commit(_ texts: [String], _ dates: [Date]) {
         intendedTexts = texts
         intendedDates = dates
-        guard state == .available else { return }
+        guard canWriteExisting else { return }
         writeCount += 1
         let number = writeCount
         let snapshot = HistorySnapshot(texts: texts, dates: dates.map(\.timeIntervalSince1970))

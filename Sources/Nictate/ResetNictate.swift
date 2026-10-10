@@ -20,7 +20,11 @@ enum ResetNictate {
         reset.keyEquivalent = ""
         guard alert.runModal() == .alertSecondButtonReturn else { return }
         Settings.resetToDefaults()
-        if deleteCaptures.state == .on { History.shared.clear() }
+        if deleteCaptures.state == .on {
+            History.shared.clear()
+            // The restart ends this process, so the deletion must reach the file first.
+            History.flushWrites()
+        }
         AppRestart.now()
     }
 }

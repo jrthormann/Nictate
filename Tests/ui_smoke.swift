@@ -418,7 +418,7 @@ do {
 // MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight
 do {
     let store = JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json"))
-    let history = History(store: store, retention: { .never })
+    let history = History(store: store, retention: { .never }, isEnabled: { true })
     history.add("first")
     history.add("second")
     history.add("third")
