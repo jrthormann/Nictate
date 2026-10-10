@@ -70,9 +70,3 @@ menu bar blink; it does not appear in ordinary UI.
 - Marketing copy in the app: "Elevate", "Seamless", "Unleash". The app says what it does.
 - A second accent colour, or any hue used for decoration rather than meaning.
 - Custom mouse cursors. The crosshair is the system crosshair.
-
-## 8. Known gaps (to decide, not yet changed)
-
-- The result pill's "Reading…" uses a circular spinner. Banned above; replace with a pulse dot.
-- The welcome title ends in "!". Remove the exclamation mark.
-- README and DMG still show the old hero art wording in places; regenerate after the copy is final.

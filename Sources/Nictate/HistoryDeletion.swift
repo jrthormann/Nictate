@@ -6,7 +6,7 @@ import AppKit
 /// When saved captures are deleted, and what is asked first. Kept apart from the alerts that ask, so every
 /// rule can be tested without one on screen.
 enum HistoryDeletion {
-    /// The answer to "Delete the saved captures too?" after "Keep history" is turned off. Cancel leaves the
+    /// The answer to "Delete the saved captures too?" after "Save Captures" is turned off. Cancel leaves the
     /// switch on again, as if it had never moved.
     enum Answer: Equatable {
         case delete
@@ -36,7 +36,7 @@ enum HistoryDeletion {
     /// Clear History asks once, when there is something to delete.
     static func asksBeforeClear(savedCount: Int) -> Bool { savedCount > 0 }
 
-    /// With "Clear history on quit" on, history is cleared at launch too: a crash, a forced quit or a power
+    /// With "Clear on Quit" on, history is cleared at launch too: a crash, a forced quit or a power
     /// loss skips the quit, and the captures would otherwise outlive the choice.
     static func clearsAtLaunch(clearOnQuit: Bool, savedCount: Int) -> Bool { clearOnQuit && savedCount > 0 }
 
@@ -49,7 +49,7 @@ enum HistoryDeletion {
     }
 }
 
-/// The alerts of `HistoryDeletion` and the clearing itself, shared by Settings, the History window and the menu.
+/// The alerts of `HistoryDeletion` and the clearing itself, shared by Settings, the History screen and the menu.
 @MainActor
 enum HistoryClearing {
     /// Deletes every saved capture and the notices that may still show one.
@@ -65,7 +65,7 @@ enum HistoryClearing {
         if run(clearAlert(savedCount: count)) == .alertSecondButtonReturn { clear(history) }
     }
 
-    /// After "Keep history" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
+    /// After "Save Captures" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
     static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) {
         let count = history.items.count
         guard HistoryDeletion.asksOnSwitchOff(savedCount: count) else { return }

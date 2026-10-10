@@ -4,6 +4,12 @@
 </picture>
 
 <p align="center">
+  <a href="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml"><img src="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/jrthormann/Nictate" alt="MIT license"></a>
+</p>
+
+<p align="center">
   Free and open source. Works on macOS 14 and later.
   <br>
   <a href="../../releases/latest">Download&nbsp;&rsaquo;</a>

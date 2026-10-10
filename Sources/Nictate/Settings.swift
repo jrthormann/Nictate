@@ -28,7 +28,6 @@ final class Settings: ObservableObject {
         defaults.register(defaults: [
             StorageKeys.hotKeyCode: kVK_ANSI_2, StorageKeys.hotKeyMods: cmdKey | shiftKey, StorageKeys.hotKeyLabel: "⇧⌘2",
             StorageKeys.rotateHotKeyCode: kVK_ANSI_2, StorageKeys.rotateHotKeyMods: optionKey | shiftKey | cmdKey, StorageKeys.rotateHotKeyLabel: "⌥⇧⌘2",
-            StorageKeys.rotationDepth: 10,
             StorageKeys.codeClean: false,
             StorageKeys.visualCue: true,
             StorageKeys.languages: [String](), StorageKeys.languageCorrection: true, StorageKeys.codeMode: false,
@@ -89,8 +88,6 @@ final class Settings: ObservableObject {
         }
     }
 
-    /// How many recent captures the rotation walks through.
-    var rotationDepth: Int { get { number(StorageKeys.rotationDepth) } set { store(newValue, StorageKeys.rotationDepth) } }
 
     // Feedback
     var visualCue: Bool { get { flag(StorageKeys.visualCue) } set { store(newValue, StorageKeys.visualCue) } }
@@ -157,7 +154,7 @@ final class Settings: ObservableObject {
     /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
     /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {
-        for key in StorageKeys.settings { defaults.removeObject(forKey: key) }
+        for key in StorageKeys.settings + StorageKeys.retired { defaults.removeObject(forKey: key) }
     }
 
     /// Key equivalent matching a recorded shortcut label, so menus render it natively (e.g. "⇧⌘2").

@@ -4,6 +4,12 @@
 </picture>
 
 <p align="center">
+  <a href="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml"><img src="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml/badge.svg?branch=main" alt="Estado de CI"></a>
+  <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=versi%C3%B3n" alt="Última versión"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/jrthormann/Nictate" alt="Licencia MIT"></a>
+</p>
+
+<p align="center">
   Gratis y de código abierto. Funciona en macOS 14 o posterior.
   <br>
   <a href="../../releases/latest">Descargar&nbsp;&rsaquo;</a>

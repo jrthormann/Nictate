@@ -58,7 +58,7 @@ enum StorageKeys {
 
     /// Every key of `Settings`.
     static let settings = [
-        hotKeyCode, hotKeyMods, hotKeyLabel, rotateHotKeyCode, rotateHotKeyMods, rotateHotKeyLabel, rotationDepth,
+        hotKeyCode, hotKeyMods, hotKeyLabel, rotateHotKeyCode, rotateHotKeyMods, rotateHotKeyLabel,
         codeHotKey,
         visualCue, notificationStyle,
         languages, languageCorrection, codeMode, keepLineBreaks, detectColumns, tablesAsTabs, cleanText,
@@ -66,6 +66,9 @@ enum StorageKeys {
         appendMode, appendSeparator, barcodeAction, detectContent, hideFromClipboardManagers,
         historyEnabled, clearHistoryOnQuit, historyRetention,
     ]
+
+    /// Keys of settings that are no longer read. Reset removes them too, so an old value cannot come back.
+    static let retired = [rotationDepth]
 
     /// Window frame autosave names (AppKit stores each frame in UserDefaults under these).
     enum WindowFrame {

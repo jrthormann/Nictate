@@ -364,8 +364,8 @@ do {
     let stored = freshSuite("storage").defaults
     let prefs = Settings(defaults: stored)
     stored.set(true, forKey: "codeMode"); stored.set("tab", forKey: "appendSeparator")
-    stored.set(25, forKey: "rotationDepth"); stored.set(["es-ES"], forKey: "languages")
-    check(prefs.codeMode && prefs.appendSeparator == "tab" && prefs.rotationDepth == 25
+    stored.set(["es-ES"], forKey: "languages")
+    check(prefs.codeMode && prefs.appendSeparator == "tab"
           && prefs.languages == ["es-ES"], "storage: values saved under the old key names still load")
     prefs.cleanText = true; prefs.hotKeyLabel = "⌥⌘K"
     check(stored.object(forKey: "dehyphenate") as? Bool == true && stored.string(forKey: "hotKeyLabel") == "⌥⌘K", "storage: writes land under the old key names")
@@ -388,7 +388,6 @@ do {
         ("rotation shortcut is ⌥⇧⌘2", prefs.rotateHotKeyCode == kVK_ANSI_2 && prefs.rotateHotKeyMods == optionKey | shiftKey | cmdKey
             && prefs.rotateHotKeyLabel == "⌥⇧⌘2"),
         ("the optional shortcut is unset", prefs.shortcut(for: .captureCode) == nil),
-        ("rotation walks ten captures", prefs.rotationDepth == 10),
         ("the visual cue is on", prefs.visualCue),
         ("the notification is the notice only", prefs.notificationStyle == .generic),
         ("languages are detected automatically", prefs.languages.isEmpty),
@@ -419,7 +418,7 @@ do {
     prefs.setShortcut(Shortcut(code: 1, mods: cmdKey), label: "⌘S", for: .capture)
     prefs.setShortcut(Shortcut(code: 3, mods: optionKey), label: "⌥F", for: .rotateHistory)
     prefs.setShortcut(Shortcut(code: 8, mods: cmdKey | controlKey), label: "⌃⌘C", for: .captureCode)
-    prefs.rotationDepth = 3; prefs.visualCue = false; prefs.notificationStyle = .text
+    prefs.visualCue = false; prefs.notificationStyle = .text
     prefs.languages = ["es-ES"]; prefs.languageCorrection = false; prefs.codeMode = true; prefs.keepLineBreaks = false
     prefs.detectColumns = false; prefs.tablesAsTabs = false; prefs.cleanText = true; prefs.codeClean = true
     prefs.appendMode = true; prefs.appendSeparator = "tab"; prefs.barcodeAction = "ask"
@@ -433,7 +432,7 @@ do {
           && back.shortcut(for: .rotateHistory)! == (Shortcut(code: 3, mods: optionKey), "⌥F")
           && back.shortcut(for: .captureCode)! == (Shortcut(code: 8, mods: cmdKey | controlKey), "⌃⌘C"),
           "storage: every shortcut reads back with its label")
-    check(back.rotationDepth == 3 && !back.visualCue && back.notificationStyle == .text
+    check(!back.visualCue && back.notificationStyle == .text
           && back.languages == ["es-ES"] && !back.languageCorrection && back.codeMode && !back.keepLineBreaks
           && !back.detectColumns && !back.tablesAsTabs && back.cleanText && back.codeClean
           && back.appendMode && back.appendSeparator == "tab" && back.barcodeAction == "ask"

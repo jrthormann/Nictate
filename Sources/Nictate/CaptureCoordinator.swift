@@ -21,7 +21,7 @@ final class CaptureCoordinator {
     private var isCapturing = false
     /// Colors, links and emails found in the latest capture, offered in the menu.
     private(set) var lastDetections = Detections()
-    /// Shared with the History window, so Cycle History and Append mode know about its copies too.
+    /// Shared with the History screen, so Cycle History and Append mode know about its copies too.
     private let clipboard: ClipboardWriter
 
     init(status: StatusItemController, windows: WindowCoordinator, clipboard: ClipboardWriter = .shared) {

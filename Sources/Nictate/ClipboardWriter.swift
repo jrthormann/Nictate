@@ -3,7 +3,7 @@
 
 import AppKit
 
-/// The one place Nictate writes the clipboard: captures, Cycle History, the History window and the menu all
+/// The one place Nictate writes the clipboard: captures, Cycle History, the History screen and the menu all
 /// go through it. It remembers its latest write, so Cycle History and Append mode know what the clipboard
 /// holds while nothing else has been copied, without reading it back.
 @MainActor

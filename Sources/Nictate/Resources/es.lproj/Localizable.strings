@@ -12,7 +12,6 @@
 "Capture QR Code or Barcode" = "Capturar código QR o de barras";
 "Capture Text" = "Capturar texto";
 "Clear History" = "Borrar historial";
-"Clear history on quit" = "Borrar historial al salir";
 "Clear History…" = "Borrar historial…";
 "Clipboard" = "Portapapeles";
 "Close" = "Cerrar";
@@ -40,7 +39,6 @@
 "History" = "Historial";
 "History is empty" = "El historial está vacío";
 "Include ⌘ or ⌃: ⌥ with a letter types a character in every app." = "Incluye ⌘ o ⌃: ⌥ con una letra escribe un carácter en todas las apps.";
-"Keep history" = "Conservar historial";
 "Keep Line Breaks" = "Mantener saltos de línea";
 "Languages" = "Idiomas";
 "Minimize" = "Minimizar";
