@@ -38,7 +38,7 @@ final class StatusPanelModel: ObservableObject {
         history.objectWillChange.sink { [weak self] in
             self?.objectWillChange.send()
             // The change is announced before its entries are stored, so the first match is chosen on the next pass.
-            DispatchQueue.main.async { self?.selectFirstIfNeeded() }
+            DispatchQueue.main.async { self?.keepSelectionValid() }
         }.store(in: &observers)
         Settings.shared.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
     }
@@ -107,11 +107,13 @@ final class StatusPanelModel: ObservableObject {
         }
     }
 
-    /// History shows entries that arrive after it opened (its read is asynchronous). Once there is a first match and
-    /// nothing is highlighted, it is highlighted, so Return always has a target.
-    private func selectFirstIfNeeded() {
-        guard screen == .history, selection == nil, !entries.isEmpty else { return }
-        selection = 0
+    /// Entries arrive asynchronously and can also shrink. Once there are entries, the highlight is kept on a row that
+    /// exists: the first match when nothing is highlighted, the last row when the highlight is past the end.
+    private func keepSelectionValid() {
+        guard screen == .history, !entries.isEmpty else { return }
+        // A highlight past the end (its row was deleted) moves to the new last row, so Return keeps a target.
+        if let selected = selection, selected >= entries.count { selection = entries.count - 1 }
+        if selection == nil { selection = 0 }
     }
 
     func searchChanged(_ text: String) {

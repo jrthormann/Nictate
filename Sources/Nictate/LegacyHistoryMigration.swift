@@ -67,17 +67,24 @@ enum LegacyHistoryMigration {
         return .imported(count: kept.texts.count, dropped: dropped)
     }
 
-    /// Both sets, newest first, each text once. For a text in both, the newer capture time is kept.
+    /// Both sets, newest first, each text once. For a text in both, the newer capture time is kept. Captures with the
+    /// same time (unknown times, which are `.distantPast`) keep their source order, so the newest 15 are not chosen
+    /// by alphabetical order.
     static func merge(current: HistorySnapshot, imported: HistorySnapshot) -> HistorySnapshot {
-        var newest: [String: Double] = [:]
+        var entries: [(text: String, date: Double)] = []
+        var index: [String: Int] = [:]
         for (text, date) in zip(current.texts + imported.texts, current.dates + imported.dates) {
-            newest[text] = max(newest[text] ?? date, date)
+            if let existing = index[text] {
+                entries[existing].date = max(entries[existing].date, date)
+            } else {
+                index[text] = entries.count
+                entries.append((text: text, date: date))
+            }
         }
-        let ordered = newest.sorted { lhs, rhs in
-            if lhs.value != rhs.value { return lhs.value > rhs.value }
-            return lhs.key < rhs.key
-        }
-        return HistorySnapshot(texts: ordered.map(\.key), dates: ordered.map(\.value))
+        let ordered = entries.enumerated().sorted { lhs, rhs in
+            (lhs.element.date, -lhs.offset) > (rhs.element.date, -rhs.offset)
+        }.map(\.element)
+        return HistorySnapshot(texts: ordered.map(\.text), dates: ordered.map(\.date))
     }
 }
 

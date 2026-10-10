@@ -2199,6 +2199,19 @@ do {
           "quit without Clear on Quit: the history keeps working afterwards")
 }
 
+// Regression: captures with unknown times keep their source order in an import; known times stay newest first.
+do {
+    let unknown = Date.distantPast.timeIntervalSince1970
+    let current = HistorySnapshot(texts: ["zebra", "apple"], dates: [unknown, unknown])
+    let imported = HistorySnapshot(texts: ["mango", "banana"], dates: [unknown, unknown])
+    let merged = LegacyHistoryMigration.merge(current: current, imported: imported)
+    check(merged.texts == ["zebra", "apple", "mango", "banana"], "import merge: captures with unknown times keep their source order", "\(merged.texts)")
+    let dated = HistorySnapshot(texts: ["b"], dates: [2_000])
+    let older = HistorySnapshot(texts: ["a", "c"], dates: [1_000, unknown])
+    check(LegacyHistoryMigration.merge(current: dated, imported: older).texts == ["b", "a", "c"],
+          "import merge: known times stay newest first, unknown times come last")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

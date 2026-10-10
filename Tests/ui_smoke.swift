@@ -462,5 +462,25 @@ do {
     check(highlighted, "late entries: the first match is highlighted once the read finishes", "\(model.entries.map(\.text))")
 }
 
+// Regression: deleting the highlighted last row moves the highlight to the new last row, so Return keeps a target.
+do {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-delete-\(UUID().uuidString).json")
+    let history = History(store: JSONHistoryStore(fileURL: file), retention: { .never }, isEnabled: { true })
+    history.add("first")
+    history.add("second")
+    history.add("third")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    model.moveSelection(by: 5)
+    check(model.selection == 2, "delete: the highlight reaches the last row")
+    model.deleteCapture("first")
+    let moved = waitUntil { model.selection == 1 && model.entries.map(\.text) == ["third", "second"] }
+    check(moved, "delete: the highlight moves to the new last row", "selection \(String(describing: model.selection))")
+}
+
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
