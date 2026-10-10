@@ -2212,6 +2212,16 @@ do {
           "import merge: known times stay newest first, unknown times come last")
 }
 
+// Update check: a prerelease sits between the release before it and the release it leads to.
+do {
+    check(UpdateCheck.isNewer("1.0.0", than: "1.0.0-beta.1"), "update: the stable 1.0.0 is newer than 1.0.0-beta.1")
+    check(UpdateCheck.isNewer("1.0.0-beta.2", than: "1.0.0-beta.1"), "update: beta 2 is newer than beta 1")
+    check(UpdateCheck.isNewer("1.0.0-beta.10", than: "1.0.0-beta.9"), "update: beta 10 is newer than beta 9, as a number")
+    check(!UpdateCheck.isNewer("1.0.0-beta.1", than: "1.0.0-beta.1"), "update: the same beta is not newer")
+    check(!UpdateCheck.isNewer("1.0.0-beta.1", than: "1.0.0"), "update: a beta is not newer than its release")
+    check(UpdateCheck.isNewer("1.0.1-beta.1", than: "1.0.0"), "update: a beta of a later version is newer")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

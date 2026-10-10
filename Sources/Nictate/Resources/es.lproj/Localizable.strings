@@ -141,7 +141,8 @@
 "Improve Recognized Text" = "Mejorar el texto reconocido";
 "Join Split Words" = "Unir palabras partidas";
 "Keep spacing, indentation, and line breaks as they appear." = "Conserva los espacios, la sangría y los saltos de línea tal como aparecen.";
-"Keep your last 15 captures on this Mac." = "Guarda tus últimas 15 capturas en este Mac.";
+"Keep your last 15 captures on this Mac. With Clear on Quit, they are deleted each time Nictate quits." = "Guarda tus últimas 15 capturas en este Mac. Con Borrar al salir, se borran cada vez que cierras Nictate.";
+"Clear on Quit" = "Borrar al salir";
 "Keyboard Shortcuts" = "Atajos de teclado";
 "Launch at Login" = "Abrir al iniciar sesión";
 "Limit clipboard sharing and history when supported by macOS." = "Limita el uso compartido y el historial del portapapeles cuando macOS lo permite.";

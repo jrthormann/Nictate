@@ -51,15 +51,39 @@ enum UpdateCheck {
         return URLSession(configuration: configuration)
     }()
 
-    /// `1.0.1` is newer than `1.0.0`; a leading "v" is ignored, and missing parts count as zero.
+    /// `1.0.1` is newer than `1.0.0`; a leading "v" is ignored, and missing parts count as zero. A prerelease such as
+    /// `1.0.0-beta.2` is older than its release `1.0.0`, and newer than `1.0.0-beta.1`.
     static func isNewer(_ candidate: String, than current: String) -> Bool {
-        let new = numbers(candidate), old = numbers(current)
-        for index in 0..<max(new.count, old.count) {
-            let a = index < new.count ? new[index] : 0
-            let b = index < old.count ? old[index] : 0
+        let new = split(candidate), old = split(current)
+        let newCore = numbers(new.core), oldCore = numbers(old.core)
+        for index in 0..<max(newCore.count, oldCore.count) {
+            let a = index < newCore.count ? newCore[index] : 0
+            let b = index < oldCore.count ? oldCore[index] : 0
             if a != b { return a > b }
         }
-        return false
+        switch (new.prerelease, old.prerelease) {
+        case (nil, nil): return false
+        case (nil, _?): return true
+        case (_?, nil): return false
+        case let (a?, b?): return comparePrerelease(a, b) > 0
+        }
+    }
+
+    /// The core numbers and the prerelease part, split at the first "-".
+    private static func split(_ version: String) -> (core: String, prerelease: String?) {
+        let trimmed = version.drop(while: { $0 == "v" || $0 == "V" })
+        guard let dash = trimmed.firstIndex(of: "-") else { return (String(trimmed), nil) }
+        return (String(trimmed[..<dash]), String(trimmed[trimmed.index(after: dash)...]))
+    }
+
+    /// Dot-separated identifiers in order: numbers compare as numbers, anything else as text, and a longer list is newer.
+    private static func comparePrerelease(_ a: String, _ b: String) -> Int {
+        let left = a.split(separator: "."), right = b.split(separator: ".")
+        for (x, y) in zip(left, right) where x != y {
+            if let nx = Int(x), let ny = Int(y) { return nx < ny ? -1 : 1 }
+            return x < y ? -1 : 1
+        }
+        return left.count == right.count ? 0 : (left.count < right.count ? -1 : 1)
     }
 
     /// Only a release page on github.com is ever offered, so a changed response cannot point elsewhere.

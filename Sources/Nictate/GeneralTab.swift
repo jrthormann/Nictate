@@ -37,6 +37,7 @@ struct GeneralTab: View {
 
             SettingsSection("History") {
                 SettingToggle("Save Captures", isOn: keepHistory.animated(reduceMotion: reduceMotion))
+                SettingToggle("Clear on Quit", isOn: $settings.clearHistoryOnQuit)
                 if legacyImport.available {
                     SettingRow("Import Previous History…") {
                         Button("Import Previous History…") {
@@ -51,7 +52,7 @@ struct GeneralTab: View {
                             .disabled(history.items.isEmpty)
                     }
                 }
-                SettingCaption("Keep your last 15 captures on this Mac.")
+                SettingCaption("Keep your last 15 captures on this Mac. With Clear on Quit, they are deleted each time Nictate quits.")
             }
 
             SettingsSection("Notifications") {

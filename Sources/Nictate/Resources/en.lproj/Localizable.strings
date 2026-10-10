@@ -141,7 +141,8 @@
 "Improve Recognized Text" = "Improve Recognized Text";
 "Join Split Words" = "Join Split Words";
 "Keep spacing, indentation, and line breaks as they appear." = "Keep spacing, indentation, and line breaks as they appear.";
-"Keep your last 15 captures on this Mac." = "Keep your last 15 captures on this Mac.";
+"Keep your last 15 captures on this Mac. With Clear on Quit, they are deleted each time Nictate quits." = "Keep your last 15 captures on this Mac. With Clear on Quit, they are deleted each time Nictate quits.";
+"Clear on Quit" = "Clear on Quit";
 "Keyboard Shortcuts" = "Keyboard Shortcuts";
 "Launch at Login" = "Launch at Login";
 "Limit clipboard sharing and history when supported by macOS." = "Limit clipboard sharing and history when supported by macOS.";
