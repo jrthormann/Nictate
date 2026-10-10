@@ -35,7 +35,11 @@ final class StatusPanelModel: ObservableObject {
         self.capture = capture
         self.windows = windows
         self.history = history
-        history.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
+        history.objectWillChange.sink { [weak self] in
+            self?.objectWillChange.send()
+            // The change is announced before its entries are stored, so the first match is chosen on the next pass.
+            DispatchQueue.main.async { self?.selectFirstIfNeeded() }
+        }.store(in: &observers)
         Settings.shared.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
     }
 
@@ -101,6 +105,13 @@ final class StatusPanelModel: ObservableObject {
             guard query.isEmpty || text.localizedCaseInsensitiveContains(query) else { return nil }
             return (text, date)
         }
+    }
+
+    /// History shows entries that arrive after it opened (its read is asynchronous). Once there is a first match and
+    /// nothing is highlighted, it is highlighted, so Return always has a target.
+    private func selectFirstIfNeeded() {
+        guard screen == .history, selection == nil, !entries.isEmpty else { return }
+        selection = 0
     }
 
     func searchChanged(_ text: String) {

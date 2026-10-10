@@ -444,5 +444,23 @@ do {
     check(model.selection == nil, "keyboard: leaving History clears the highlight")
 }
 
+// Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a
+// highlighted first match, so Return has a target.
+do {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-late-\(UUID().uuidString).json")
+    let seed = History(store: JSONHistoryStore(fileURL: file), retention: { .never }, isEnabled: { true })
+    seed.add("arrived later")
+    History.flushWrites()
+    let history = History(store: JSONHistoryStore(fileURL: file), retention: { .never }, isEnabled: { true }, loadsNow: false)
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    check(model.selection == nil && model.entries.isEmpty, "late entries: History opens before its read has finished")
+    let highlighted = waitUntil { model.selection == 0 && model.entries.map(\.text) == ["arrived later"] }
+    check(highlighted, "late entries: the first match is highlighted once the read finishes", "\(model.entries.map(\.text))")
+}
+
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

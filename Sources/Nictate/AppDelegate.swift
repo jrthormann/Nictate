@@ -63,9 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Quit clears the history when the saved "clear on quit" choice is on, then waits for the queued writes so the
-    /// last capture or deletion is on disk before the process ends.
+    /// Quit first lets a history read that is still running finish, so a clear requested while it was loading is not
+    /// lost. Then Clear on Quit clears the history, and the queued writes are flushed so the change is on disk before
+    /// the process ends.
     func applicationWillTerminate(_ notification: Notification) {
+        History.shared.settleForQuit()
         if settings.clearHistoryOnQuit { HistoryClearing.clear() }
         History.flushWrites()
     }

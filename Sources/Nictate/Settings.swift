@@ -147,18 +147,17 @@ final class Settings: ObservableObject {
         set { store(newValue, StorageKeys.historyEnabled) }
     }
     var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
-    /// A week by default (the registered default). A stored value that is not a choice reads as never, so a
-    /// damaged preference can never delete captures.
+    /// Never by default (the registered default), so captures do not expire by age. A stored value that is not a
+    /// choice reads as never, so a damaged preference can never delete captures.
     var historyRetention: HistoryRetention {
         get { HistoryRetention(rawValue: text(StorageKeys.historyRetention)) ?? .never }
         set { store(newValue.rawValue, StorageKeys.historyRetention) }
     }
 
-    /// Reset Nictate: every stored setting goes, so each returns to its default. The retention is written as
-    /// "week" (the default of a new install), so that the next launch does not settle it again as "never".
+    /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
+    /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {
         for key in StorageKeys.settings { defaults.removeObject(forKey: key) }
-        defaults.set(HistoryRetention.week.rawValue, forKey: StorageKeys.historyRetention)
     }
 
     /// Key equivalent matching a recorded shortcut label, so menus render it natively (e.g. "⇧⌘2").

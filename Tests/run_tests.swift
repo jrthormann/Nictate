@@ -1795,7 +1795,8 @@ do {
     check(UpdateCheck.endpoint.scheme == "https" && UpdateCheck.endpoint.host == "api.github.com", "updates: the only request goes to GitHub's API over https")
 }
 
-// Reset: stored settings go, retention is written as week so the next launch keeps it, onboarding stays.
+// Reset: stored settings go and each returns to its registered default. Retention returns to never, and a reset
+// never deletes saved captures, even ones older than a week.
 do {
     let suite = freshSuite("reset")
     suite.defaults.set(false, forKey: StorageKeys.visualCue)
@@ -1806,9 +1807,19 @@ do {
     let stored = suite.defaults.persistentDomain(forName: suite.name) ?? [:]
     check(stored[StorageKeys.visualCue] == nil && stored[StorageKeys.rotationDepth] == nil,
           "reset: stored settings are removed, so each one returns to its default")
-    check(suite.defaults.string(forKey: StorageKeys.historyRetention) == HistoryRetention.week.rawValue,
-          "reset: retention becomes a week, so the next launch does not settle it as never")
+    check(stored[StorageKeys.historyRetention] == nil, "reset: retention is not written, so it returns to its registered default")
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
+
+    let settings = Settings(defaults: suite.defaults)
+    check(settings.historyRetention == .never, "reset: retention reads as never after a reset")
+    let lastMonth = Date().addingTimeInterval(-30 * 86_400)
+    let saved = HistorySnapshot(texts: ["saved last month"], dates: [lastMonth.timeIntervalSince1970])
+    let history = History(store: ScriptedStore(answers: [.loaded(saved)], saved: saved),
+                          retention: { settings.historyRetention }, isEnabled: alwaysSaving)
+    history.pruneExpired()
+    History.flushWrites()
+    check(history.items == ["saved last month"], "reset: a reset keeps captures older than a week",
+          "\(history.items)")
 }
 
 // Unavailable history: the copy still works, nothing is kept in memory or queued, and the file is never replaced.
@@ -1970,9 +1981,19 @@ do {
     let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
     check(!refusing.writeVerified("never arrives", transient: false),
           "clipboard: a refused write reports failure instead of success")
-    check(board.string(forType: .string) == "previous",
-          "clipboard: a refused write keeps the previous contents")
     check(refusing.lastWrite == nil, "clipboard: a refused write is not remembered as ours")
+
+    // Regression: the previous clipboard is never read, so a concealed entry from a password manager is neither
+    // copied aside nor put back. The successful copy holds only the new text.
+    board.clearContents()
+    let concealed = NSPasteboardItem()
+    concealed.setString("hunter2", forType: .string)
+    concealed.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+    board.writeObjects([concealed])
+    check(writer.writeVerified("after a password", transient: false) && board.string(forType: .string) == "after a password",
+          "clipboard: a copy over a concealed entry holds only the new text")
+    check((board.pasteboardItems ?? []).count == 1 && board.types?.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) != true,
+          "clipboard: the concealed entry is not restored or kept")
 }
 
 // Edge cases a history copy must get exactly right: multiline, accented and emoji text, long OCR output, and
@@ -2001,7 +2022,7 @@ do {
           "clipboard edge: an empty text is written as asked, and reads back as empty", "accepted \(emptyAccepted)")
 }
 
-// Several representations: a failed write puts back every representation the previous clipboard held.
+// Several representations: a copy replaces them all with the text, and the previous rich representation is not read.
 do {
     let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-reps-\(UUID().uuidString)"))
     defer { board.releaseGlobally() }
@@ -2010,11 +2031,46 @@ do {
     item.setString("plain previous", forType: .string)
     item.setData(Data("{\\rtf1 rich previous}".utf8), forType: NSPasteboard.PasteboardType("public.rtf"))
     board.writeObjects([item])
-    let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
-    check(!refusing.writeVerified("never arrives", transient: false), "clipboard reps: a refused write reports failure")
+    let writer = ClipboardWriter(pasteboard: board)
+    check(writer.writeVerified("plain copy", transient: false), "clipboard reps: a copy over rich text reports success")
     let types = board.pasteboardItems?.first?.types ?? []
-    check(board.string(forType: .string) == "plain previous" && types.contains(NSPasteboard.PasteboardType("public.rtf")),
-          "clipboard reps: both the plain and the rich representation are put back", "\(types.map(\.rawValue))")
+    check(board.string(forType: .string) == "plain copy" && !types.contains(NSPasteboard.PasteboardType("public.rtf")),
+          "clipboard reps: the copy holds the text alone, with no previous rich representation", "\(types.map(\.rawValue))")
+}
+
+// Regression: Clear on Quit reaches the file even when the history was still loading at quit. The read is applied
+// first, and only then is the clear written.
+do {
+    let stored = HistorySnapshot(texts: ["one", "two"], dates: [1_000, 2_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    history.clear()
+    history.settleForQuit()
+    History.flushWrites()
+    check(history.items.isEmpty && store.saved?.texts.isEmpty == true,
+          "quit: a clear requested while loading is written before quit", "file \(store.saved?.texts ?? [])")
+}
+
+// Regression: a read that was already in flight when an import began cannot end the import's hold, so a capture
+// made during the import is not written over the merged file.
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let merged = HistorySnapshot(texts: ["kept", "imported"], dates: [1_000, 500])
+    let store = ScriptedStore(answers: [.loaded(stored), .loaded(merged)], saved: stored)
+    let history = History(store: store, retention: { .never }, isEnabled: alwaysSaving, loadsNow: false)
+    let stale = history.refresh()
+    history.beginImport()
+    settle { await stale?.value }
+    check(history.state == .loading, "import hold: a read that finishes during the import does not end the hold")
+    history.add("during the import")
+    History.flushWrites()
+    check(store.saved?.texts == stored.texts, "import hold: a capture during the import is not written over the file")
+    store.saved = merged
+    history.endImport()
+    settle { while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) } }
+    check(history.items == ["kept", "imported"] && history.state == .available,
+          "import hold: after the import the file's merged captures are shown", "\(history.items)")
 }
 
 for suite in testSuites { suite.wipe() }

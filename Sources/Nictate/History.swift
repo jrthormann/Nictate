@@ -64,11 +64,15 @@ final class History: ObservableObject {
     private var loadInFlight = false
     /// True once the file has been read (and is not unreadable), so its entries are known and can be changed.
     private var hasLoadedFile = false
-    /// Changes to saved entries can be written: the file is readable, whether or not saving is on.
-    private var canWriteExisting: Bool { state == .available || (state == .disabled && hasLoadedFile) }
+    /// Changes to saved entries can be written: the file is readable, whether or not saving is on. Never during an import.
+    private var canWriteExisting: Bool { !importing && (state == .available || (state == .disabled && hasLoadedFile)) }
+    /// True from `beginImport` to `endImport`. Reads that finish meanwhile are stale, so they are ignored.
+    private var importing = false
     /// Numbers each write. A write's result is published only if it is newer than the last one published.
     private var writeCount = 0
     private var publishedWrite = 0
+    /// Writes queued on the I/O queue whose results have not yet reached the main actor.
+    private var writesInFlight = 0
     /// The retention the user chose, read each time captures are pruned.
     private let retention: @MainActor () -> HistoryRetention
     /// Whether the history is switched on. Read by `refresh`, so a disabled history never touches the Keychain.
@@ -98,6 +102,7 @@ final class History: ObservableObject {
     /// Starts or retries loading. Called at launch, when the panel opens, and when Keep History is turned on.
     /// Does nothing while the history is switched off, so no Keychain access happens for it.
     @discardableResult func refresh() -> Task<Void, Never>? {
+        guard !importing else { return nil }
         guard isEnabled() else {
             // Saving is off: no new captures are recorded. The saved ones stay loaded, so they can still be
             // shown, copied and deleted, and a deletion is written straight away.
@@ -139,16 +144,29 @@ final class History: ObservableObject {
     }
 
     /// Holds History still while an import rewrites the file. Until `endImport`, captures are not kept (the clipboard
-    /// copy still happens), so no save built from the older list can overwrite the merged file.
+    /// copy still happens), and reads that finish meanwhile are ignored, so no save built from the older list can
+    /// overwrite the merged file.
     func beginImport() {
+        importing = true
         loadInFlight = true
         state = .loading
     }
 
     /// Ends the hold and reads the file, which now holds whatever the import wrote.
     func endImport() {
+        importing = false
         loadInFlight = false
         reloadFromFile()
+    }
+
+    /// Quit path: waits, for at most `timeout`, until a read in flight has been applied and every queued write has
+    /// finished. A clear requested while the history was still loading is then written before the process ends.
+    /// Bounded so that a stuck read cannot hold up quit; the next launch clears again when Clear on Quit is on.
+    func settleForQuit(timeout: TimeInterval = 2) {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            History.flushWrites()
+        } while (loadInFlight || writesInFlight > 0) && Date() < deadline
     }
 
     /// Reads the file again, after something outside History changed it (an import). Captures are then shown as
@@ -171,6 +189,7 @@ final class History: ObservableObject {
     /// Applies what a read found. Only what the file holds is shown; a removal that was made while the file
     /// could not be written is applied now and written back.
     private func apply(_ result: HistoryLoad) {
+        guard !importing else { return }
         loadInFlight = false
         switch result {
         case .loaded(let file):
@@ -289,6 +308,7 @@ final class History: ObservableObject {
         intendedDates = dates
         guard canWriteExisting else { return }
         writeCount += 1
+        writesInFlight += 1
         let number = writeCount
         let snapshot = HistorySnapshot(texts: texts, dates: dates.map(\.timeIntervalSince1970))
         let store = self.store
@@ -302,6 +322,7 @@ final class History: ObservableObject {
     /// nothing: the entries shown stay what the file holds, the state drops to unavailable, and the file is read
     /// again so that it, not memory, decides what is shown.
     private func writeFinished(_ number: Int, _ snapshot: HistorySnapshot, _ saved: Bool) {
+        writesInFlight -= 1
         guard number > publishedWrite else { return }
         guard saved else {
             Log.app.error("History was not saved; the change is not shown and the file is unchanged")
