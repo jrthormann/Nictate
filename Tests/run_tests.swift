@@ -2315,6 +2315,34 @@ do {
     check(suite.defaults.bool(forKey: StorageKeys.legacyHistoryImported), "reset: app state outside the settings is kept")
 }
 
+// Turning saving back on needs no read of a file that is already known, so the next capture is kept at once.
+do {
+    let suite = freshSuite("reenable")
+    let settings = Settings(defaults: suite.defaults)
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: { settings.historyEnabled })
+    settings.historyEnabled = false
+    history.refresh()
+    settings.historyEnabled = true
+    history.refresh()
+    history.add("captured right after")
+    History.flushWrites()
+    check(history.state == .available && store.saved?.texts == ["captured right after", "kept"],
+          "save captures: turning saving back on keeps the next capture at once", "\(store.saved?.texts ?? [])")
+}
+
+// The switch-off decision waits for a queued write, so the capture being written is counted.
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = LateSaveStore(stored: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("x")
+    settle { await history.finishLoading() }
+    check(history.items == ["x", "keep"] && store.saved?.texts == ["x", "keep"],
+          "switch-off: the decision waits for a queued write, so it counts the capture", "\(history.items)")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

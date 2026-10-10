@@ -90,14 +90,14 @@ final class History: ObservableObject {
     @discardableResult func refresh() -> Task<Void, Never>? {
         guard !importing, !closed else { return nil }
         guard isEnabled() else {
-            // Saving is off: no new captures are recorded. The saved ones stay loaded, so they can still be
-            // shown, copied and deleted, and a deletion is written straight away.
+            // Saving is off: nothing new is recorded, but the saved captures stay shown, copied and deletable.
             state = .disabled
             guard !hasLoadedFile, !loadInFlight else { return nil }
             loadInFlight = true
             return startLoad()
         }
         guard state != .available, !loadInFlight else { return nil }
+        if hasLoadedFile { state = .available; return nil }
         loadInFlight = true
         state = .loading
         return startLoad()
@@ -110,10 +110,11 @@ final class History: ObservableObject {
         return task
     }
 
-    /// Waits for a read in flight to be applied, so a decision that depends on the saved captures sees them.
+    /// Waits for a read in flight, and for queued writes, so a decision that depends on the saved captures sees them.
     func finishLoading() async {
-        guard loadInFlight else { return }
-        await loadTask?.value
+        if loadInFlight { await loadTask?.value }
+        let deadline = Date().addingTimeInterval(History.quitTimeout)
+        while writesInFlight > 0, Date() < deadline { try? await Task.sleep(nanoseconds: 5_000_000) }
     }
 
     /// Reads the file and key on the I/O queue, then applies the result here on the main actor.
@@ -259,8 +260,7 @@ final class History: ObservableObject {
     /// Applies what a read found. Only what the file holds is shown; a removal that was made while the file
     /// could not be written is applied now and written back.
     private func apply(_ result: HistoryLoad) {
-        // A read that finishes during an import belongs to the import's hold, and is ignored. Once the history is
-        // closed, a read still ends (so `loadInFlight` is cleared), but its captures are not shown or written.
+        // A read that ends during an import is ignored. Once closed, a read still ends but is never shown or written.
         guard !importing else { return }
         loadInFlight = false
         guard !closed else { return }
@@ -389,6 +389,7 @@ final class History: ObservableObject {
             intendedTexts = items
             intendedDates = dates
             state = .unavailable
+            hasLoadedFile = false
             refresh()
             return
         }
