@@ -9,7 +9,10 @@ import SwiftUI
 final class StatusPanelModel: ObservableObject {
     enum Screen { case main, history }
 
-    @Published var screen: Screen = .main
+    @Published var screen: Screen = .main {
+        // Opening History highlights its first match, so Return always has a target.
+        didSet { if screen == .history, selection == nil { selection = entries.isEmpty ? nil : 0 } }
+    }
     @Published var query = ""
     /// Shown in the History screen when a copy fails. Cleared by the next attempt.
     @Published var copyError: String?
@@ -21,23 +24,27 @@ final class StatusPanelModel: ObservableObject {
     /// Closes the panel once an action has done its job.
     var dismiss: () -> Void = {}
 
-    init(capture: CaptureCoordinator, windows: WindowCoordinator) {
+    /// The history the panel shows. The app passes `History.shared`; tests pass a disposable one.
+    private let history: History
+
+    init(capture: CaptureCoordinator, windows: WindowCoordinator, history: History = .shared) {
         self.capture = capture
         self.windows = windows
+        self.history = history
     }
 
     /// Called each time the panel opens: the main screen, with a fresh search.
     func reset() {
         screen = .main
         query = ""
-        History.shared.query = ""
+        history.query = ""
         // Opening the panel never asks for authorization again: a locked history waits for the Unlock button.
-        if History.shared.state != .locked { History.shared.refresh() }
-        History.shared.pruneExpired()
+        if history.state != .locked { history.refresh() }
+        history.pruneExpired()
     }
 
     /// The Unlock button: the only way to ask for authorization again once the history is locked.
-    func unlockHistory() { History.shared.refresh() }
+    func unlockHistory() { history.refresh() }
 
     // MARK: Main screen
 
@@ -45,8 +52,8 @@ final class StatusPanelModel: ObservableObject {
     var languages: [String] { settings.languages }
     var supportedLanguages: [String] { Recognizer.supportedLanguages }
     var historyEnabled: Bool { settings.historyEnabled }
-    var historyCount: Int { History.shared.items.count }
-    var historyState: HistoryState { History.shared.state }
+    var historyCount: Int { history.items.count }
+    var historyState: HistoryState { history.state }
     var hotKeyLabel: String { settings.hotKeyLabel }
     var rotateHotKeyLabel: String { settings.rotateHotKeyLabel }
     var codeHotKeyLabel: String? { settings.shortcut(for: .captureCode)?.label }
@@ -74,17 +81,20 @@ final class StatusPanelModel: ObservableObject {
 
     /// The captures that match the search, newest first. Matching ignores case, as the History window does.
     var entries: [(text: String, date: Date)] {
-        History.shared.items.indices.compactMap { index -> (text: String, date: Date)? in
-            let text = History.shared.items[index]
-            let date = History.shared.dates[index]
+        history.items.indices.compactMap { index -> (text: String, date: Date)? in
+            let text = history.items[index]
+            let date = history.dates[index]
             guard query.isEmpty || text.localizedCaseInsensitiveContains(query) else { return nil }
             return (text, date)
         }
     }
 
     func searchChanged(_ text: String) {
+        // The text field reports its text again on every key, including the arrows and Return. Only a real change
+        // of the search starts over; otherwise the highlight and what Return copies would be reset.
+        guard text != query else { return }
         query = text
-        History.shared.query = text
+        history.query = text
         // A new search starts at its first match, so Return always has a sensible target.
         selection = entries.isEmpty ? nil : 0
     }
@@ -115,7 +125,7 @@ final class StatusPanelModel: ObservableObject {
     }
 
     func deleteCapture(_ text: String) {
-        History.shared.remove(text)
+        history.remove(text)
     }
 
     func clearHistory() {
@@ -125,7 +135,7 @@ final class StatusPanelModel: ObservableObject {
     func backToMain() {
         screen = .main
         query = ""
-        History.shared.query = ""
+        history.query = ""
         selection = nil
     }
 }

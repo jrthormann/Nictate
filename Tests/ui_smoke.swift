@@ -416,5 +416,35 @@ do {
     anchor.orderOut(nil)
 }
 
+// MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight
+do {
+    let store = EncryptedHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).sealed"),
+                                      key: { _ in SymmetricKey(data: Data(repeating: 6, count: 32)) })
+    let history = History(store: store, retention: { .never })
+    history.add("first")
+    history.add("second")
+    history.add("third")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    model.screen = .history
+    check(model.selection == 0, "keyboard: opening History highlights its first match")
+    model.searchChanged("")
+    model.moveSelection(by: 1)
+    model.searchChanged("")
+    check(model.selection == 1, "keyboard: the same search text again keeps the arrow-key highlight where it is")
+    model.searchChanged("i")
+    check(model.entries.map(\.text) == ["third", "first"] && model.selection == 0,
+          "keyboard: a real search change starts again at its first match", "\(model.entries.map(\.text))")
+    model.moveSelection(by: 5)
+    check(model.selection == 1, "keyboard: arrows stop at the last match rather than wrapping")
+    model.moveSelection(by: -9)
+    check(model.selection == 0, "keyboard: arrows stop at the first match")
+    model.backToMain()
+    check(model.selection == nil, "keyboard: leaving History clears the highlight")
+}
+
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
