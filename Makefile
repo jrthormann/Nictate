@@ -1,7 +1,7 @@
 # Nictate: a macOS menu bar app that copies text from anywhere on your screen.
 # Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
-.PHONY: setup build test-app test ui-test strings sources check coverage run install
+.PHONY: setup build test-app test ui-test strings sources check coverage run install dmg
 
 build:      ## Build build/Nictate.app
 	./scripts/build-app.sh
@@ -42,4 +42,7 @@ install: build  ## Build, quit Nictate, put the new copy in /Applications and la
 	ditto build/Nictate.app /Applications/Nictate.app.new
 	rm -rf /Applications/Nictate.app && mv /Applications/Nictate.app.new /Applications/Nictate.app
 	open /Applications/Nictate.app
+
+dmg:        ## Build build/Nictate-<version>.dmg, signed with the local identity (see docs/RELEASING.md)
+	./scripts/build-dmg.sh
 

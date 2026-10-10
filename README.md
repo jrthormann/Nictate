@@ -105,7 +105,7 @@ choose to open goes to your browser, which connects the way it normally would.
 
 ## Status
 
-Nictate 1.0.0-beta.1 is a public test release. It works, and I've tested it on macOS 27. I haven't tried it on
+Nictate 1.0.0-beta.2 is a public test release. It works, and I've tested it on macOS 27. I haven't tried it on
 macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome. The
 [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't.
 
