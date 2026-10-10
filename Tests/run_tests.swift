@@ -1658,6 +1658,72 @@ do {
     check(suite.defaults.bool(forKey: StorageKeys.didOnboard), "reset: onboarding stays done, so the welcome window does not come back")
 }
 
+// Clipboard reliability: a history copy is confirmed by reading the text back, and a refused write puts the
+// previous clipboard contents back. A private pasteboard keeps the user's clipboard out of the tests.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let writer = ClipboardWriter(pasteboard: board)
+    board.clearContents()
+    board.setString("previous", forType: .string)
+
+    check(writer.writeVerified("a full capture\nwith two lines", transient: false),
+          "clipboard: a successful copy reports success")
+    check(board.string(forType: .string) == "a full capture\nwith two lines",
+          "clipboard: the complete text is what the clipboard holds")
+
+    board.clearContents()
+    board.setString("previous", forType: .string)
+    let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
+    check(!refusing.writeVerified("never arrives", transient: false),
+          "clipboard: a refused write reports failure instead of success")
+    check(board.string(forType: .string) == "previous",
+          "clipboard: a refused write keeps the previous contents")
+    check(refusing.lastWrite == nil, "clipboard: a refused write is not remembered as ours")
+}
+
+// Edge cases a history copy must get exactly right: multiline, accented and emoji text, long OCR output, and
+// whitespace. Each is read back byte for byte.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-edge-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let writer = ClipboardWriter(pasteboard: board)
+    let samples: [(String, String)] = [
+        ("multiline", "first line\n\tindented\nlast line"),
+        ("accents", "café naïve Ñandú résumé"),
+        ("emoji and CJK", "🙂 漢字 한국어"),
+        ("combining marks", "e\u{0301}\u{0303} vs é"),
+        ("long capture", String(repeating: "Lorem ipsum dolor sit amet. ", count: 3_000)),
+        ("whitespace only", "   \n\t  "),
+    ]
+    for (name, text) in samples {
+        check(writer.writeVerified(text, transient: false) && board.string(forType: .string) == text,
+              "clipboard edge: \(name) is copied exactly", "\(board.string(forType: .string)?.count ?? -1) of \(text.count)")
+    }
+    // An empty text is written as asked. The history never stores one (see History.add callers), so this is a clipboard check only.
+    board.clearContents()
+    board.setString("keep me", forType: .string)
+    let emptyAccepted = writer.writeVerified("", transient: false)
+    check(emptyAccepted && board.string(forType: .string) == "",
+          "clipboard edge: an empty text is written as asked, and reads back as empty", "accepted \(emptyAccepted)")
+}
+
+// Several representations: a failed write puts back every representation the previous clipboard held.
+do {
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-reps-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+    let item = NSPasteboardItem()
+    item.setString("plain previous", forType: .string)
+    item.setData(Data("{\\rtf1 rich previous}".utf8), forType: NSPasteboard.PasteboardType("public.rtf"))
+    board.writeObjects([item])
+    let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
+    check(!refusing.writeVerified("never arrives", transient: false), "clipboard reps: a refused write reports failure")
+    let types = board.pasteboardItems?.first?.types ?? []
+    check(board.string(forType: .string) == "plain previous" && types.contains(NSPasteboard.PasteboardType("public.rtf")),
+          "clipboard reps: both the plain and the rich representation are put back", "\(types.map(\.rawValue))")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

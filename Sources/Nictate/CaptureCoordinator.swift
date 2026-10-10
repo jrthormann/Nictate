@@ -171,10 +171,16 @@ final class CaptureCoordinator {
     }
 
     /// Copies a capture chosen from the history, with the same cue and announcement as a fresh capture.
-    func copyCapture(_ text: String) {
-        copy(text)
+    /// Returns false, with a spoken message, when the clipboard did not take the text.
+    @discardableResult
+    func copyCapture(_ text: String) -> Bool {
+        guard clipboard.writeVerified(text) else {
+            status.announce(tr("Couldn't copy text. Try again."))
+            return false
+        }
         status.cue(.success)
         status.announce(tr("Text copied"))
+        return true
     }
 
     /// Copies a value found in the latest capture, from the menu.

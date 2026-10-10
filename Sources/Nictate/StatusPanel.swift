@@ -11,6 +11,10 @@ final class StatusPanelModel: ObservableObject {
 
     @Published var screen: Screen = .main
     @Published var query = ""
+    /// Shown in the History screen when a copy fails. Cleared by the next attempt.
+    @Published var copyError: String?
+    /// The highlighted row in the History list, as an index into `entries`. Arrow keys move it, Return copies it.
+    @Published var selection: Int?
     private let settings = Settings.shared
     private let capture: CaptureCoordinator
     private let windows: WindowCoordinator
@@ -77,12 +81,33 @@ final class StatusPanelModel: ObservableObject {
     func searchChanged(_ text: String) {
         query = text
         History.shared.query = text
+        // A new search starts at its first match, so Return always has a sensible target.
+        selection = entries.isEmpty ? nil : 0
     }
 
-    /// Copies the whole capture, even when the row shows only its beginning, and closes the panel.
+    /// Arrow keys: moves the highlight through the matches, stopping at the ends rather than wrapping.
+    func moveSelection(by step: Int) {
+        let count = entries.count
+        guard count > 0 else { selection = nil; return }
+        let start = selection ?? (step > 0 ? -1 : count)
+        selection = min(max(start + step, 0), count - 1)
+    }
+
+    /// Return: copies the highlighted capture, exactly as a click does.
+    func copySelected() {
+        guard let selection, entries.indices.contains(selection) else { return }
+        copyCapture(entries[selection].text)
+    }
+
+    /// Copies the whole capture, even when the row shows only its beginning. The panel closes only once the
+    /// clipboard holds the text; otherwise it stays open and says why.
     func copyCapture(_ text: String) {
-        dismiss()
-        capture.copyCapture(text)
+        if capture.copyCapture(text) {
+            copyError = nil
+            dismiss()
+        } else {
+            copyError = tr("Couldn't copy text. Try again.")
+        }
     }
 
     func deleteCapture(_ text: String) {
@@ -97,6 +122,7 @@ final class StatusPanelModel: ObservableObject {
         screen = .main
         query = ""
         History.shared.query = ""
+        selection = nil
     }
 }
 

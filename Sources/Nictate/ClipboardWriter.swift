@@ -11,18 +11,53 @@ final class ClipboardWriter {
     static let shared = ClipboardWriter()
 
     private let pasteboard: NSPasteboard
+    /// The write itself. Tests replace it to simulate a clipboard that refuses the text.
+    private let replace: (NSPasteboard, String, Bool) -> Int
     private(set) var lastWrite: ClipboardWrite?
 
-    init(pasteboard: NSPasteboard = .general) {
+    init(pasteboard: NSPasteboard = .general,
+         replace: @escaping (NSPasteboard, String, Bool) -> Int = { $0.replaceContents(with: $1, transient: $2) }) {
         self.pasteboard = pasteboard
+        self.replace = replace
     }
 
     /// Replaces the clipboard with `text` and returns the change count of this write.
     @discardableResult
     func write(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Int {
-        let changeCount = pasteboard.replaceContents(with: text, transient: transient)
+        let changeCount = replace(pasteboard, text, transient)
         lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
         return changeCount
+    }
+
+    /// Writes `text` and reads it back before reporting success. If the clipboard does not hold it, the previous
+    /// contents are put back where possible, so a failed copy never costs the user what they had copied.
+    func writeVerified(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Bool {
+        let previous = snapshot()
+        let changeCount = replace(pasteboard, text, transient)
+        guard pasteboard.string(forType: .string) == text else {
+            restore(previous)
+            return false
+        }
+        lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
+        return true
+    }
+
+    /// Every item on the clipboard with each of its types, so the contents can be put back as they were.
+    private func snapshot() -> [[(NSPasteboard.PasteboardType, Data)]] {
+        (pasteboard.pasteboardItems ?? []).map { item in
+            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+        }
+    }
+
+    private func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]]) {
+        pasteboard.clearContents()
+        guard !items.isEmpty else { return }
+        let rebuilt: [NSPasteboardItem] = items.map { entries in
+            let item = NSPasteboardItem()
+            for (type, data) in entries { item.setData(data, forType: type) }
+            return item
+        }
+        pasteboard.writeObjects(rebuilt)
     }
 
     /// The text of the latest write while it is still on the clipboard, otherwise nil.

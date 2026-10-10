@@ -171,3 +171,4 @@
 "Search history" = "Buscar en el historial";
 "Loading history…" = "Cargando historial…";
 "History is unavailable right now. New captures are still copied." = "El historial no está disponible ahora. Las nuevas capturas se siguen copiando.";
+"Couldn't copy text. Try again." = "No se pudo copiar el texto. Inténtalo otra vez.";

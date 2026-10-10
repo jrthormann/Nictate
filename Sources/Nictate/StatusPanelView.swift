@@ -141,8 +141,14 @@ private struct HistoryScreen: View {
             TextField(tr("Search history"), text: Binding(get: { model.query }, set: { model.searchChanged($0) }))
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
+                .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
+                .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
+                .onSubmit { model.copySelected() }
                 .padding(.horizontal, 12)
             stateNote
+            if let copyError = model.copyError {
+                Text(copyError).font(.caption).foregroundStyle(.red).padding(.horizontal, 12)
+            }
             content
             if model.historyCount > 0 {
                 Button(tr("Clear History…"), role: .destructive, action: model.clearHistory)
@@ -184,8 +190,8 @@ private struct HistoryScreen: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(entries, id: \.text) { entry in
-                        CaptureRow(text: entry.text, date: entry.date,
+                    ForEach(Array(entries.enumerated()), id: \.element.text) { index, entry in
+                        CaptureRow(text: entry.text, date: entry.date, selected: model.selection == index,
                                    copy: { model.copyCapture(entry.text) },
                                    delete: { model.deleteCapture(entry.text) })
                     }
@@ -199,6 +205,7 @@ private struct HistoryScreen: View {
 private struct CaptureRow: View {
     let text: String
     let date: Date
+    var selected = false
     let copy: () -> Void
     let delete: () -> Void
 
@@ -217,11 +224,15 @@ private struct CaptureRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(tr("Copies the whole capture"))
+            .accessibilityAction(named: tr("Copy")) { copy() }
             Button(action: delete) { Image(systemName: "trash") }
-                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .buttonStyle(.borderless).foregroundStyle(selected ? Color.white : Color.secondary)
                 .accessibilityLabel(tr("Delete"))
         }
+        .foregroundStyle(selected ? Color.white : Color.primary)
         .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor : .clear).padding(.horizontal, 4))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             Button(tr("Copy"), action: copy)
             Button(tr("Delete"), role: .destructive, action: delete)
