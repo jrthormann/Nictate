@@ -93,6 +93,12 @@ A link you choose to open is handed to your browser, which then connects as it n
 
 <br>
 
+## Status
+
+Nictate 1.0.0-beta.1 is a public test release. It is functional, and the maintainer has tested it on macOS 27.
+It has not yet been tested on macOS 14, 15 or 26, and VoiceOver support has not been audited. Reports are welcome:
+see [CHANGELOG.md](CHANGELOG.md) for what is tested and what is not.
+
 ## Install
 
 Download the disk image from the [latest release](../../releases/latest), open it, and drag Nictate to
