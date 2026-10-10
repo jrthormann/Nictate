@@ -129,8 +129,10 @@ make install
 
 ## Contributing
 
-Issues and pull requests are welcome. Translations live in `Sources/Nictate/Resources/`, one `.lproj` folder per language.
-`make strings` checks that none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes each file.
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, propose a change,
+build, run the tests and submit a pull request. Translations live in `Sources/Nictate/Resources/`, one `.lproj` folder per
+language, and `make strings` checks that none is missing. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes each file.
+The latest test release is on the [Releases page](../../releases/latest).
 
 <br>
 
