@@ -28,8 +28,8 @@ struct OutputTab: View {
             }
 
             SettingsSection("Smart Detection") {
-                SettingToggle("Detect Links, Emails & Numbers", isOn: $settings.detectContent)
-                SettingCaption("Also finds colors.")
+                SettingToggle("Detect Links, Contacts & Colors", isOn: $settings.detectContent)
+                SettingCaption("Recognize links, email addresses, phone numbers, and colors.")
                 SettingRow("QR & Barcode Results") {
                     Picker("QR & Barcode Results", selection: $settings.barcodeAction) {
                         Text(tr("Copy Text Only")).tag("copy")

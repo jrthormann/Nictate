@@ -162,7 +162,6 @@
 "Reset" = "Restablecer";
 "GitHub is busy right now" = "GitHub está ocupado ahora mismo";
 "Too many update checks were made from this network. Try again in a few minutes." = "Se han hecho demasiadas comprobaciones desde esta red. Inténtalo de nuevo en unos minutos.";
-
 "Press %@, then drag to select an area." = "Pulsa %@ y arrastra para seleccionar un área.";
 "Your screen is full of text you can't copy. Nictate fixes that. Your other problems are unfortunately outside the scope of this project." = "Tu pantalla está llena de texto que no puedes copiar. Nictate lo arregla. Tus otros problemas, por desgracia, quedan fuera del alcance de este proyecto.";
 "Back" = "Atrás";
@@ -176,7 +175,6 @@
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Añade las nuevas capturas al texto que ya está copiado.";
 "Also delete saved captures" = "Eliminar también las capturas guardadas";
-"Also finds colors." = "También detecta colores.";
 "Append to Clipboard" = "Añadir al portapapeles";
 "Ask Before Opening" = "Preguntar antes de abrir";
 "Automatically detect languages, or choose the ones you use." = "Detectar el idioma automáticamente o elegir los que usas.";
@@ -185,7 +183,6 @@
 "Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation." = "La limpieza de código quita los símbolos de terminal, los números de línea (solo cuando hay tres seguidos) y las comillas tipográficas. Mantiene la sangría.";
 "Copy Feedback" = "Confirmación al copiar";
 "Copy Text Only" = "Copiar solo el texto";
-"Detect Links, Emails & Numbers" = "Detectar enlaces, correos y números";
 "Detect Text Columns" = "Detectar columnas de texto";
 "Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below." = "Cada ajuste vuelve a su valor predeterminado y Nictate se reinicia. Las capturas guardadas se conservan, salvo que marques la casilla de abajo.";
 "Fix common recognition errors." = "Corrige errores comunes de reconocimiento.";
@@ -226,3 +223,5 @@
 "Import captures saved by an earlier version of Nictate." = "Importa capturas guardadas en una versión anterior de Nictate.";
 "Previous history imported." = "Historial anterior importado.";
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Tus capturas actuales se conservan. Si el total supera 15, se eliminan las más antiguas.";
+"Detect Links, Contacts & Colors" = "Detectar enlaces, contactos y colores";
+"Recognize links, email addresses, phone numbers, and colors." = "Reconoce enlaces, correos electrónicos, números de teléfono y colores.";

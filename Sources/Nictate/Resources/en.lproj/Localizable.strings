@@ -163,7 +163,6 @@
 "Reset" = "Reset";
 "GitHub is busy right now" = "GitHub is busy right now";
 "Too many update checks were made from this network. Try again in a few minutes." = "Too many update checks were made from this network. Try again in a few minutes.";
-
 "Press %@, then drag to select an area." = "Press %@, then drag to select an area.";
 "Back" = "Back";
 "Copies the whole capture" = "Copies the whole capture";
@@ -176,7 +175,6 @@
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Add new captures to the text already copied.";
 "Also delete saved captures" = "Also delete saved captures";
-"Also finds colors." = "Also finds colors.";
 "Append to Clipboard" = "Append to Clipboard";
 "Ask Before Opening" = "Ask Before Opening";
 "Automatically detect languages, or choose the ones you use." = "Automatically detect languages, or choose the ones you use.";
@@ -185,7 +183,6 @@
 "Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation." = "Code Cleanup removes terminal prompts, line numbers (only when at least three in a row) and typographic quotes. It keeps indentation.";
 "Copy Feedback" = "Copy Feedback";
 "Copy Text Only" = "Copy Text Only";
-"Detect Links, Emails & Numbers" = "Detect Links, Emails & Numbers";
 "Detect Text Columns" = "Detect Text Columns";
 "Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below." = "Every setting goes back to its default, and Nictate restarts. Saved captures are kept unless you tick the box below.";
 "Fix common recognition errors." = "Fix common recognition errors.";
@@ -226,3 +223,5 @@
 "Import captures saved by an earlier version of Nictate." = "Import captures saved by an earlier version of Nictate.";
 "Previous history imported." = "Previous history imported.";
 "Your current captures are kept. If the total is more than 15, the oldest are removed." = "Your current captures are kept. If the total is more than 15, the oldest are removed.";
+"Detect Links, Contacts & Colors" = "Detect Links, Contacts & Colors";
+"Recognize links, email addresses, phone numbers, and colors." = "Recognize links, email addresses, phone numbers, and colors.";
