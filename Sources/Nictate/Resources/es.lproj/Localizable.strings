@@ -165,3 +165,7 @@
 
 "Press %@, then drag to select an area." = "Pulsa %@ y arrastra para seleccionar un área.";
 "Your screen is full of text you can't copy. Nictate fixes that. Your other problems are unfortunately outside the scope of this project." = "Tu pantalla está llena de texto que no puedes copiar. Nictate lo arregla. Tus otros problemas, por desgracia, quedan fuera del alcance de este proyecto.";
+"Back" = "Atrás";
+"Copies the whole capture" = "Copia la captura completa";
+"No matches" = "Sin coincidencias";
+"Search history" = "Buscar en el historial";

@@ -31,9 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.install()
         let status = StatusItemController()
         let capture = CaptureCoordinator(status: status, windows: windows)
-        let menu = MenuController(capture: capture, windows: windows)
-        status.attach(menu.menu)
-        running = Running(mainMenu: mainMenu, status: status, capture: capture, menu: menu)
+        let model = StatusPanelModel(capture: capture, windows: windows)
+        let panel = StatusPanel(model: model)
+        status.attach(panel)
+        running = Running(mainMenu: mainMenu, status: status, capture: capture, panel: panel)
 
         settings.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -103,5 +104,5 @@ private struct Running {
     let mainMenu: MainMenu
     let status: StatusItemController
     let capture: CaptureCoordinator
-    let menu: MenuController
+    let panel: StatusPanel
 }

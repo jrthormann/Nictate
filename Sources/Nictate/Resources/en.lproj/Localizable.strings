@@ -165,3 +165,7 @@
 "Too many update checks were made from this network. Try again in a few minutes." = "Too many update checks were made from this network. Try again in a few minutes.";
 
 "Press %@, then drag to select an area." = "Press %@, then drag to select an area.";
+"Back" = "Back";
+"Copies the whole capture" = "Copies the whole capture";
+"No matches" = "No matches";
+"Search history" = "Search history";

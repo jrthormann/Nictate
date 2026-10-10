@@ -170,6 +170,13 @@ final class CaptureCoordinator {
         clipboard.write(text)
     }
 
+    /// Copies a capture chosen from the history, with the same cue and announcement as a fresh capture.
+    func copyCapture(_ text: String) {
+        copy(text)
+        status.cue(.success)
+        status.announce(tr("Text copied"))
+    }
+
     /// Copies a value found in the latest capture, from the menu.
     func copyDetected(_ value: String) {
         copy(value)

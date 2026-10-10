@@ -376,27 +376,15 @@ if ciRun && skips > 0 {
     print("FAIL  skipped checks in CI: the suite did not test everything it claims (see the SKIP lines)")
     failures += 1
 }
-// MARK: Status menu structure: separators, groups, symbols and key equivalents
+// MARK: Status panel: the history is a screen of the same panel, and copying closes it
 do {
     let status = StatusItemController()
-    let controller = MenuController(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
-    controller.menuNeedsUpdate(controller.menu)
-    let items = controller.menu.items
-    let titles = items.map { $0.isSeparatorItem ? "—" : $0.title }
-    check(items.first?.isSeparatorItem == false && items.last?.isSeparatorItem == false,
-          "menu: no separator at the start or the end", titles.joined(separator: " | "))
-    let adjacentSeparators = zip(items, items.dropFirst()).contains { $0.0.isSeparatorItem && $0.1.isSeparatorItem }
-    check(!adjacentSeparators, "menu: no two separators in a row")
-    check(items.allSatisfy { $0.isSeparatorItem || !$0.title.isEmpty }, "menu: every item has a title")
-    let settings = items.first { $0.title == tr("Settings…") }
-    check(settings?.keyEquivalent == "," && settings?.keyEquivalentModifierMask == .command && settings?.image == nil,
-          "menu: Settings… is ⌘, and has no symbol")
-    let quit = items.first { $0.title == tr("Quit Nictate") }
-    check(quit?.keyEquivalent == "q" && quit?.keyEquivalentModifierMask == .command, "menu: Quit Nictate is ⌘Q")
-    let capture = items.first { $0.title == tr("Capture Text") }
-    check(capture?.image != nil, "menu: the capture command keeps its symbol")
-    let parents = items.filter { $0.hasSubmenu }
-    check(parents.allSatisfy { $0.image == nil }, "menu: language, mode and history parents are plain text")
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    model.reset()
+    check(model.screen == .main && model.query.isEmpty, "panel: opens on the main screen with an empty search")
+    model.screen = .history
+    model.backToMain()
+    check(model.screen == .main, "panel: Back returns to the main screen without closing the panel")
 }
 
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
