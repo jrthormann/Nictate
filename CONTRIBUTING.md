@@ -16,6 +16,8 @@ Please don't paste captured text you want to keep private. A short description i
 
 For a new feature or a larger change, open an issue first and describe the problem it solves. Small fixes, documentation and translations can go straight to a pull request.
 
+[docs/PRODUCT.md](docs/PRODUCT.md) says what Nictate is for and what it already does. A proposal that fits its principles and needs is easier to decide on.
+
 ## Build from source
 
 You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). Xcode is not required.
