@@ -180,7 +180,7 @@ private struct HistoryScreen: View {
             }
         }
         .padding(.horizontal, Panel.verticalInset)
-        .onAppear { searchFocused = true }
+        .onAppear { DispatchQueue.main.async { searchFocused = true } }
         .onChange(of: model.searchFocusRequests) { _, _ in searchFocused = true }
     }
 
