@@ -35,5 +35,16 @@ done
 if grep -q '\.id(index)' Sources/Nictate/StatusPanelView.swift; then
     echo "ERROR: StatusPanelView.swift must identify History rows by their text, not by index"; problems=1
 fi
+# The default QA build starts with no synthetic history: a fixture list there would be seeded again on every launch.
+# Only that declaration is checked. Tests may still pass their own captures to History.seedFixtures.
+if ! grep -qx '    static let historyFixtures: \[String\] = \[\]' scripts/variants/BuildIdentity.test.swift; then
+    echo "ERROR: scripts/variants/BuildIdentity.test.swift must declare an empty historyFixtures (QA reseeds synthetic captures otherwise)"; problems=1
+fi
+# The QA build keeps the production defaults: a startup rule in AppDelegate that writes Save Captures would make a reset
+# differ from production. AppDelegate has no reason to mention the setting, so any mention fails, however it is split
+# across lines.
+if grep -q 'historyEnabled' Sources/Nictate/AppDelegate.swift; then
+    echo "ERROR: AppDelegate.swift must not mention historyEnabled (QA defaults must match production)"; problems=1
+fi
 (( problems == 0 )) && echo "Sources OK"
 exit $problems

@@ -9,17 +9,7 @@ enum BuildIdentity {
     /// The QA build never reads the production Keychain key, so it offers no import of the old history.
     static let supportsLegacyImport = false
     static let historyFolderName = "Nictate Test"
-    /// Representative OCR captures: code with indentation, a table, links, contacts, accents, a long paragraph.
-    static let historyFixtures: [String] = [
-        "Selected text, the second line\n    indented by four spaces\n\tand a tab\nend",
-        "let total = items.reduce(0) { $0 + $1.price }",
-        "Name\tRole\tCity\nAna\tDesigner\tSanto Domingo\nLuis\tEngineer\tMadrid",
-        "https://example.com/docs/capture?ref=test",
-        "ana@example.com",
-        "+1 (809) 555-0142",
-        "Reunión mañana a las 10:30 en la oficina de Malecón, sala 4.",
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-        "Color #FF8800 and rgb(0, 128, 255)",
-        "Trailing spaces kept   ",
-    ]
+    /// Empty on purpose: the QA build starts with no synthetic captures and never seeds them. A test that needs
+    /// captures passes its own to History.seedFixtures.
+    static let historyFixtures: [String] = []
 }
