@@ -183,9 +183,9 @@ hdiutil detach "$DEV" >/dev/null
 IMAGE="$WORK/Nictate-$VERSION.dmg"
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$IMAGE" >/dev/null
 
-# Only now is the release folder claimed, so a failed build leaves nothing behind.
-mkdir "$RELEASE_DIR" || fail "$RELEASE_DIR was created while this build ran; nothing was overwritten"
-CREATED_RELEASE="$RELEASE_DIR"
+# Only now is the release folder claimed, so a failed build leaves nothing behind. claim_release_folder records the claim in
+# CREATED_RELEASE in the same step as mkdir, so no interruption can leave behind a folder this build created.
+claim_release_folder "$RELEASE_DIR" || fail "$RELEASE_DIR was created while this build ran; nothing was overwritten"
 DMG="$RELEASE_DIR/Nictate-$VERSION.dmg"
 cp "$IMAGE" "$DMG"
 hdiutil verify "$DMG" >/dev/null

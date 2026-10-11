@@ -180,3 +180,20 @@ release_check_build_number() {
     fi
     print -r -- "build $found for $version is approved"
 }
+
+# Claims the release folder DIR for this build. mkdir fails when DIR exists, so nothing from an earlier release is touched.
+# When this call creates DIR it records DIR in CREATED_RELEASE, which the build's EXIT cleanup removes on failure. Returns
+# 0 only when this call created DIR. The claim cannot be cut between the two steps: mkdir runs with INT, TERM and HUP
+# ignored (the subshell's ignored signals are inherited by mkdir, so one cannot abort it midway), and a signal that
+# reaches the shell during the claim only sets a flag. The shell then exits 130 once the claim is recorded, so the cleanup
+# always sees the folder this call created, and never a folder another process created.
+claim_release_folder() {
+    local dir="$1" interrupted=""
+    trap 'interrupted=1' INT TERM HUP
+    if ( trap '' INT TERM HUP; mkdir "$dir" ) 2>/dev/null; then
+        CREATED_RELEASE="$dir"
+    fi
+    trap 'exit 130' INT TERM HUP
+    [[ -z "$interrupted" ]] || exit 130
+    [[ "${CREATED_RELEASE:-}" == "$dir" ]]
+}
