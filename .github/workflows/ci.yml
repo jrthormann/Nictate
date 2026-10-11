@@ -30,6 +30,11 @@ jobs:
         run: |
           swiftc --version
           xcrun --show-sdk-path
+      # The cheap checks run first, so a broken change fails in about a minute, before the compiles.
+      - name: Source rules (no NSLog/print, files under 400 lines)
+        run: scripts/check_sources.sh
+      - name: Localization check
+        run: scripts/check_strings.py
       # Swift 6 language mode is not what ships (the code builds as Swift 5 with complete
       # concurrency checking); this keeps it from drifting further from the move to 6.
       - name: Type-check in Swift 6 mode
@@ -40,20 +45,10 @@ jobs:
       # The release tests run before prebuilt/ exists, so the working tree is clean while they run.
       - name: Release packaging and signing tests
         run: scripts/test_release.zsh
-      # Keep the arm64 runner: the Intel step below rebuilds build/run_tests
-      # as x86_64.
+      # The macos-14 job runs this arm64 binary. The Intel tests are their own job (intel-tests), so
+      # nothing here rebuilds it as x86_64.
       - name: Keep the arm64 test runner
         run: mkdir prebuilt && cp build/run_tests prebuilt/run_tests
-      - name: Unit tests as Intel (under Rosetta)
-        run: |
-          arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
-          TEST_ARCH=x86_64 Tests/run_tests.sh
-      - name: UI smoke tests
-        run: Tests/run_ui_tests.sh
-      - name: Localization check
-        run: scripts/check_strings.py
-      - name: Source rules (no NSLog/print, files under 400 lines)
-        run: scripts/check_sources.sh
       - name: Build app
         env:
           BUILD_NUMBER: ${{ github.run_number }}
@@ -69,6 +64,26 @@ jobs:
           path: prebuilt/prebuilt.tar
           if-no-files-found: error
           retention-days: 1
+
+  intel-tests:
+    # The unit tests as an Intel binary, under Rosetta. Separate from build-and-test so the two run side by side.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Unit tests as Intel (under Rosetta)
+        run: |
+          arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+          TEST_ARCH=x86_64 Tests/run_tests.sh
+
+  ui-smoke:
+    # Real AppKit objects, so this job needs a window server. It builds its own binary, so it runs side by side with build-and-test.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: UI smoke tests
+        run: Tests/run_ui_tests.sh
 
   macos-14:
     # The oldest macOS Nictate supports. It compiles nothing: the macos-14
