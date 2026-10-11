@@ -18,8 +18,6 @@ The second public test release. Please report what you find: https://github.com/
 ### Added
 - SECURITY.md, which explains how to report a vulnerability privately, and a Code of Conduct.
 - A plain Install guide in the README, in English and Spanish, and a distribution section in SECURITY.md.
-- Manual checks for focus and unreadable history in CONTRIBUTING.md.
-- README badges, a Support section, and FUNDING.yml.
 
 ### Changed
 - **More reliable history.** A capture appears in History only after it has been saved. Every save is read back and checked before Nictate counts it as saved.
