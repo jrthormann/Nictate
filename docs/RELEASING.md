@@ -143,18 +143,22 @@ Developer ID signing and notarization need the paid Apple Developer Program. The
 adoption, contributor interest, or demonstrated demand justifies the cost. Until then, the beta is distributed without
 them, and that limit is stated in the README and the release notes.
 
-Three different things are easy to confuse:
+Four separate things are involved. Keep them apart when writing release notes or answering users:
 
-- **A valid code signature** shows that the app is unchanged since it was signed. `codesign --verify --strict` checks
-  it. Nictate has one, made with the local identity. The signature identifies the signer; it does not show that Apple
-  has checked the app.
-- **Apple Developer ID signing** uses a certificate that Apple issues to a registered developer. It requires the paid
-  Apple Developer Program. Nictate does not have it.
-- **Notarization** is Apple's automated check of a signed app. A notarized app can pass Gatekeeper without the
-  approval step. It also requires the paid program. Nictate is not notarized.
+- **Local code signing** (what Nictate uses). The app is signed with `Nictate Local Signing`, a certificate the maintainer
+  created. A valid signature shows that the app is unchanged since it was signed, and that this certificate signed it.
+  macOS does not trust that certificate for distribution, so Gatekeeper does not accept the app on its own.
+- **Apple Developer ID signing.** The app is signed with a certificate that Apple issues to a registered developer
+  through the Apple Developer Program, which is a paid program. Nictate does not use one.
+- **Apple notarization.** Apple scans a Developer ID-signed app and issues a ticket. The ticket is attached to the app or
+  fetched by Gatekeeper. Notarization also needs the paid program. Nictate is not notarized.
+- **Gatekeeper's normal distribution requirement.** For software downloaded from the internet and distributed outside the
+  Mac App Store, Gatekeeper's standard policy generally requires both Developer ID signing and notarization. An app that
+  meets both opens without an approval step. Nictate beta.2 meets neither, so macOS blocks its first launch until the user
+  approves it in System Settings, Privacy & Security ("Open Anyway"). That manual step is expected for this beta. See
+  [Apple's notarization guidance](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
-Gatekeeper accepts the second and third kinds. `spctl` therefore reports a Nictate build as rejected. That is expected for
-this distribution, and the release notes say so. It is not a failure of the build.
+`spctl` therefore reports a Nictate build as rejected. That is expected for this distribution. It is not a build failure.
 
 `make setup` creates the "Nictate Local Signing" identity in its own keychain,
 `~/Library/Keychains/nictate-signing.keychain-db`. You choose its password, and nothing stores it. The keychain locks
