@@ -41,6 +41,7 @@ The second public test release. Please report what you find: https://github.com/
 ### Tested
 - Automated: `make check` (unit tests, UI smoke tests, the localization and source checks) and `make build` pass on this release's app code, which is unchanged since `25e13c2`. On GitHub, the CI jobs for `25e13c2` passed: `build-and-test`, and `macos-14`, which runs the prebuilt tests on a macOS 14 runner.
 - Manual, recorded by the maintainer earlier on macOS 27 for the QA build: the focus checks and the unreadable-history check. Not run again for this release.
+- Checked on macOS 27.0.1 with a test build of this release: the first-launch message for a copy that is not notarized, its entry in Privacy & Security, the welcome window in English and Spanish, and the About panel and update check.
 
 ### Not yet tested
 - The Install steps on macOS 14 and on macOS 15 or later, on a Mac where Nictate was never installed.

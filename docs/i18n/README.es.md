@@ -120,13 +120,13 @@ Descarga la imagen de disco solo desde la [página de versiones](https://github.
 **Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas cambiar ningún ajuste de seguridad para abrir Nictate.
 
 1. Abre **Aplicaciones** y haz doble clic en **Nictate**.
-2. macOS muestra un aviso de que Apple no pudo verificar Nictate. Descártalo. El texto exacto depende de tu versión de macOS.
+2. macOS muestra un aviso de que Apple no pudo verificar Nictate. Ciérralo con su botón de descartar, y no elijas la opción de mover la app a la papelera. El texto exacto depende de tu versión de macOS.
 3. Abre **Ajustes del Sistema**, ve a **Privacidad y seguridad** y baja hasta **Seguridad**. Pulsa **Abrir igualmente** junto al aviso sobre Nictate, y luego escribe tu contraseña o usa Touch ID.
 4. Abre Nictate otra vez. Si macOS pide confirmarlo, pulsa **Abrir**.
-5. La ventana de bienvenida pide **Permite la grabación de pantalla**. Pulsa **Abrir Ajustes del Sistema**, activa Nictate en **Grabación de pantalla** (en macOS 15 y posteriores la lista puede llamarse Grabación de pantalla y audio del sistema) y pulsa **Reiniciar Nictate** en la ventana de bienvenida.
+5. La ventana de bienvenida pide **Permite la grabación de pantalla**. Pulsa **Abrir Ajustes del Sistema**, activa Nictate en la lista de grabación de pantalla de Ajustes del Sistema, y pulsa **Reiniciar Nictate** en la ventana de bienvenida.
 6. Selecciona texto con <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd>, y se copia en tu portapapeles.
 
-**En macOS 14 Sonoma** no necesitas la parte de Ajustes del Sistema del paso 3. Haz clic con Control en Nictate en Aplicaciones, elige **Abrir** y luego pulsa **Abrir** otra vez.
+**En macOS 14 Sonoma**, usa esto en lugar de los pasos 2 a 4: haz clic con Control en Nictate en Aplicaciones, elige **Abrir** y luego pulsa **Abrir** otra vez. Después sigue con el paso 5.
 
 **Sobre la firma.** Una firma de código válida permite a macOS confirmar que la app es la misma que se compiló, y que la firmó el certificado local de Nictate. No es una firma Apple Developer ID, y Apple no ha notarizado ni verificado Nictate. Por eso macOS te pide aprobarla.
 

@@ -120,13 +120,13 @@ Download the disk image only from the [releases page](https://github.com/jrthorm
 **Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to change any security setting to open Nictate.
 
 1. Open **Applications** and double-click **Nictate**.
-2. macOS shows a message that Apple couldn't verify Nictate. Dismiss it. The exact wording depends on your macOS version.
+2. macOS shows a message that Apple couldn't verify Nictate. Dismiss it with **Done** (on macOS 27 that is the button's name), and don't choose **Move to Trash**. The exact wording depends on your macOS version.
 3. Open **System Settings**, go to **Privacy & Security**, and scroll to **Security**. Click **Open Anyway** next to the message about Nictate, then enter your password or use Touch ID.
 4. Open Nictate again. If macOS asks you to confirm, click **Open**.
-5. The welcome window asks you to **Allow screen recording**. Click **Open System Settings**, turn on Nictate under **Screen Recording** (on macOS 15 and later the list may be called Screen & System Audio Recording), then click **Restart Nictate** in the welcome window.
+5. The welcome window asks you to **Allow screen recording**. Click **Open System Settings**, turn on Nictate in the **Screen & System Audio Recording** list (older versions of macOS may call it Screen Recording), then click **Restart Nictate** in the welcome window.
 6. Select text with <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd>, and it lands on your clipboard.
 
-**On macOS 14 Sonoma,** skip the System Settings part of step 3. Control-click Nictate, choose **Open**, then click **Open** again.
+**On macOS 14 Sonoma,** use this instead of steps 2 to 4: Control-click Nictate in Applications, choose **Open**, then click **Open** again. Then continue with step 5.
 
 **About the signature.** A valid code signature lets macOS confirm that the app is the same one that was built, and that it was signed with Nictate's local certificate. It isn't an Apple Developer ID signature, and Apple hasn't notarized or verified Nictate. That is why macOS asks you to approve it.
 
