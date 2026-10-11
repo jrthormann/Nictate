@@ -9,6 +9,13 @@ Apple Developer Program. A fixed local identity gives every release the same sig
 permission across updates (an ad-hoc signature differs on every build). Because the image is not notarized, macOS may
 block its first launch; the README explains how to open it with the system's own controls.
 
+## Release environment
+
+The official beta.2 image is produced in the verified release environment: macOS 27 with Xcode 27, on the maintainer's Mac
+(macOS 27.0.1, Xcode 27.0, build 27A266a). This constrains how the image is built, not what it runs on. Nictate's minimum
+deployment target is still macOS 14 (`LSMinimumSystemVersion` in `Sources/Nictate/Resources/Info.plist`). The CI runners,
+macOS 26 and macOS 14, test the release commit, and they do not produce the image.
+
 ## Checklist
 
 - [ ] The release commit is on `main`, and CI passes on it (`build-and-test` and `macos-14`).
