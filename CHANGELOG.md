@@ -3,16 +3,15 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.0-beta.2] (in preparation)
+## [1.0.0-beta.2] - 2026-10-11
 
-Not published yet. The current published prerelease is 1.0.0-beta.1. These notes describe the next release, 1.0.0-beta.2,
-and will be finalized when it is published. Please report what you find once it is: https://github.com/jrthormann/Nictate/issues
+The second public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
 
 **Two things to know before you install:**
 
 - **Nictate isn't notarized by Apple.** macOS asks you to approve it once, on first launch. The Install steps in the
   README show how. You don't need to turn off Gatekeeper or any other system-wide security protection.
-- **If you have 1.0.0-beta.1, install beta.2 by hand once it's published.** Beta.1 reports itself as version 1.0.0, so its
+- **If you have 1.0.0-beta.1, install beta.2 by hand.** Beta.1 reports itself as version 1.0.0, so its
   Check for Updates can't see newer releases. Download beta.2 from the [releases page](https://github.com/jrthormann/Nictate/releases) and
   replace the app in Applications. From beta.2 on, Check for Updates offers newer betas and the stable release.
 
@@ -38,13 +37,13 @@ and will be finalized when it is published. Please report what you find once it 
 - The README and SECURITY.md now say what the signature does and doesn't mean, and that the app isn't notarized.
 
 ### Tested
-- Automated: `make check` (unit tests, UI smoke tests, the localization and source checks) and `make build` pass on the app code at commit `69c1af8` on `main`, where the last app change was merged (PR #15). CI passed for that commit: `build-and-test`, and `macos-14`, which runs the prebuilt tests on a macOS 14 runner. The commit the final beta.2 build is made from, and its results, will be recorded when it is published.
+- Automated: `make check` (unit tests, UI smoke tests, the localization, source and release packaging checks) and `make build` pass on commit `9aa6b39` on `main`. The app code of this release is the same as at that commit; later changes are documentation only. CI passed for that commit on `build-and-test`, and on `macos-14`, which runs the prebuilt tests on a macOS 14 runner.
 - Manual QA before publication, on QA builds of this code (not the final disk image): History selection, deletion, reopening and scrolling; copying from History, with focus returning to the previous app; Clear on Quit on and off; and Reset with its default settings. The version and build numbers were checked in the app bundle.
 - Earlier QA build, not the final beta.2 build: the focus checks and the unreadable-history check, recorded by the maintainer on macOS 27.
 - Earlier test build, not the final beta.2 build, checked on macOS 27.0.1: the first-launch message for a copy that is not notarized, its entry in Privacy & Security, the welcome window in English and Spanish, and the About panel and update check.
 
 ### Not yet tested
-- The final beta.2 disk image: installing it, first launch, and the Gatekeeper steps.
+- The final beta.2 disk image: installing it, first launch, the Gatekeeper steps, and the About window's version in a running copy.
 - The Install steps on macOS 14 and on macOS 15 or later, on a Mac where Nictate was never installed.
 - Screen Recording permission and clipboard use in other apps, on a clean user account.
 - macOS 26 beyond the CI runs ([#2](https://github.com/jrthormann/Nictate/issues/2)).

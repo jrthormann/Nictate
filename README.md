@@ -119,21 +119,21 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 ## Status
 
-Nictate 1.0.0-beta.1 is the current published prerelease: an experimental public beta. It works, and I've tested it on
-macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
-The [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't. Nictate started as a side project. This beta will show
+Nictate 1.0.0-beta.2 is the current public test release: an experimental public beta. The builds in this release were
+tested on macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
+The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't. Nictate started as a side project. This beta will show
 whether anyone else needs it.
 
-1.0.0-beta.2 is in preparation and isn't published yet. This section will change when it is.
+1.0.0-beta.1 is the previous public prerelease. It stays on the [Releases page](https://github.com/jrthormann/Nictate/releases).
 
 This beta isn't notarized by Apple, so macOS asks you to approve it on first launch. See [Install](#install).
 
-Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. When beta.2 is published,
-download it from the [Releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
+Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. If you have beta.1,
+download beta.2 from the [Releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
 
 ## Install
 
-Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current published release is 1.0.0-beta.1, so that's the one to download for now.
+Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current release is 1.0.0-beta.2, so that's the one to download.
 
 **Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to turn off Gatekeeper or any other system-wide security protection to open Nictate. Approving Nictate once covers Nictate only.
 
