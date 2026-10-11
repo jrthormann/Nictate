@@ -61,12 +61,12 @@ enum LegacyHistoryMigration {
         let merged = merge(current: current, imported: old)
         let kept = merged.capped()
         let dropped = merged.texts.count - kept.texts.count
-        guard destination.save(kept) else { return .failed(reason: "new file could not be written") }
-        // Read the new file back and confirm it holds exactly what was intended.
-        guard case .loaded(let check) = destination.load(), check == kept else {
-            return .failed(reason: "new file did not read back as written")
+        // The store reads the file back before it confirms, so a confirmed save needs no second read.
+        switch destination.save(kept) {
+        case .confirmed: return .imported(count: kept.texts.count, dropped: dropped)
+        case .notWritten: return .failed(reason: "new file could not be written")
+        case .unconfirmed: return .failed(reason: "new file did not read back as written")
         }
-        return .imported(count: kept.texts.count, dropped: dropped)
     }
 
     /// Both sets, newest first, each text once. For a text in both, the newer capture time is kept. Captures with the

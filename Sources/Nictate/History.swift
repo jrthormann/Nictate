@@ -187,20 +187,20 @@ final class History: ObservableObject {
     func clearForQuit(timeout: TimeInterval = History.quitTimeout) -> Bool {
         closed = true
         isClosed = true
-        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
+        guard writeEmpty(until: Date().addingTimeInterval(timeout)) == .confirmed else { return false }
         emptyInMemory()
         return true
     }
 
-    /// Reset with "Also delete saved captures". Like `clearForQuit`, but a refused or late write reopens the history,
-    /// so the app keeps saving and the reset can stop with a message instead of restarting over captures that remain.
-    func clearForReset(timeout: TimeInterval = History.quitTimeout) -> Bool {
+    /// Reset with "Also delete saved captures". Like `clearForQuit`, but it returns the store's answer, so the reset can
+    /// say what happened.
+    func clearForReset(timeout: TimeInterval = History.quitTimeout) -> HistoryPersistOutcome {
         closed = true
         isClosed = true
-        // Not confirmed: the history stays closed, because a late write may still empty the file.
-        guard writeEmpty(until: Date().addingTimeInterval(timeout)) else { return false }
-        emptyInMemory()
-        return true
+        // The history stays closed whatever the answer: a write still running may yet empty the file.
+        let outcome = writeEmpty(until: Date().addingTimeInterval(timeout))
+        if outcome == .confirmed { emptyInMemory() }
+        return outcome
     }
 
     private func emptyInMemory() {
@@ -210,34 +210,34 @@ final class History: ObservableObject {
         intendedDates = []
     }
 
-    /// "Discard Unreadable History": replaces a file that could not be read, once the store confirms. Only after the
-    /// user's explicit Discard. A failure leaves the file and the state as they were.
-    func discardUnreadableFile() async -> Bool {
-        guard fileIsUnreadable, !closed else { return false }
+    /// "Discard Unreadable History": replaces a file that could not be read, after the user's explicit Discard. A refused
+    /// write leaves the file and the state as they were; a write that is not confirmed is settled by reading the file again.
+    func discardUnreadableFile() async -> HistoryPersistOutcome {
+        guard fileIsUnreadable, !closed else { return .notWritten }
         let store = self.store
-        guard await History.performFileWork({ store.save(HistorySnapshot(texts: [], dates: [])) }) else { return false }
-        fileIsUnreadable = false
-        reloadFromFile()
-        return true
+        let outcome = await History.performFileWork { store.save(HistorySnapshot(texts: [], dates: [])) }
+        if outcome == .confirmed { fileIsUnreadable = false }
+        if outcome != .notWritten { reloadFromFile() }
+        return outcome
     }
 
-    /// Queues the empty history behind everything already queued, and waits until `deadline` for the store's answer.
-    private func writeEmpty(until deadline: Date) -> Bool {
+    /// Queues the empty history behind everything already queued, and waits until `deadline`. A write still running then is unconfirmed.
+    private func writeEmpty(until deadline: Date) -> HistoryPersistOutcome {
         let store = self.store
-        let outcome = WriteOutcome()
+        let answer = WriteOutcome()
         let finished = DispatchSemaphore(value: 0)
         Self.io.async {
-            outcome.saved = store.save(HistorySnapshot(texts: [], dates: []))
+            answer.outcome = store.save(HistorySnapshot(texts: [], dates: []))
             finished.signal()
         }
         guard finished.wait(timeout: .now() + max(0, deadline.timeIntervalSinceNow)) == .success else {
             Log.app.error("Clear on Quit: the history write did not finish in time; nothing is claimed as cleared")
-            return false
+            return .unconfirmed
         }
-        if !outcome.saved {
-            Log.app.error("Clear on Quit: the history could not be cleared; the choice stays on for the next launch")
+        if answer.outcome != .confirmed {
+            Log.app.error("Clear on Quit: the empty history is \(answer.outcome.rawValue, privacy: .public); the choice stays on for the next launch")
         }
-        return outcome.saved
+        return answer.outcome
     }
 
     /// Reads the file again, after something outside History changed it (an import). Captures are then shown as
@@ -372,20 +372,20 @@ final class History: ObservableObject {
         let snapshot = HistorySnapshot(texts: texts, dates: dates.map(\.timeIntervalSince1970))
         let store = self.store
         Self.io.async { [weak self] in
-            let saved = store.save(snapshot)
-            Task { @MainActor in self?.writeFinished(number, snapshot, saved) }
+            let outcome = store.save(snapshot)
+            Task { @MainActor in self?.writeFinished(number, snapshot, outcome) }
         }
     }
 
-    /// Publishes a write that succeeded, unless a newer one has already been published. A failed write publishes
-    /// nothing: the entries shown stay what the file holds, the state drops to unavailable, and the file is read
-    /// again so that it, not memory, decides what is shown.
-    private func writeFinished(_ number: Int, _ snapshot: HistorySnapshot, _ saved: Bool) {
+    /// Publishes a write the store confirmed, unless a newer one has already been published. Any other answer publishes
+    /// nothing: the entries shown stay what the file holds, the state drops to unavailable, and the file is read again,
+    /// so that it, not memory, decides what is shown. An unconfirmed write may or may not be in the file.
+    private func writeFinished(_ number: Int, _ snapshot: HistorySnapshot, _ outcome: HistoryPersistOutcome) {
         writesInFlight -= 1
         // After Clear on Quit the list is the empty one; a write that finishes later must not bring captures back into it.
         guard !closed, number > publishedWrite else { return }
-        guard saved else {
-            Log.app.error("History was not saved; the change is not shown and the file is unchanged")
+        guard outcome == .confirmed else {
+            Log.app.error("History write \(outcome.rawValue, privacy: .public): the change is not shown, and the file is read again")
             intendedTexts = items
             intendedDates = dates
             state = .unavailable

@@ -73,6 +73,8 @@ final class ScriptedStore: HistoryStore, @unchecked Sendable {
     var saves = 0
     /// False makes every write fail, as a full disk would.
     var writesSucceed = true
+    /// What a failing write reports. `.unconfirmed` stands for a write that landed but did not read back, so it is kept.
+    var failure: HistoryPersistOutcome = .notWritten
     init(answers: [HistoryLoad], saved: HistorySnapshot? = nil) {
         self.answers = answers
         self.saved = saved
@@ -82,11 +84,14 @@ final class ScriptedStore: HistoryStore, @unchecked Sendable {
         guard answers.count > 1 else { return answers.first ?? .unavailable }
         return answers.removeFirst()
     }
-    func save(_ snapshot: HistorySnapshot) -> Bool {
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
         saves += 1
-        guard writesSucceed else { return false }
+        guard writesSucceed else {
+            if failure == .unconfirmed { saved = snapshot }
+            return failure
+        }
         saved = snapshot
-        return true
+        return .confirmed
     }
 }
 
@@ -980,6 +985,35 @@ do {
           "plan: a barcode link is only copied when the choice is copy")
     check(!plan("https://example.com/qr", choices: asking).contains { if case .offerLink = $0 { return true } else { return false } },
           "plan: a link in recognized text is never offered on its own")
+
+    // A refused copy is not a capture: the clipboard did not take the text, so nothing after the copy may claim it.
+    let refusedMessage = tr("Couldn't copy text. Try again.")
+    let refused = CapturePlan.settled(plan("hello", detections: found), copied: false)
+    check(refused == [.remember(found), .copy("hello"), .cue(.failure), .announce(refusedMessage),
+                      .notify(generic: refusedMessage, text: refusedMessage)],
+          "plan: a refused copy ends as a failure that says the text was not copied", "\(refused)")
+    check(!refused.contains { if case .addToHistory = $0 { return true } else { return false } },
+          "plan: a refused copy is not kept in History")
+    check(!refused.contains(.cue(.success)) && !refused.contains(.announce(tr("Text copied"))),
+          "plan: a refused copy gives no success cue and no Text copied announcement")
+    let refusedAppend = CapturePlan.settled(plan("new", choices: appending, existing: ExistingClipboard(text: "old", isPrivate: false)),
+                                            copied: false)
+    check(!refusedAppend.contains(.announce(tr("Text added"))) && !refusedAppend.contains(.notify(generic: tr("Text added"), text: "new")),
+          "plan: a refused append does not say the text was added")
+    check(!CapturePlan.settled(plan("https://example.com/qr", mode: .code, barcode: true, choices: asking), copied: false)
+            .contains { if case .offerLink = $0 { return true } else { return false } },
+          "plan: a refused barcode copy offers no link")
+    let accepted = plan("hello", detections: found)
+    check(CapturePlan.settled(accepted, copied: true) == accepted, "plan: an accepted copy carries out the whole plan")
+    check(CapturePlan.settled(plan(""), copied: false) == miss(tr("No text found")), "plan: a miss stays a miss whatever the clipboard did")
+    // As CaptureCoordinator.finish uses it, on a private pasteboard whose clipboard refuses the text (never the user's).
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-tests-refused-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let refusing = ClipboardWriter(pasteboard: board, replace: { pasteboard, _, _ in pasteboard.clearContents(); return pasteboard.changeCount })
+    let planned = plan("hello")
+    let written = planned.compactMap(\.copiedText).first.map { refusing.writeVerified($0, transient: false) }
+    check(written == false && refusing.lastWrite == nil && !CapturePlan.settled(planned, copied: written ?? false).contains(.addToHistory("hello")),
+          "plan: a refused capture is not remembered as copied and never reaches History")
 }
 
 // Append mode reads the clipboard: an item another app marked concealed or transient (a password manager's
@@ -1049,13 +1083,12 @@ do {
     let board = NSPasteboard(name: NSPasteboard.Name("nictate-test-\(UUID().uuidString)"))
     let writer = ClipboardWriter(pasteboard: board)
     check(writer.lastWrite == nil && writer.ownText == nil, "clipboard writer: nothing written yet")
-    let count = writer.write("b", transient: false)
-    check(count == board.changeCount && writer.lastWrite == ClipboardWrite(changeCount: count, text: "b"),
+    check(writer.writeVerified("b", transient: false) && writer.lastWrite == ClipboardWrite(changeCount: board.changeCount, text: "b"),
           "clipboard writer: the recorded count is the one the write produced")
     let trio = ["c", "b", "a"]
     check(HistoryRotation.nextIndex(items: trio, clipboard: writer.ownText) == 2,
           "clipboard writer: after a History window copy of the second, rotation moves on to the third")
-    writer.write("b", transient: true)
+    _ = writer.writeVerified("b", transient: true)
     check(writer.existingForAppend() == ExistingClipboard(text: "b", isPrivate: false),
           "clipboard writer: a History window copy with the private setting stays appendable")
     board.clearContents()
@@ -1878,6 +1911,22 @@ do {
           "publish: after a restart the file holds exactly what was on screen")
 }
 
+// A save reports what happened: a write that reads back is confirmed, and a refused write leaves the file as it was.
+do {
+    let first = HistorySnapshot(texts: ["first"], dates: [1_000])
+    check(sealedStore("persist-ok").save(first) == .confirmed, "persist: a write that reads back is confirmed")
+    let folder = testPreferences.appendingPathComponent("persist-readonly-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let locked = JSONHistoryStore(fileURL: folder.appendingPathComponent("history.json"))
+    _ = locked.save(first)
+    let before = (try? Data(contentsOf: locked.fileURL)) ?? Data()
+    try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+    let refused = locked.save(HistorySnapshot(texts: ["second"], dates: [2_000]))
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+    check(refused == .notWritten && !before.isEmpty && ((try? Data(contentsOf: locked.fileURL)) ?? Data()) == before,
+          "persist: a refused write is notWritten and the file is byte for byte as it was", "\(refused)")
+}
+
 // A failed encrypted write never reports the capture as saved: the file keeps its entries, the new capture is
 // dropped, and the history is read again from the file.
 do {
@@ -1895,6 +1944,25 @@ do {
     check(settled && failingHistory.items == ["old"] && failing.saved == stored,
           "available: a failed write drops the new capture, restores the saved entries, and leaves the file as it was",
           "items \(failingHistory.items), state \(failingHistory.state)")
+}
+
+// An unconfirmed write is not shown until the file is read again: then the file decides what is shown.
+do {
+    let old = HistorySnapshot(texts: ["old"], dates: [1_000])
+    let grown = HistorySnapshot(texts: ["new", "old"], dates: [2_000, 1_000])
+    let store = ScriptedStore(answers: [.loaded(old), .loaded(grown)], saved: old)
+    store.writesSucceed = false
+    store.failure = .unconfirmed
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("new", at: Date(timeIntervalSince1970: 2_000))
+    var shown = false
+    for _ in 0..<400 where !shown {
+        shown = history.items == ["new", "old"] && history.state == .available
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    History.flushWrites()
+    check(shown && store.loads == 2, "persist: an unconfirmed write is not shown until the file is read again, and then the file decides",
+          "items \(history.items), loads \(store.loads)")
 }
 
 // Whitespace-only text is never kept in the history, but valid text keeps every space, tab and line break.
@@ -2041,9 +2109,9 @@ final class SlowReadStore: HistoryStore, @unchecked Sendable {
         Thread.sleep(forTimeInterval: readDelay)
         return .loaded(stored)
     }
-    func save(_ snapshot: HistorySnapshot) -> Bool {
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
         saved = snapshot
-        return true
+        return .confirmed
     }
 }
 
@@ -2051,9 +2119,9 @@ final class HungWriteStore: HistoryStore, @unchecked Sendable {
     let stored: HistorySnapshot
     init(stored: HistorySnapshot) { self.stored = stored }
     func load() -> HistoryLoad { .loaded(stored) }
-    func save(_ snapshot: HistorySnapshot) -> Bool {
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
         Thread.sleep(forTimeInterval: 1.0)
-        return true
+        return .confirmed
     }
 }
 
@@ -2195,7 +2263,7 @@ do {
     let stored = HistorySnapshot(texts: ["a", "b"], dates: [1_000, 2_000])
     let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
     let history = History(store: store, isEnabled: alwaysSaving)
-    check(history.clearForReset() && store.saved?.texts.isEmpty == true && history.items.isEmpty,
+    check(history.clearForReset() == .confirmed && store.saved?.texts.isEmpty == true && history.items.isEmpty,
           "reset: deleting captures is confirmed by the store before the reset goes on")
 }
 do {
@@ -2203,12 +2271,24 @@ do {
     let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
     store.writesSucceed = false
     let history = History(store: store, isEnabled: alwaysSaving)
-    check(!history.clearForReset() && history.items == ["keep"], "reset: a refused deletion is reported and nothing is claimed")
+    check(history.clearForReset() == .notWritten && history.items == ["keep"], "reset: a refused deletion is reported and nothing is claimed")
     store.writesSucceed = true
     history.add("after the refusal")
     History.flushWrites()
     check(store.saved?.texts == ["keep"] && history.isClosed, "reset: after a refused deletion the history stays closed and writes nothing", "\(store.saved?.texts ?? [])")
 }
+
+// A deletion the store does not confirm is reported as unconfirmed, and nothing is claimed.
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    store.writesSucceed = false
+    store.failure = .unconfirmed
+    let history = History(store: store, isEnabled: alwaysSaving)
+    check(history.clearForReset() == .unconfirmed && history.isClosed && history.items == ["keep"],
+          "reset: a deletion that did not read back is reported as unconfirmed, and nothing is claimed")
+}
+
 // Regression: a reset without deletion waits for the pending writes, and reports a write that never finishes.
 do {
     let store = ScriptedStore(answers: [.empty])
@@ -2259,18 +2339,18 @@ final class LateSaveStore: HistoryStore, @unchecked Sendable {
     var saved: HistorySnapshot?
     init(stored: HistorySnapshot) { self.stored = stored }
     func load() -> HistoryLoad { .loaded(stored) }
-    func save(_ snapshot: HistorySnapshot) -> Bool {
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
         Thread.sleep(forTimeInterval: 0.4)
         saved = snapshot
-        return true
+        return .confirmed
     }
 }
 do {
     let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
     let store = LateSaveStore(stored: stored)
     let history = History(store: store, isEnabled: alwaysSaving)
-    check(!history.clearForReset(timeout: 0.1) && history.isClosed && history.items == ["keep"],
-          "reset: an unconfirmed deletion is reported, and the history stays closed")
+    check(history.clearForReset(timeout: 0.1) == .unconfirmed && history.isClosed && history.items == ["keep"],
+          "reset: a deletion still running at the timeout is reported as unconfirmed, and the history stays closed")
     history.add("after the timeout")
     History.flushWrites()
     check(store.saved?.texts.isEmpty == true && history.items == ["keep"],
@@ -2292,7 +2372,7 @@ do {
     settle {
         let discarded = await history.discardUnreadableFile()
         while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
-        check(discarded && store.saved?.texts.isEmpty == true && history.state == .available && !history.fileIsUnreadable,
+        check(discarded == .confirmed && store.saved?.texts.isEmpty == true && history.state == .available && !history.fileIsUnreadable,
               "unreadable history: an explicit discard replaces the file and starts an empty history")
     }
 }
@@ -2302,8 +2382,23 @@ do {
     let history = History(store: store, isEnabled: alwaysSaving)
     settle {
         let discarded = await history.discardUnreadableFile()
-        check(!discarded && history.fileIsUnreadable && store.saved == nil,
+        check(discarded == .notWritten && history.fileIsUnreadable && store.saved == nil,
               "unreadable history: a discard that fails leaves the file and the state as they were")
+    }
+}
+
+// An unconfirmed discard is reported, and the file decides what is shown: read again, it holds an empty history.
+do {
+    let store = ScriptedStore(answers: [.corrupt, .empty])
+    store.writesSucceed = false
+    store.failure = .unconfirmed
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle {
+        let outcome = await history.discardUnreadableFile()
+        while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) }
+        check(outcome == .unconfirmed && store.saved?.texts.isEmpty == true && !history.fileIsUnreadable && history.state == .available,
+              "unreadable history: a discard that is not confirmed is reported, and the file decides what is shown",
+              "outcome \(outcome), state \(history.state)")
     }
 }
 
