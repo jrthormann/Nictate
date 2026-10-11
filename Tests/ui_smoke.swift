@@ -17,6 +17,14 @@ application.setActivationPolicy(.accessory)
 var failures = 0
 var skips = 0
 var notes = 0
+/// History files this run creates in the temporary folder. They are removed before the run exits, so repeated runs leave nothing behind.
+var historyFiles: [URL] = []
+@MainActor
+func scratchHistoryFile(_ prefix: String) -> URL {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(prefix)\(UUID().uuidString).json")
+    historyFiles.append(file)
+    return file
+}
 @MainActor
 func check(_ ok: Bool, _ name: String, _ detail: String = "") {
     print((ok ? "PASS  " : "FAIL  ") + name + (detail.isEmpty || ok ? "" : " " + detail))
@@ -260,7 +268,7 @@ MainActor.assumeIsolated {
         check(clear.buttons[0].keyEquivalent == "\r" && clear.buttons[1].keyEquivalent == "" && clear.buttons[1].hasDestructiveAction,
               "history deletion: Clear History has no key, so Return cannot delete")
         // With nothing saved, neither path shows an alert (a modal here would hang the run until the timeout).
-        let empty = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json")))
+        let empty = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-")))
         HistoryClearing.confirmClear(empty)
         check(!HistoryDeletion.asksOnSwitchOff(savedCount: empty.items.count), "history deletion: an empty history asks nothing when saving is switched off")
     }
@@ -312,7 +320,7 @@ do {
 
 // MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight
 do {
-    let store = JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-\(UUID().uuidString).json"))
+    let store = JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-"))
     let history = History(store: store, isEnabled: { true })
     history.add("first")
     history.add("second")
@@ -342,7 +350,7 @@ do {
 // Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a
 // highlighted first match, so Return has a target.
 do {
-    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-late-\(UUID().uuidString).json")
+    let file = scratchHistoryFile("nictate-ui-late-")
     let seed = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
     seed.add("arrived later")
     History.flushWrites()
@@ -359,7 +367,7 @@ do {
 
 // Regression: deleting the highlighted last row moves the highlight to the new last row, so Return keeps a target.
 do {
-    let file = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-delete-\(UUID().uuidString).json")
+    let file = scratchHistoryFile("nictate-ui-delete-")
     let history = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
     history.add("first")
     history.add("second")
@@ -379,7 +387,7 @@ do {
 
 // Regression: a copy error from an earlier visit does not reappear when the panel opens again.
 do {
-    let history = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-err-\(UUID().uuidString).json")), isEnabled: { true })
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-err-")), isEnabled: { true })
     let status = StatusItemController()
     let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
                                  windows: WindowCoordinator(), history: history)
@@ -390,7 +398,7 @@ do {
 
 // Regression: Command-F asks the History screen for its search field, once per press.
 do {
-    let history = History(store: JSONHistoryStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-find-\(UUID().uuidString).json")), isEnabled: { true })
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-find-")), isEnabled: { true })
     let status = StatusItemController()
     let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
                                  windows: WindowCoordinator(), history: history)
@@ -399,5 +407,8 @@ do {
     check(model.searchFocusRequests == before + 1, "find: Command-F asks the History search field for focus")
 }
 
+// Flush pending writes first, so a write cannot recreate a file after it is removed.
+History.flushWrites()
+for file in historyFiles { try? FileManager.default.removeItem(at: file) }
 print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
