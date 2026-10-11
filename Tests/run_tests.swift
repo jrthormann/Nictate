@@ -2369,6 +2369,12 @@ do {
     check(flags == [true, false, false], "recovery: the discard is offered only when the file was detected unreadable", "\(flags)")
 }
 
+// History rows: the keyboard selection is the only accented row, and a row under the pointer gets only a tint.
+check(captureHighlight(selected: true, hovered: true) == .selected, "highlight: the keyboard selection wins over the pointer")
+check(captureHighlight(selected: true, hovered: false) == .selected, "highlight: the keyboard selection is accented")
+check(captureHighlight(selected: false, hovered: true) == .hovered, "highlight: a row under the pointer gets only a tint")
+check(captureHighlight(selected: false, hovered: false) == .none, "highlight: other rows are plain")
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {
