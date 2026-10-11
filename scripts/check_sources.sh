@@ -35,10 +35,11 @@ done
 if ! grep -qx '    static let historyFixtures: \[String\] = \[\]' scripts/variants/BuildIdentity.test.swift; then
     echo "ERROR: scripts/variants/BuildIdentity.test.swift must declare an empty historyFixtures (QA reseeds synthetic captures otherwise)"; problems=1
 fi
-# The QA build keeps the production defaults: a test-variant rule that writes Save Captures would make a reset differ from
-# production. Checked per line, so a change to that rule is caught.
-if grep -q 'isTestVariant.*historyEnabled' Sources/Nictate/AppDelegate.swift; then
-    echo "ERROR: AppDelegate.swift must not set historyEnabled for the test variant (QA defaults must match production)"; problems=1
+# The QA build keeps the production defaults: a startup rule in AppDelegate that writes Save Captures would make a reset
+# differ from production. AppDelegate has no reason to mention the setting, so any mention fails, however it is split
+# across lines.
+if grep -q 'historyEnabled' Sources/Nictate/AppDelegate.swift; then
+    echo "ERROR: AppDelegate.swift must not mention historyEnabled (QA defaults must match production)"; problems=1
 fi
 (( problems == 0 )) && echo "Sources OK"
 exit $problems
