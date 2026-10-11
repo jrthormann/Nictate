@@ -11,13 +11,28 @@ cd "$(dirname "$0")/.."
 
 ORIG_PATH="$PATH"
 TMP="$(mktemp -d)"
-# Removes the throwaway keychain from the keychain lists and deletes the folder, on every exit, failed runs included.
+# The user's keychain search list as it was before a case changed it, and whether a case has changed it since.
+SEARCH_SAVED=()
+SEARCH_CHANGED=""
+# Puts back the search list that search_list_open saved. Does nothing when the list is not changed.
+restore_search_list() {
+    [[ -n "$SEARCH_CHANGED" ]] || return 0
+    if ! security list-keychains -d user -s "${SEARCH_SAVED[@]}"; then
+        print -r -- "error: could not restore the user's keychain search list" >&2
+        return 1
+    fi
+    SEARCH_CHANGED=""
+}
+# Restores the search list, deletes the throwaway keychain with its throwaway identity, and removes the folder. Runs on
+# every exit: a normal end, a failed assertion, and an interruption (INT, TERM and HUP exit through this trap).
 cleanup() {
     local kc="$TMP/e2e/signing.keychain-db"
+    restore_search_list || true
     [[ ! -f "$kc" ]] || security delete-keychain "$kc" >/dev/null 2>&1 || true
     rm -rf "$TMP"
 }
 trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
 source scripts/signing_keychain.zsh
 source scripts/release_signing.zsh
 NICTATE_SIGN_FLAGS=(--force --options runtime)
@@ -285,6 +300,20 @@ EOF
     codesign --force --sign - "$app" >/dev/null 2>&1
 }
 
+# user_keychains: the user's keychain search list, one path per line, without the quotes security prints around them.
+user_keychains() {
+    security list-keychains -d user | sed -E 's/^[[:space:]]*"(.*)"[[:space:]]*$/\1/'
+}
+
+# search_list_open KEYCHAIN: saves the user's search list, then adds KEYCHAIN to it. The keychain cases call this on a
+# hosted runner only (GITHUB_ACTIONS): on the hosted macOS 26 runner, codesign finds the test identity only when its keychain
+# is on the search list. A developer's search list is never changed by these cases, and production signing does not do this.
+search_list_open() {
+    SEARCH_SAVED=(${(f)"$(user_keychains)"})
+    security list-keychains -d user -s "$1" "${SEARCH_SAVED[@]}" || return 1
+    SEARCH_CHANGED=1
+}
+
 # Real codesign, with a throwaway keychain and certificate: releases are signed by the pinned certificate, a locked
 # keychain is refused, and a pin the keychain does not hold is refused. Nothing outside $TMP is touched.
 # The setup is made the way scripts/create_signing_cert.sh makes the real identity, and each stage is checked, so a
@@ -345,27 +374,16 @@ EOF
             "$out" "$pw" "$p12pw"
         return 0
     fi
+    # On a hosted runner the keychain joins the search list for the signing cases; cleanup restores the list.
+    if [[ -n "${GITHUB_ACTIONS:-}" ]] && ! search_list_open "$kc" >"$out" 2>&1; then
+        fixture_failed "could not add the throwaway keychain to the user's search list" "$out" "$pw" "$p12pw"
+        return 0
+    fi
     cp /usr/bin/true "$TMP/e2e/probe"
     if ! codesign --force --keychain "$kc" --sign "$sha" "$TMP/e2e/probe" >"$out" 2>&1; then
         {
-            echo "codesign by SHA-1 printed the message above. Diagnostics (no secrets):"
-            echo "macOS $(sw_vers -productVersion)"
+            echo "macOS $(sw_vers -productVersion); search list: $(user_keychains | tr '\n' ' ')"
             security find-identity -p codesigning "$kc" 2>&1
-            echo "codesign by name, same keychain:"
-            cp /usr/bin/true "$TMP/e2e/probe-by-name"
-            codesign --force --keychain "$kc" --sign "$NICTATE_SIGNING_NAME" "$TMP/e2e/probe-by-name" 2>&1 || true
-            if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-                # Diagnostic on the hosted runner only: does signing work once the keychain is on the search list?
-                local -a saved
-                saved=("${(@f)$(security list-keychains -d user | tr -d '"' | sed 's/^ *//')}")
-                echo "search list before: ${saved[*]}"
-                security list-keychains -d user -s "$kc" "${saved[@]}"
-                cp /usr/bin/true "$TMP/e2e/probe-searched"
-                echo "codesign by SHA-1 with the keychain on the search list:"
-                codesign --force --keychain "$kc" --sign "$sha" "$TMP/e2e/probe-searched" 2>&1 && echo "ok" || echo "failed"
-                security list-keychains -d user -s "${saved[@]}"
-                echo "search list restored: $(security list-keychains -d user | tr -d '"' | sed 's/^ *//' | tr '\n' ' ')"
-            fi
         } >>"$out"
         fixture_failed "codesign cannot sign with the imported identity, though the keychain lists it" "$out" "$pw" "$p12pw"
         return 0
@@ -415,6 +433,93 @@ EOF
         NICTATE_SIGNING_KEYCHAIN="$TMP/e2e/absent.keychain-db" NICTATE_SIGNING_NAME="Nictate Local Signing" RELEASE_SIGNING_PIN_FILE="$TMP/e2e/pin.txt"
         expect "release refuses when its keychain does not exist" refused "does not exist" sign_for_release "$TMP/e2e/two.app"
     )
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        if restore_search_list && [[ "$(user_keychains)" == "${(F)SEARCH_SAVED}" ]]; then
+            pass "the user's keychain search list is back as it was before the signing cases"
+        else
+            failure "the user's keychain search list is back as it was before the signing cases" \
+                "now: $(user_keychains | tr '\n' ' ')"
+        fi
+    fi
+}
+
+# Release folder claims. build-dmg.sh claims its release folder with claim_release_folder. Each case hosts one claim the way the
+# build does (the claim, the EXIT cleanup and the signal handlers) in its own zsh. The interruption cases use a stand-in mkdir
+# that signals the host at the exact point the window exists: after mkdir has created the folder, before the claim is
+# recorded. The stand-in sends the signal itself, so no case depends on timing.
+release_folder_claims() {
+    local dir="$TMP/claims" claim_bin="$TMP/claim-bin" host="$TMP/claim-host.zsh" st won=0 s
+    mkdir -p "$dir" "$claim_bin"
+    cat > "$claim_bin/mkdir" <<'EOF'
+#!/bin/sh
+# Stand-in for mkdir in the claim cases: runs the real mkdir, then sends SIGTERM to the hosting shell before returning.
+/bin/mkdir "$@"
+status=$?
+kill -TERM "$CLAIMER"
+exit $status
+EOF
+    chmod +x "$claim_bin/mkdir"
+    cat > "$host" <<'EOF'
+#!/bin/zsh
+# Hosts one release folder claim the way scripts/build-dmg.sh does. Arguments: REPO_ROOT DIR
+set -euo pipefail
+source "$1/scripts/release_signing.zsh"
+CREATED_RELEASE=""
+cleanup() { [[ -z "$CREATED_RELEASE" ]] || rm -rf "$CREATED_RELEASE"; }
+trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
+export CLAIMER=$$
+claim_release_folder "$2" || exit 1
+CREATED_RELEASE=""
+EOF
+    # claim_host DIR [STAND_IN_DIR]: returns the host's exit status.
+    claim_host() {
+        PATH="${2:+$2:}$ORIG_PATH" zsh "$host" "$PWD" "$1"
+    }
+
+    st=0; claim_host "$dir/ordinary" || st=$?
+    if (( st == 0 )) && [[ -d "$dir/ordinary" ]]; then
+        pass "a release folder claim creates the folder, and a finished build keeps it"
+    else
+        failure "a release folder claim creates the folder, and a finished build keeps it" "status $st"
+    fi
+
+    mkdir "$dir/owned" && print -r -- keep > "$dir/owned/theirs"
+    st=0; claim_host "$dir/owned" || st=$?
+    if (( st == 1 )) && [[ "$(cat "$dir/owned/theirs" 2>/dev/null)" == keep ]]; then
+        pass "an existing release folder is refused, and left with its contents"
+    else
+        failure "an existing release folder is refused, and left with its contents" "status $st"
+    fi
+
+    st=0; claim_host "$dir/interrupted" "$claim_bin" || st=$?
+    if (( st == 130 )) && [[ ! -e "$dir/interrupted" ]]; then
+        pass "a signal between mkdir and the recorded claim removes the folder that claim created"
+    else
+        failure "a signal between mkdir and the recorded claim removes the folder that claim created" \
+            "status $st, folder left behind: $(test -e "$dir/interrupted" && echo yes || echo no)"
+    fi
+
+    mkdir "$dir/owned-interrupted" && print -r -- keep > "$dir/owned-interrupted/theirs"
+    st=0; claim_host "$dir/owned-interrupted" "$claim_bin" || st=$?
+    if (( st == 130 )) && [[ "$(cat "$dir/owned-interrupted/theirs" 2>/dev/null)" == keep ]]; then
+        pass "a signal while another process owns the folder leaves that folder alone"
+    else
+        failure "a signal while another process owns the folder leaves that folder alone" "status $st"
+    fi
+
+    ( st=0; claim_host "$dir/race" || st=$?; print -r -- "$st" > "$dir/race.a" ) &
+    ( st=0; claim_host "$dir/race" || st=$?; print -r -- "$st" > "$dir/race.b" ) &
+    wait
+    for s in "$(cat "$dir/race.a")" "$(cat "$dir/race.b")"; do
+        [[ "$s" == 0 ]] && won=$((won + 1))
+    done
+    if (( won == 1 )) && [[ -d "$dir/race" ]]; then
+        pass "two claims for one release folder at once: exactly one creates it"
+    else
+        failure "two claims for one release folder at once: exactly one creates it" \
+            "claims that created it: $won, folder present: $(test -d "$dir/race" && echo yes || echo no)"
+    fi
 }
 
 # make dmg refuses before anything is built or written. It packages a commit, so these cases run on a clean clone of HEAD:
@@ -466,6 +571,7 @@ make_app "$TMP/adhoc.app"
     expect "release verification refuses an ad hoc app, which carries no certificate" refused "no certificate (ad hoc)" release_verify_app "$TMP/adhoc.app"
 )
 keychain_cases
+release_folder_claims
 packaging_refusals
 
 passed="$(grep -c '^PASS$' "$RESULTS" || true)"
