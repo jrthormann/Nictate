@@ -11,7 +11,13 @@ cd "$(dirname "$0")/.."
 
 ORIG_PATH="$PATH"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# Removes the throwaway keychain from the keychain lists and deletes the folder, on every exit, failed runs included.
+cleanup() {
+    local kc="$TMP/e2e/signing.keychain-db"
+    [[ ! -f "$kc" ]] || security delete-keychain "$kc" >/dev/null 2>&1 || true
+    rm -rf "$TMP"
+}
+trap cleanup EXIT
 source scripts/signing_keychain.zsh
 source scripts/release_signing.zsh
 NICTATE_SIGN_FLAGS=(--force --options runtime)
@@ -22,17 +28,28 @@ RESULTS="$TMP/results.txt"
 pass() { print -r -- "PASS  $1"; print -r -- "PASS" >> "$RESULTS"; }
 failure() {
     print -r -- "FAIL  $1"
-    [[ -z "${2:-}" ]] || print -r -- "      $2"
+    [[ -z "${2:-}" ]] || print -r -- "$2" | sed 's/^/      /'
     print -r -- "FAIL" >> "$RESULTS"
 }
 skip() { print -r -- "SKIP  $1"; print -r -- "SKIP" >> "$RESULTS"; }
+
+# fixture_failed STAGE LOG SECRET...: records a failed setup stage. LOG holds what the tool printed; each SECRET is
+# removed from it before it is shown.
+fixture_failed() {
+    local stage="$1" log="$2" detail="" secret
+    shift 2
+    detail="$(cat "$log" 2>/dev/null || true)"
+    for secret in "$@"; do detail="${detail//$secret/[removed]}"; done
+    failure "throwaway keychain fixture: $stage" "${detail:-the tool printed nothing}"
+}
 
 # expect DESCRIPTION ok|refused NEEDLE COMMAND...: runs COMMAND and checks its exit status, and that its output contains
 # NEEDLE when NEEDLE is not empty.
 expect() {
     local desc="$1" want="$2" needle="$3" out="" rc=0
     shift 3
-    out="$("$@" 2>&1)" || rc=$?
+    # Stdin is /dev/null, so no case can wait for a password, even when the suite runs from a terminal.
+    out="$("$@" 2>&1 </dev/null)" || rc=$?
     if [[ "$want" == ok ]] && (( rc != 0 )); then
         failure "$desc" "expected success, exit $rc: $out"
     elif [[ "$want" == refused ]] && (( rc == 0 )); then
@@ -270,8 +287,10 @@ EOF
 
 # Real codesign, with a throwaway keychain and certificate: releases are signed by the pinned certificate, a locked
 # keychain is refused, and a pin the keychain does not hold is refused. Nothing outside $TMP is touched.
+# The setup is made the way scripts/create_signing_cert.sh makes the real identity, and each stage is checked, so a
+# failure names the operation that failed and shows what the tool printed.
 keychain_cases() {
-    local kc="$TMP/e2e/signing.keychain-db" pw p12pw sha
+    local kc="$TMP/e2e/signing.keychain-db" pw p12pw sha rc out="$TMP/e2e/stage.log"
     mkdir -p "$TMP/e2e"
     pw="$(/usr/bin/openssl rand -hex 16)"
     p12pw="$(/usr/bin/openssl rand -hex 16)"
@@ -287,20 +306,68 @@ basicConstraints = critical,CA:false
 keyUsage = critical,digitalSignature
 extendedKeyUsage = critical,codeSigning
 EOF
-    /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 2 -config "$TMP/e2e/cert.cnf" \
-        -keyout "$TMP/e2e/key.pem" -out "$TMP/e2e/cert.pem" 2>/dev/null
-    P12PW="$p12pw" /usr/bin/openssl pkcs12 -export -inkey "$TMP/e2e/key.pem" -in "$TMP/e2e/cert.pem" \
-        -out "$TMP/e2e/id.p12" -passout env:P12PW 2>/dev/null
+    if ! /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 2 -config "$TMP/e2e/cert.cnf" \
+            -keyout "$TMP/e2e/key.pem" -out "$TMP/e2e/cert.pem" >"$out" 2>&1; then
+        fixture_failed "openssl could not create the test certificate" "$out" "$pw" "$p12pw"
+        return 0
+    fi
+    if ! P12PW="$p12pw" /usr/bin/openssl pkcs12 -export -inkey "$TMP/e2e/key.pem" -in "$TMP/e2e/cert.pem" \
+            -out "$TMP/e2e/id.p12" -passout env:P12PW >"$out" 2>&1; then
+        fixture_failed "openssl could not pack the test key and certificate into a PKCS#12 file" "$out" "$pw" "$p12pw"
+        return 0
+    fi
     rm -f "$TMP/e2e/key.pem"
-    {
-        print -r -- "create-keychain -p $(signing_quote "$pw") $(signing_quote "$kc")"
-        print -r -- "unlock-keychain -p $(signing_quote "$pw") $(signing_quote "$kc")"
-        print -r -- "import $(signing_quote "$TMP/e2e/id.p12") -k $(signing_quote "$kc") -P $(signing_quote "$p12pw") -x -T /usr/bin/codesign"
-        print -r -- "set-key-partition-list -S apple-tool:,apple: -s -k $(signing_quote "$pw") $(signing_quote "$kc")"
-    } | signing_security
+    if ! { print -r -- "create-keychain -p $(signing_quote "$pw") $(signing_quote "$kc")"
+           print -r -- "unlock-keychain -p $(signing_quote "$pw") $(signing_quote "$kc")"; } | signing_security 2>"$out"; then
+        fixture_failed "security could not create and unlock the throwaway keychain" "$out" "$pw" "$p12pw"
+        return 0
+    fi
+    # Status 0 is unlocked. Anything else is reported with the status and the helper's own output, so a broken
+    # /usr/bin/python3 (it stops when the Xcode license is not accepted) is not mistaken for a locked keychain.
+    rc=0
+    (NICTATE_SIGNING_KEYCHAIN="$kc"; signing_keychain_status) >"$out" 2>&1 || rc=$?
+    if (( rc != 0 )); then
+        fixture_failed "the throwaway keychain is not unlocked (status check returned $rc)" "$out" "$pw" "$p12pw"
+        return 0
+    fi
+    if ! { print -r -- "import $(signing_quote "$TMP/e2e/id.p12") -k $(signing_quote "$kc") -P $(signing_quote "$p12pw") -x -T /usr/bin/codesign"
+           print -r -- "set-key-partition-list -S apple-tool:,apple: -s -k $(signing_quote "$pw") $(signing_quote "$kc")"; } | signing_security 2>"$out"; then
+        fixture_failed "security could not import the test certificate and its key" "$out" "$pw" "$p12pw"
+        return 0
+    fi
     sha="$(security find-certificate -c "Nictate Local Signing" -Z "$kc" 2>/dev/null | awk '/^SHA-1 hash:/ { print $3; exit }')"
     if [[ -z "$sha" ]]; then
-        failure "a throwaway keychain with a certificate was created" "the setup produced no certificate"
+        fixture_failed "the test certificate is not in the throwaway keychain after import" "$out" "$pw" "$p12pw"
+        return 0
+    fi
+    if ! security find-identity -p codesigning "$kc" >"$out" 2>&1 || ! grep -q -F "$sha" "$out"; then
+        fixture_failed "the test certificate has no private key in the throwaway keychain, so there is no identity to sign with" \
+            "$out" "$pw" "$p12pw"
+        return 0
+    fi
+    cp /usr/bin/true "$TMP/e2e/probe"
+    if ! codesign --force --keychain "$kc" --sign "$sha" "$TMP/e2e/probe" >"$out" 2>&1; then
+        {
+            echo "codesign by SHA-1 printed the message above. Diagnostics (no secrets):"
+            echo "macOS $(sw_vers -productVersion)"
+            security find-identity -p codesigning "$kc" 2>&1
+            echo "codesign by name, same keychain:"
+            cp /usr/bin/true "$TMP/e2e/probe-by-name"
+            codesign --force --keychain "$kc" --sign "$NICTATE_SIGNING_NAME" "$TMP/e2e/probe-by-name" 2>&1 || true
+            if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+                # Diagnostic on the hosted runner only: does signing work once the keychain is on the search list?
+                local -a saved
+                saved=("${(@f)$(security list-keychains -d user | tr -d '"' | sed 's/^ *//')}")
+                echo "search list before: ${saved[*]}"
+                security list-keychains -d user -s "$kc" "${saved[@]}"
+                cp /usr/bin/true "$TMP/e2e/probe-searched"
+                echo "codesign by SHA-1 with the keychain on the search list:"
+                codesign --force --keychain "$kc" --sign "$sha" "$TMP/e2e/probe-searched" 2>&1 && echo "ok" || echo "failed"
+                security list-keychains -d user -s "${saved[@]}"
+                echo "search list restored: $(security list-keychains -d user | tr -d '"' | sed 's/^ *//' | tr '\n' ' ')"
+            fi
+        } >>"$out"
+        fixture_failed "codesign cannot sign with the imported identity, though the keychain lists it" "$out" "$pw" "$p12pw"
         return 0
     fi
     print -r -- "SHA-1 $sha" > "$TMP/e2e/pin.txt"
@@ -350,31 +417,42 @@ EOF
     )
 }
 
-# make dmg refuses build numbers before anything is built or written. Needs a clean tree, so the commit it reads is the
-# one on disk; otherwise these cases are skipped.
+# make dmg refuses before anything is built or written. It packages a commit, so these cases run on a clean clone of HEAD:
+# no working-tree state (CI's prebuilt/ folder, or uncommitted edits) can skip them. Each case also points the release
+# keychain at a path that does not exist, so a case that got past its refusal still could not sign.
 packaging_refusals() {
-    if [[ -n "$(git status --porcelain)" ]]; then
-        skip "make dmg refusals (the working tree has changes; run this on a clean tree)"
+    local clone="$TMP/clone" none="$TMP/no-release-keychain.keychain-db"
+    if ! git clone -q --no-hardlinks . "$clone" 2>"$TMP/clone.log"; then
+        failure "a clean clone of HEAD for the make dmg refusals" "$(cat "$TMP/clone.log")"
         return 0
     fi
-    local out
     (
-        export BUILD_NUMBER=21 OUT_DIR="$TMP/dmg-21"
+        cd "$clone"
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=21 OUT_DIR="$TMP/dmg-21"
         expect "make dmg refuses BUILD_NUMBER=21, the build beta.1 already published" refused "approved for build 22" zsh scripts/build-dmg.sh
     )
     if [[ -e "$TMP/dmg-21" ]]; then failure "no output folder for BUILD_NUMBER=21" "$TMP/dmg-21 exists"; else pass "no output folder for BUILD_NUMBER=21"; fi
     (
-        export BUILD_NUMBER=1 OUT_DIR="$TMP/dmg-1"
+        cd "$clone"
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=1 OUT_DIR="$TMP/dmg-1"
         expect "make dmg refuses BUILD_NUMBER=1" refused "approved for build 22" zsh scripts/build-dmg.sh
     )
     if [[ -e "$TMP/dmg-1" ]]; then failure "no output folder for BUILD_NUMBER=1" "$TMP/dmg-1 exists"; else pass "no output folder for BUILD_NUMBER=1"; fi
     (
+        cd "$clone"
         unset BUILD_NUMBER
-        export OUT_DIR="$TMP/dmg-none"
+        export NICTATE_SIGNING_KEYCHAIN="$none" OUT_DIR="$TMP/dmg-none"
         expect "make dmg refuses a missing BUILD_NUMBER" refused "set BUILD_NUMBER" zsh scripts/build-dmg.sh
     )
-    out="$TMP/dmg-none"
-    if [[ -e "$out" ]]; then failure "no output folder without BUILD_NUMBER" "$out exists"; else pass "no output folder without BUILD_NUMBER"; fi
+    if [[ -e "$TMP/dmg-none" ]]; then failure "no output folder without BUILD_NUMBER" "$TMP/dmg-none exists"; else pass "no output folder without BUILD_NUMBER"; fi
+    (
+        cd "$clone"
+        print -r -- "an uncommitted change" >> CHANGELOG.md
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=22 OUT_DIR="$TMP/dmg-dirty"
+        expect "make dmg refuses a working tree with changes, even with the approved build 22" \
+            refused "the working tree has changes" zsh scripts/build-dmg.sh
+    )
+    if [[ -e "$TMP/dmg-dirty" ]]; then failure "no output folder for a dirty working tree" "$TMP/dmg-dirty exists"; else pass "no output folder for a dirty working tree"; fi
 }
 
 release_refusals
@@ -395,4 +473,4 @@ failed="$(grep -c '^FAIL$' "$RESULTS" || true)"
 skipped="$(grep -c '^SKIP$' "$RESULTS" || true)"
 print -r -- ""
 print -r -- "$passed passed, $failed failed, $skipped skipped"
-(( failed == 0 ))
+(( failed == 0 && passed > 0 ))
