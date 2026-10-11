@@ -95,3 +95,23 @@ enum AppHistoryStore {
 final class WriteOutcome: @unchecked Sendable {
     var outcome: HistoryPersistOutcome = .notWritten
 }
+
+extension History {
+    /// Test variant only: fills an empty history with the fixtures, through the normal write path, newest
+    /// first as listed. Does nothing once the history has anything in it, so a restart does not add them again.
+    func seedFixtures(_ texts: [String]) {
+        guard state == .available, items.isEmpty else { return }
+        let now = Date()
+        for (offset, text) in texts.enumerated().reversed() {
+            add(text, at: now.addingTimeInterval(-Double(offset) * 300))
+        }
+    }
+
+    /// Times that line up with `count` texts. If the stored list is not the same length it cannot be trusted
+    /// to belong to these texts, so every time is unknown rather than risk showing the wrong one.
+    static func alignedDates(count: Int, stored: [Double]) -> [Date] {
+        stored.count == count
+            ? stored.map { Date(timeIntervalSince1970: $0) }
+            : Array(repeating: .distantPast, count: count)
+    }
+}

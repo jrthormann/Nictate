@@ -43,6 +43,7 @@ struct GeneralTab: View {
                         Button("Import Previous History…") {
                             ImportPreviousHistory.confirmAndRun { legacyImport.refresh() }
                         }
+                        .disabled(history.importing)
                     }
                     SettingCaption("Import captures saved by an earlier version of Nictate.")
                 }

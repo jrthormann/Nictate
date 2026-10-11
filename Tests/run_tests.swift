@@ -1911,6 +1911,116 @@ do {
           "publish: after a restart the file holds exactly what was on screen")
 }
 
+// Concurrent captures and deletions: many threads hand their work to the main actor at once. History must still write
+// each change once, one write at a time, in the order it was made, and show exactly what the file holds.
+/// Counts the iterations of `runOnMainConcurrently` that have run on the main thread.
+final class ArrivalCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func arrive() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+    var arrived: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+}
+
+/// Runs `work` once for each index, as if from many threads at once: the iterations run concurrently on a background
+/// queue, and each hops to the main thread, where History is used. Spins the run loop until every one has run, at most
+/// ten seconds. True when all of them ran.
+@MainActor
+func runOnMainConcurrently(_ count: Int, _ work: @escaping @MainActor (Int) -> Void) -> Bool {
+    let arrivals = ArrivalCounter()
+    DispatchQueue.global().async {
+        DispatchQueue.concurrentPerform(iterations: count) { index in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { work(index) }
+                arrivals.arrive()
+            }
+        }
+    }
+    let deadline = Date().addingTimeInterval(10)
+    while arrivals.arrived < count, Date() < deadline {
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.001))
+    }
+    return arrivals.arrived == count
+}
+
+/// Records each snapshot it is asked to save, and counts the saves that overlap. Saves run one at a time on the I/O
+/// queue, so none may overlap; the short sleep gives an overlap the chance to show.
+final class OverlapStore: HistoryStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var active = 0
+    private(set) var overlaps = 0
+    private(set) var snapshots: [HistorySnapshot] = []
+    func load() -> HistoryLoad { .empty }
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
+        lock.lock()
+        active += 1
+        if active > 1 { overlaps += 1 }
+        snapshots.append(snapshot)
+        lock.unlock()
+        Thread.sleep(forTimeInterval: 0.0002)
+        lock.lock()
+        active -= 1
+        lock.unlock()
+        return .confirmed
+    }
+}
+
+do {
+    let store = OverlapStore()
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let ran = runOnMainConcurrently(200) { index in
+        history.add("capture \(index)", at: Date(timeIntervalSince1970: Double(index)))
+    }
+    settle { await history.finishLoading() }
+    History.flushWrites()
+    let heads = store.snapshots.compactMap { $0.texts.first }
+    check(ran && store.snapshots.count == 200 && Set(heads).count == 200 && store.overlaps == 0,
+          "concurrent captures: each of 200 concurrent adds is written once, and no two writes overlap",
+          "ran \(ran), writes \(store.snapshots.count), overlaps \(store.overlaps)")
+    let chained = store.snapshots.indices.dropFirst().allSatisfy { index in
+        Array(store.snapshots[index].texts.dropFirst())
+            == Array(store.snapshots[index - 1].texts.prefix(HistoryPolicy.maximumHistoryEntries - 1))
+    }
+    check(chained, "concurrent captures: each write is the one before it plus its own capture, so none is lost or built from an older list")
+    let last = store.snapshots.last?.texts ?? []
+    check(history.items == last && last.count == HistoryPolicy.maximumHistoryEntries && Set(last).count == last.count,
+          "concurrent captures: the list on screen is the last write, with 15 captures and none repeated", "\(history.items.count) shown")
+    let ownTimes = history.dates.count == history.items.count && zip(history.items, history.dates).allSatisfy { pair in
+        pair.1 == Date(timeIntervalSince1970: Double(pair.0.dropFirst("capture ".count)) ?? -1)
+    }
+    check(ownTimes, "concurrent captures: every capture keeps its own time", "\(history.dates)")
+}
+do {
+    let store = sealedStore("concurrent")
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let added = runOnMainConcurrently(100) { index in
+        history.add("concurrent \(index)", at: Date(timeIntervalSince1970: Double(index)))
+    }
+    settle { await history.finishLoading() }
+    History.flushWrites()
+    let reread = History(store: store, isEnabled: alwaysSaving)
+    check(added && history.items.count == HistoryPolicy.maximumHistoryEntries && reread.items == history.items,
+          "concurrent captures: 100 concurrent adds leave the file equal to the list on screen, and a re-read matches",
+          "shown \(history.items.count), file \(reread.items.count)")
+    let shown = history.items
+    let removed = runOnMainConcurrently(100) { index in
+        history.remove(shown[index % shown.count])
+    }
+    settle { await history.finishLoading() }
+    History.flushWrites()
+    let afterRemoval = History(store: store, isEnabled: alwaysSaving)
+    check(removed && history.items.isEmpty && afterRemoval.items.isEmpty,
+          "concurrent captures: 100 concurrent removes of the shown captures all reach the file, and none comes back",
+          "shown \(history.items.count), file \(afterRemoval.items.count)")
+}
+
 // A save reports what happened: a write that reads back is confirmed, and a refused write leaves the file as it was.
 do {
     let first = HistorySnapshot(texts: ["first"], dates: [1_000])
@@ -2083,7 +2193,7 @@ do {
     let store = ScriptedStore(answers: [.loaded(stored), .loaded(merged)], saved: stored)
     let history = History(store: store, isEnabled: alwaysSaving, loadsNow: false)
     let stale = history.refresh()
-    history.beginImport()
+    check(history.beginImport(), "import hold: an import is admitted while none runs")
     settle { await stale?.value }
     check(history.state == .loading, "import hold: a read that finishes during the import does not end the hold")
     history.add("during the import")
@@ -2094,6 +2204,33 @@ do {
     settle { while history.state == .loading { try? await Task.sleep(nanoseconds: 1_000_000) } }
     check(history.items == ["kept", "imported"] && history.state == .available,
           "import hold: after the import the file's merged captures are shown", "\(history.items)")
+}
+
+// Import admission: one import at a time, and an end without an admitted import changes nothing.
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let first = history.beginImport()
+    let second = history.beginImport()
+    check(first && !second && history.importing && history.state == .loading,
+          "import admission: a second import is refused while one holds the history", "first \(first), second \(second)")
+    history.endImport()
+    settle { await history.finishLoading() }
+    check(history.beginImport(), "import admission: once the admitted import ends, another one can start")
+    history.endImport()
+    settle { await history.finishLoading() }
+}
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    let loads = store.loads
+    history.endImport()
+    let unchanged = history.state == .available
+    History.flushWrites()
+    check(unchanged && store.loads == loads && history.items == ["kept"],
+          "import admission: an end without an admitted import changes nothing", "state \(history.state), loads \(store.loads - loads)")
 }
 
 // Clear on Quit: stores that stand in for a slow read, a hung disk and a failing disk.
@@ -2355,6 +2492,97 @@ do {
     History.flushWrites()
     check(store.saved?.texts.isEmpty == true && history.items == ["keep"],
           "reset: a late deletion cannot be followed by a restored or new capture", "\(store.saved?.texts ?? [])")
+}
+
+// Restart handoff: a restart takes the history file over. Changes queued before it reach the file, nothing is written
+// after it, and a restart that does not start gives the history back.
+do {
+    let store = LateSaveStore(stored: HistorySnapshot(texts: ["kept"], dates: [1_000]))
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("pending")
+    settle {
+        let handedOff = await history.handOff()
+        check(handedOff && store.saved?.texts == ["pending", "kept"],
+              "handoff: a change queued before a restart is on disk when the handoff completes", "\(store.saved?.texts ?? [])")
+    }
+    history.add("after the handoff")
+    history.remove("kept")
+    History.flushWrites()
+    check(store.saved?.texts == ["pending", "kept"] && history.items == ["pending", "kept"],
+          "handoff: a capture or deletion after the handoff never reaches the file the new instance reads", "\(store.saved?.texts ?? [])")
+}
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle { _ = await history.handOff() }
+    history.cancelHandOff()
+    history.add("after a failed restart")
+    History.flushWrites()
+    check(!history.isHandedOff && store.saved?.texts == ["after a failed restart"],
+          "handoff: when the new instance cannot start, this one keeps saving")
+}
+do {
+    let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    store.writesSucceed = false
+    let history = History(store: store, isEnabled: alwaysSaving)
+    _ = history.clearForReset()
+    store.writesSucceed = true
+    settle { _ = await history.handOff() }
+    history.cancelHandOff()
+    history.add("still closed")
+    History.flushWrites()
+    check(history.isClosed && store.saved?.texts == ["keep"],
+          "handoff: a history closed by a refused deletion stays closed after a restart that did not start")
+}
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    settle { _ = await history.handOff() }
+    store.saved = HistorySnapshot(texts: ["saved by the new instance"], dates: [2_000])
+    let cleared = history.clearForQuit()
+    History.flushWrites()
+    check(!cleared && store.saved?.texts == ["saved by the new instance"],
+          "handoff: Clear on Quit after a restart leaves the file to the new instance, which clears it at launch", "\(store.saved?.texts ?? [])")
+    check(!history.beginImport(), "handoff: no import starts once the history is handed off")
+}
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let store = ScriptedStore(answers: [.loaded(stored)], saved: stored)
+    let history = History(store: store, isEnabled: alwaysSaving)
+    _ = history.beginImport()
+    let started = Date()
+    settle {
+        let handedOff = await history.handOff()
+        check(!handedOff && history.importing && Date().timeIntervalSince(started) < 2,
+              "handoff: a restart during an import is refused at once, and the import keeps its hold")
+    }
+    history.endImport()
+    settle { await history.finishLoading() }
+}
+do {   // last: its 1 s write occupies the shared I/O queue
+    let history = History(store: HungWriteStore(stored: HistorySnapshot(texts: ["x"], dates: [1_000])), isEnabled: alwaysSaving)
+    history.add("y")
+    let started = Date()
+    settle {
+        let handedOff = await history.handOff(timeout: 0.2)
+        check(!handedOff && !history.isHandedOff && Date().timeIntervalSince(started) < 0.9,
+              "handoff: a write that never finishes stops the restart in time, and nothing is handed over")
+    }
+    History.flushWrites()
+}
+do {
+    let store = ScriptedStore(answers: [.empty])
+    let history = History(store: store, isEnabled: alwaysSaving)
+    history.add("first")
+    settle {
+        Task { @MainActor in history.add("second") }
+        let handedOff = await history.handOff()
+        check(handedOff && store.saved?.texts == ["second", "first"],
+              "handoff: a change made while the restart waits is written before the handoff completes", "\(store.saved?.texts ?? [])")
+    }
+    History.flushWrites()
 }
 
 // An unreadable history file is never overwritten at startup or by a capture. Only an explicit discard replaces it.

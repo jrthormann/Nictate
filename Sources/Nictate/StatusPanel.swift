@@ -225,3 +225,15 @@ final class StatusPanel {
         popover.performClose(nil)
     }
 }
+
+extension History {
+    /// "5 min. ago" style text for a capture time, or nil when the time is unknown.
+    static func ageLabel(for date: Date, now: Date = Date(), locale: Locale = .current) -> String? {
+        guard date != .distantPast else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        formatter.dateTimeStyle = .named
+        formatter.locale = locale
+        return formatter.localizedString(for: date, relativeTo: now)
+    }
+}

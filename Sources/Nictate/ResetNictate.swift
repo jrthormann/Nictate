@@ -6,7 +6,11 @@ import AppKit
 /// "Reset Settings…". It resets preferences. Saved captures stay unless the user also ticks the box to delete them.
 @MainActor
 enum ResetNictate {
+    /// True while a reset waits for the history to be handed over. A second Reset meanwhile is ignored.
+    private static var isRunning = false
+
     static func confirm() {
+        guard !isRunning else { return }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -33,12 +37,20 @@ enum ResetNictate {
                 stop(tr("Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again."))
                 return
             }
-        } else if !History.shared.waitForPendingWrites() {
-            stop(tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
-            return
         }
-        Settings.resetToDefaults()
-        AppRestart.now()
+        isRunning = true
+        Task { @MainActor in
+            defer { isRunning = false }
+            if !deletes {
+                // Changes still in flight must reach the file before the restart; if they cannot, nothing is reset.
+                guard await History.shared.handOff() else {
+                    stop(tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
+                    return
+                }
+            }
+            Settings.resetToDefaults()
+            AppRestart.now()
+        }
     }
 
     private static func stop(_ message: String) {

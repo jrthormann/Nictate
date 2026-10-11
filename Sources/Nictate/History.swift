@@ -17,6 +17,7 @@ enum HistoryState: Equatable {
 /// Persist first, publish after success: `items` and `dates` only ever hold entries that the file already holds.
 /// A change is written in full on one serial queue, and it becomes visible only when its write has succeeded.
 /// An older write never replaces a newer one, because a write is published only if it is the newest that succeeded.
+/// A restart takes the file over (`handOff`): changes already queued are written first, and nothing is written after.
 @MainActor
 final class History: ObservableObject {
     /// The app's history. It loads in the background (see `refresh`), never on the main thread.
@@ -35,6 +36,8 @@ final class History: ObservableObject {
     @Published private(set) var fileIsUnreadable = false
     /// True once a deletion has begun and could not be confirmed, or for quit: no change is saved until restart.
     @Published private(set) var isClosed = false
+    /// True from `handOff` until `cancelHandOff`: a restart has taken the file over, so nothing is written meanwhile.
+    private(set) var isHandedOff = false
     @Published var query = ""
 
     private let store: any HistoryStore
@@ -52,11 +55,10 @@ final class History: ObservableObject {
     /// Changes to saved entries can be written: the file is readable, whether or not saving is on. Never during an import.
     private var canWriteExisting: Bool { !importing && (state == .available || (state == .disabled && hasLoadedFile)) }
     /// True from `beginImport` to `endImport`. Reads that finish meanwhile are stale, so they are ignored.
-    private var importing = false
-    /// True once a deletion for quit or for a reset has begun. From then on no read is applied and no write starts.
+    @Published private(set) var importing = false
+    /// True once a deletion for quit or for a reset has begun, or a restart has taken the file over. From then on no
+    /// read is applied and no write starts.
     private var closed = false
-    /// The read in flight, if any, so `finishLoading` can wait for it.
-    private var loadTask: Task<Void, Never>?
     /// The longest the app waits on the file at quit. Past it, nothing is claimed as written.
     static let quitTimeout: TimeInterval = 3
     /// Numbers each write. A write's result is published only if it is newer than the last one published.
@@ -103,18 +105,20 @@ final class History: ObservableObject {
         return startLoad()
     }
 
-    /// Starts a read and keeps its task, so a caller can wait for the saved captures to be shown.
+    /// Starts a read, so a caller can wait for the saved captures to be shown (see `finishLoading`).
     private func startLoad() -> Task<Void, Never> {
-        let task = Task { await reload() }
-        loadTask = task
-        return task
+        Task { await reload() }
     }
 
-    /// Waits for a read in flight, and for queued writes, so a decision that depends on the saved captures sees them.
-    func finishLoading() async {
-        if loadInFlight { await loadTask?.value }
-        let deadline = Date().addingTimeInterval(History.quitTimeout)
-        while writesInFlight > 0, Date() < deadline { try? await Task.sleep(nanoseconds: 5_000_000) }
+    /// Waits, at most `timeout`, for a read in flight and queued writes, so a decision on saved captures sees them.
+    /// Nothing is waited for during an import, which ends on its own schedule. True when both finished in time.
+    @discardableResult
+    func finishLoading(timeout: TimeInterval = History.quitTimeout) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !importing, loadInFlight || writesInFlight > 0, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        return !loadInFlight && writesInFlight == 0
     }
 
     /// Reads the file and key on the I/O queue, then applies the result here on the main actor.
@@ -126,16 +130,6 @@ final class History: ObservableObject {
         apply(result)
     }
 
-    /// Test variant only: fills an empty history with the fixtures, through the normal write path, newest
-    /// first as listed. Does nothing once the history has anything in it, so a restart does not add them again.
-    func seedFixtures(_ texts: [String]) {
-        guard state == .available, items.isEmpty else { return }
-        let now = Date()
-        for (offset, text) in texts.enumerated().reversed() {
-            add(text, at: now.addingTimeInterval(-Double(offset) * 300))
-        }
-    }
-
     /// Runs file work on the same serial queue as the writes, so an import never races a capture being saved.
     static func performFileWork<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
         await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
@@ -145,18 +139,39 @@ final class History: ObservableObject {
 
     /// Holds History still while an import rewrites the file. Until `endImport`, captures are not kept (the clipboard
     /// copy still happens), and reads that finish meanwhile are ignored, so no save built from the older list can
-    /// overwrite the merged file.
-    func beginImport() {
+    /// overwrite the merged file. False when an import is already running, or the history is closed (see `handOff`).
+    func beginImport() -> Bool {
+        guard !importing, !closed else { return false }
         importing = true
         loadInFlight = true
         state = .loading
+        return true
     }
 
-    /// Ends the hold and reads the file, which now holds whatever the import wrote.
+    /// Ends the hold and reads the file, which now holds whatever the import wrote. Does nothing without a hold.
     func endImport() {
+        guard importing else { return }
         importing = false
         loadInFlight = false
         reloadFromFile()
+    }
+
+    /// Restart: waits, at most `timeout`, for every change so far to reach the file, then takes the file over; this
+    /// instance writes nothing afterwards. False when the wait ran out or an import runs (then saving goes on).
+    func handOff(timeout: TimeInterval = History.quitTimeout) async -> Bool {
+        guard await finishLoading(timeout: timeout) else {
+            Log.app.error("History changes were not written in time; the restart did not start")
+            return false
+        }
+        closed = true
+        isHandedOff = true
+        return true
+    }
+
+    /// Gives the file back after a restart that did not start. Saving resumes, unless a deletion closed the history.
+    func cancelHandOff() {
+        isHandedOff = false
+        closed = isClosed
     }
 
     /// Waits until everything queued on the I/O queue before this call has run, or until `deadline`. False means it
@@ -167,9 +182,9 @@ final class History: ObservableObject {
         return done.wait(timeout: .now() + max(0, deadline.timeIntervalSinceNow)) == .success
     }
 
-    /// Waits, at most `timeout`, until a read in flight is applied and every queued write has finished. Returns true
-    /// only when everything finished in time, so a caller that is about to end the process knows the changes are on
-    /// disk. Bounded, so a slow disk cannot hold up quit or a reset forever.
+    /// Quit only: waits, at most `timeout`, until a read in flight is applied and every queued write has finished.
+    /// It runs the run loop, so a restart uses `handOff`. True only when everything finished in time, so the caller
+    /// knows the changes are on disk.
     @discardableResult func waitForPendingWrites(timeout: TimeInterval = History.quitTimeout) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while loadInFlight || writesInFlight > 0 {
@@ -222,7 +237,9 @@ final class History: ObservableObject {
     }
 
     /// Queues the empty history behind everything already queued, and waits until `deadline`. A write still running then is unconfirmed.
+    /// After a handoff nothing is written: the restarted instance clears the history at launch instead.
     private func writeEmpty(until deadline: Date) -> HistoryPersistOutcome {
+        guard !isHandedOff else { return .notWritten }
         let store = self.store
         let answer = WriteOutcome()
         let finished = DispatchSemaphore(value: 0)
@@ -302,24 +319,6 @@ final class History: ObservableObject {
             intendedTexts = []
             intendedDates = []
         }
-    }
-
-    /// Times that line up with `count` texts. If the stored list is not the same length it cannot be trusted
-    /// to belong to these texts, so every time is unknown rather than risk showing the wrong one.
-    static func alignedDates(count: Int, stored: [Double]) -> [Date] {
-        stored.count == count
-            ? stored.map { Date(timeIntervalSince1970: $0) }
-            : Array(repeating: .distantPast, count: count)
-    }
-
-    /// "5 min. ago" style text for a capture time, or nil when the time is unknown.
-    static func ageLabel(for date: Date, now: Date = Date(), locale: Locale = .current) -> String? {
-        guard date != .distantPast else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        formatter.dateTimeStyle = .named
-        formatter.locale = locale
-        return formatter.localizedString(for: date, relativeTo: now)
     }
 
     /// Keeps a capture in the history, once it is saved. Only while the history is available: a loading,
