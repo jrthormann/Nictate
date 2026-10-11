@@ -70,38 +70,18 @@ if [[ "$VARIANT" == test ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Nictate Test" $APP/Contents/Info.plist
 fi
 
-# Signing order: SIGN_IDENTITY if set; else "Nictate Local Signing" from its dedicated keychain (made by
-# `make setup`, see scripts/create_signing_cert.sh); else that identity in the login keychain; otherwise ad-hoc.
-# The dedicated keychain locks when the Mac sleeps: the first build after a wake asks for its password in the terminal, and pressing
-# Return there (or building without a terminal) skips it and moves on to the fallbacks with a warning.
+# Signing: scripts/release_signing.zsh. A release (NICTATE_RELEASE=1, set by make dmg) is signed only with the certificate
+# pinned in scripts/release-signing.txt, from the dedicated keychain, and never falls back. Any other build takes the
+# development fallbacks (SIGN_IDENTITY, the dedicated keychain, the login-keychain certificate, ad hoc), each named in a
+# warning. The dedicated keychain locks when the Mac sleeps: the first build after a wake asks for its password in the
+# terminal, and pressing Return there, or building without a terminal, skips it.
 source scripts/signing_keychain.zsh
-SIGN_FLAGS=(--force --options runtime --entitlements Sources/Nictate/Resources/Nictate.entitlements)
-SIGNED_FROM_KEYCHAIN=""
-# Only valid code-signing identities count for the login-keychain fallbacks: a certificate without its
-# key shows up in find-certificate but cannot sign.
-VALID_IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
-IDENTITY="${SIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]] && HASH=$(signing_keychain_hash); then
-    # Signing by hash: the login keychain may hold an older certificate with the same name.
-    if signing_keychain_unlock \
-        && codesign $SIGN_FLAGS --keychain "$NICTATE_SIGNING_KEYCHAIN" --sign "$HASH" $APP; then
-        SIGNED_FROM_KEYCHAIN=1
-    else
-        echo "warning: could not sign from $NICTATE_SIGNING_KEYCHAIN, trying the fallback identities"
-    fi
-fi
-if [[ -z "$IDENTITY" && -z "$SIGNED_FROM_KEYCHAIN" ]]; then
-    for candidate in "Nictate Local Signing"; do
-        if [[ "$VALID_IDENTITIES" == *"\"$candidate\""* ]]; then IDENTITY="$candidate"; break; fi
-    done
-fi
-if [[ -n "$SIGNED_FROM_KEYCHAIN" ]]; then
-    :  # already signed above
-elif [[ -n "$IDENTITY" ]] && [[ "$VALID_IDENTITIES" == *"\"$IDENTITY\""* ]]; then
-    codesign $SIGN_FLAGS --sign "$IDENTITY" $APP
+source scripts/release_signing.zsh
+NICTATE_SIGN_FLAGS=(--force --options runtime --entitlements Sources/Nictate/Resources/Nictate.entitlements)
+if [[ "${NICTATE_RELEASE:-}" == 1 ]]; then
+    sign_for_release "$APP" || exit 1
 else
-    echo "warning: no local signing identity found (run make setup), signing ad-hoc (permissions may reset on each build)"
-    codesign $SIGN_FLAGS --sign - $APP
+    sign_for_development "$APP"
 fi
 codesign --verify --strict $APP
 rm -rf $FINAL && mv $APP $FINAL

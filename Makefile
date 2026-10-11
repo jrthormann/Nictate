@@ -1,7 +1,7 @@
 # Nictate: a macOS menu bar app that copies text from anywhere on your screen.
 # Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
-.PHONY: setup build test-app test ui-test strings sources check coverage run install dmg
+.PHONY: setup build test-app test ui-test strings sources test-release check coverage run install dmg
 
 build:      ## Build build/Nictate.app
 	./scripts/build-app.sh
@@ -24,7 +24,10 @@ strings:    ## Verify es/en localization is complete
 sources:    ## Forbid NSLog/print in Sources and files over 400 lines
 	scripts/check_sources.sh
 
-check: test ui-test strings sources   ## Everything CI runs, minus the build
+test-release: ## Regression tests for release packaging: approved build numbers, the release certificate, and their refusals
+	scripts/test_release.zsh
+
+check: test ui-test strings sources test-release   ## Everything CI runs, minus the build
 
 coverage:   ## Print line coverage of the unit tests per source file (informational, never fails)
 	-rm -rf build/coverage && mkdir -p build/coverage
@@ -43,6 +46,6 @@ install: build  ## Build, quit Nictate, put the new copy in /Applications and la
 	rm -rf /Applications/Nictate.app && mv /Applications/Nictate.app.new /Applications/Nictate.app
 	open /Applications/Nictate.app
 
-dmg:        ## Build build/Nictate-<version>.dmg, signed with the local identity (see docs/RELEASING.md)
+dmg:        ## Build build/release/<version>/Nictate-<version>.dmg from a commit; BUILD_NUMBER required (docs/RELEASING.md)
 	./scripts/build-dmg.sh
 

@@ -82,7 +82,7 @@ global shortcut (HotKeyManager, Carbon)
 | Script | What it does |
 | --- | --- |
 | `scripts/build-app.sh` | Builds, signs and stages `build/Nictate.app` (`make build`). |
-| `scripts/build-dmg.sh` | Packs the signed app into `build/Nictate-<version>.dmg` (`make dmg`). Refuses an ad-hoc signed app. See [RELEASING.md](RELEASING.md). |
+| `scripts/build-dmg.sh` | The release image: exports one commit, builds and signs the app, and writes `build/release/<version>/Nictate-<version>.dmg` with its `SHA256SUMS` (`make dmg`). It never overwrites a release folder. See [RELEASING.md](RELEASING.md). |
 | `scripts/make_dmg_background.swift` | Draws the disk image window's background. Run by `build-dmg.sh`. |
 | `scripts/check_sources.sh` | Source rules: no `NSLog` or `print`, and no file over 400 lines (`make sources`). |
 | `scripts/check_strings.py` | Checks that `en` and `es` have the same keys and placeholders (`make strings`). |

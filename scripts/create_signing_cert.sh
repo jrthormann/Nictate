@@ -18,9 +18,11 @@
 # with this key. Locking it (`security lock-keychain ~/Library/Keychains/nictate-signing.keychain-db`)
 # closes that window until the next build.
 #
-# Moving from the older login-keychain certificate: scripts/build-app.sh prefers this keychain and still falls back
-# to "Nictate Local Signing" in the login keychain, so the old one can stay until you remove it. The new
-# certificate is a different one, so grant Screen Recording once more after the first build with it.
+# Moving from the older login-keychain certificate: scripts/build-app.sh prefers this keychain. Development builds still
+# fall back to "Nictate Local Signing" in the login keychain, with a warning, so the old one can stay until you remove
+# it. make dmg never falls back: the release certificate must be in this keychain and pinned in
+# scripts/release-signing.txt. A different certificate asks users for Screen Recording again, so grant it once more
+# after the first build with it.
 # Then remove the old identity and its trust setting by hand (this script never does):
 #   security find-certificate -c "Nictate Local Signing" -Z ~/Library/Keychains/login.keychain-db | grep SHA-1
 #   security delete-identity -t -Z <that SHA-1> ~/Library/Keychains/login.keychain-db
@@ -95,4 +97,6 @@ hash=$(signing_keychain_hash) || { echo "error: the identity did not reach $KC (
 cp /usr/bin/true "$TMP/probe"
 codesign --force --keychain "$KC" --sign "$hash" "$TMP/probe" 2>/dev/null \
     || { echo "error: codesign could not sign with '$NAME' from $KC" >&2; exit 1; }
-echo "Created '$NAME' in $KC. Now run ./scripts/build-app.sh"
+echo "Created '$NAME' in $KC."
+echo "Its SHA-1 is $hash. Releases use the certificate pinned in scripts/release-signing.txt: pin this SHA-1 there only on purpose, in a commit."
+echo "Now run ./scripts/build-app.sh"

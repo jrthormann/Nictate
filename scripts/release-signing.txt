@@ -1,0 +1,5 @@
+# The certificate that releases are signed with: the SHA-1 of "Nictate Local Signing", as
+# `security find-certificate -c "Nictate Local Signing" -Z` prints it. make dmg signs only with this certificate, from
+# the dedicated keychain (~/Library/Keychains/nictate-signing.keychain-db), and refuses to package anything else.
+# Change it only on purpose: a different certificate makes macOS ask every user to grant Screen Recording again.
+SHA-1 30FAF2A15B50BFBE015BC2F67A48A32C2731B225

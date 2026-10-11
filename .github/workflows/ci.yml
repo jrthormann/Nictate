@@ -37,6 +37,9 @@ jobs:
       # Optimized, like the shipped app, so a bug that only shows up with -O is caught here.
       - name: Unit tests (layout, cleaning, OCR)
         run: OPT=-O Tests/run_tests.sh
+      # The release tests run before prebuilt/ exists, so the working tree is clean while they run.
+      - name: Release packaging and signing tests
+        run: scripts/test_release.zsh
       # Keep the arm64 runner: the Intel step below rebuilds build/run_tests
       # as x86_64.
       - name: Keep the arm64 test runner
