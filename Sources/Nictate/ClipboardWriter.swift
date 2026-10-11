@@ -4,8 +4,8 @@
 import AppKit
 
 /// The one place Nictate writes the clipboard: captures, Cycle History, the History screen and the menu all
-/// go through it. It remembers its latest write, so Cycle History and Append mode know what the clipboard
-/// holds while nothing else has been copied, without reading it back.
+/// go through it. Each write is read back once, and only a write that reads back is remembered, so Cycle History and
+/// Append mode know what the clipboard holds while nothing else has been copied.
 @MainActor
 final class ClipboardWriter {
     static let shared = ClipboardWriter()
@@ -19,14 +19,6 @@ final class ClipboardWriter {
          replace: @escaping (NSPasteboard, String, Bool) -> Int = { $0.replaceContents(with: $1, transient: $2) }) {
         self.pasteboard = pasteboard
         self.replace = replace
-    }
-
-    /// Replaces the clipboard with `text` and returns the change count of this write.
-    @discardableResult
-    func write(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Int {
-        let changeCount = replace(pasteboard, text, transient)
-        lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
-        return changeCount
     }
 
     /// Writes `text` and reads back only that text before reporting success. The previous clipboard is never read,

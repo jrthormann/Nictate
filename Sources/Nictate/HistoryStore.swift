@@ -31,10 +31,21 @@ enum HistoryLoad: Equatable {
     case unavailable
 }
 
-/// Where the history lives between launches. `save` returns false when nothing could be written.
+/// What a save did to the file. Only `confirmed` means the file holds the snapshot.
+enum HistoryPersistOutcome: String, Equatable, Sendable {
+    /// Written atomically, then read back byte for byte.
+    case confirmed
+    /// Nothing was written: the folder, the encoding or the atomic replace failed. The file is as it was.
+    case notWritten
+    /// Not confirmed: the file did not read back as written, or the answer came too late to wait for. It may hold the
+    /// snapshot or not; only a fresh read can tell.
+    case unconfirmed
+}
+
+/// Where the history lives between launches.
 protocol HistoryStore: Sendable {
     func load() -> HistoryLoad
-    func save(_ snapshot: HistorySnapshot) -> Bool
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome
 }
 
 /// The history as a JSON file in the app's Application Support folder, inside its sandbox container.
@@ -58,16 +69,17 @@ struct JSONHistoryStore: HistoryStore, Sendable {
         return .loaded(snapshot.capped())
     }
 
-    func save(_ snapshot: HistorySnapshot) -> Bool {
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
+        let data: Data
         do {
-            let data = try JSONEncoder().encode(snapshot.capped())
+            data = try JSONEncoder().encode(snapshot.capped())
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: fileURL, options: .atomic)
-            // Read back what was written before reporting success.
-            return (try? Data(contentsOf: fileURL)) == data
         } catch {
-            return false
+            return .notWritten
         }
+        // Read back what was written before reporting success.
+        return (try? Data(contentsOf: fileURL)) == data ? .confirmed : .unconfirmed
     }
 }
 
@@ -81,5 +93,5 @@ enum AppHistoryStore {
 /// Carries a store's answer from the I/O queue to the caller that waits for it. The caller reads it only after the
 /// semaphore has been signalled, so the write and the read never overlap.
 final class WriteOutcome: @unchecked Sendable {
-    var saved = false
+    var outcome: HistoryPersistOutcome = .notWritten
 }

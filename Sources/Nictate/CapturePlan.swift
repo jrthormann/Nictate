@@ -3,7 +3,8 @@
 
 import Foundation
 
-/// One thing a finished capture does. CaptureCoordinator carries them out in the order given.
+/// One thing a finished capture does. CaptureCoordinator carries them out in the order given, except that the copy comes
+/// first: the effects after it depend on whether the clipboard took the text.
 enum CaptureEffect: Equatable {
     /// Keep what the capture detected, for the menu.
     case remember(Detections)
@@ -57,8 +58,24 @@ enum CapturePlan {
         return effects
     }
 
+    /// The plan once the clipboard has answered its copy. A refused copy keeps what came before it (the detections for
+    /// the menu) and ends the capture as a failure: no success cue or announcement, no History entry, no notice that
+    /// says it was copied, no link offer. An accepted copy, and a plan without a copy (a miss), are returned unchanged.
+    static func settled(_ effects: [CaptureEffect], copied: Bool) -> [CaptureEffect] {
+        guard !copied, let copy = effects.firstIndex(where: { $0.copiedText != nil }) else { return effects }
+        return Array(effects[...copy]) + miss(tr("Couldn't copy text. Try again."))
+    }
+
     /// A capture that found nothing usable: visual cue, VoiceOver and (per the notification style) a banner.
     private static func miss(_ message: String) -> [CaptureEffect] {
         [.cue(.failure), .announce(message), .notify(generic: message, text: message)]
+    }
+}
+
+extension CaptureEffect {
+    /// The text a `.copy` puts on the clipboard; nil for every other effect.
+    var copiedText: String? {
+        guard case .copy(let text) = self else { return nil }
+        return text
     }
 }

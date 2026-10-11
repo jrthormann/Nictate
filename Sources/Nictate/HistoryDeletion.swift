@@ -85,15 +85,16 @@ enum HistoryClearing {
         alert.addButton(withTitle: tr("Discard")).hasDestructiveAction = true
         guard run(alert) == .alertSecondButtonReturn else { return }
         Task { @MainActor in
-            guard await history.discardUnreadableFile() else {
-                let failure = NSAlert()
-                failure.alertStyle = .warning
-                failure.messageText = tr("Discard didn't work")
-                failure.informativeText = tr("The file couldn't be replaced, so it was left unchanged.")
-                failure.addButton(withTitle: tr("OK"))
-                _ = run(failure)
-                return
-            }
+            let outcome = await history.discardUnreadableFile()
+            guard outcome != .confirmed else { return }
+            let failure = NSAlert()
+            failure.alertStyle = .warning
+            failure.messageText = outcome == .notWritten ? tr("Discard didn't work") : tr("Discard couldn't be confirmed")
+            failure.informativeText = outcome == .notWritten
+                ? tr("The file couldn't be replaced, so it was left unchanged.")
+                : tr("The file was written but didn't read back as expected. History now shows what the file holds.")
+            failure.addButton(withTitle: tr("OK"))
+            _ = run(failure)
         }
     }
 

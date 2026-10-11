@@ -102,21 +102,27 @@ final class CaptureCoordinator {
         let existing = settings.appendMode ? clipboard.existingForAppend() : nil
         let choices = CapturePlan.Choices(appendMode: settings.appendMode, delimiter: settings.appendDelimiter,
                                           historyEnabled: settings.historyEnabled, barcodeAction: settings.barcodeAction)
-        let effects = CapturePlan.effects(mode: mode, result: capture.result, text: capture.text,
+        let planned = CapturePlan.effects(mode: mode, result: capture.result, text: capture.text,
                                           detections: capture.detections, choices: choices, existing: existing)
-        for effect in effects { perform(effect) }
-        let copied = effects.contains { if case .copy = $0 { true } else { false } }
+        // The copy is made first and read back: whether the clipboard took the text decides everything after it.
+        // nil: the plan has nothing to copy (a miss).
+        let copied = planned.compactMap(\.copiedText).first.map { clipboard.writeVerified($0) }
+        for effect in CapturePlan.settled(planned, copied: copied ?? false) { perform(effect) }
         showResult(capture, mode: mode, copied: copied, region: region)
-        if copied { FocusReturn.shared.returnIfStillActive() }
+        if copied == true { FocusReturn.shared.returnIfStillActive() }
     }
 
-    /// The pill beside the selection: the word count when text was copied, otherwise what was missing.
-    private func showResult(_ capture: Capture, mode: CaptureMode, copied: Bool, region: SelectedRegion) {
+    /// The pill beside the selection: the word count when text was copied, the refusal when the clipboard did not take
+    /// it, otherwise what was missing (`copied` is nil when there was nothing to copy).
+    private func showResult(_ capture: Capture, mode: CaptureMode, copied: Bool?, region: SelectedRegion) {
         let style: ResultPill.Style
-        if copied {
+        switch copied {
+        case .some(true):
             let words = capture.text.split(whereSeparator: \.isWhitespace).count
             style = .success(words == 1 ? tr("Copied · 1 word") : tr("Copied · %d words", words))
-        } else {
+        case .some(false):
+            style = .miss(tr("Couldn't copy text. Try again."))
+        case .none:
             style = .miss(mode == .code ? tr("No code found · try a larger area") : tr("No text found · try a larger area"))
         }
         ResultPill.shared.show(style, near: region.rect, screen: region.screen)
@@ -125,7 +131,7 @@ final class CaptureCoordinator {
     private func perform(_ effect: CaptureEffect) {
         switch effect {
         case .remember(let detections): lastDetections = detections
-        case .copy(let text): copy(text)
+        case .copy: break // Made in finish, before the effects that depend on it.
         case .cue(let outcome): status.cue(outcome)
         case .announce(let message): status.announce(message)
         case .addToHistory(let text): History.shared.add(text)
@@ -163,15 +169,11 @@ final class CaptureCoordinator {
             status.announce(tr("History is empty"))
             return
         }
-        copy(items[index])
+        guard clipboard.writeVerified(items[index]) else { refuseCopy(); return }
         status.cue(.success)
         let position = tr("Capture %d of %d", index + 1, items.count)
         status.announce(position)
         notifier.notify(generic: position, text: "\(position): \(items[index].prefix(80))")
-    }
-
-    func copy(_ text: String) {
-        clipboard.write(text)
     }
 
     /// Copies a capture chosen from the history, with the same cue and announcement as a fresh capture.
@@ -189,8 +191,14 @@ final class CaptureCoordinator {
 
     /// Copies a value found in the latest capture, from the menu.
     func copyDetected(_ value: String) {
-        copy(value)
+        guard clipboard.writeVerified(value) else { refuseCopy(); return }
         status.cue(.success)
         status.announce(tr("Text copied"))
+    }
+
+    /// A copy the clipboard did not take: the failure cue, and VoiceOver says so. Nothing is recorded as copied.
+    private func refuseCopy() {
+        status.cue(.failure)
+        status.announce(tr("Couldn't copy text. Try again."))
     }
 }

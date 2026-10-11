@@ -176,6 +176,7 @@
 "Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Recent changes to saved captures aren't on disk yet. Try again in a moment.";
 
 "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.";
+"Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again." = "Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again.";
 "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment.";
 "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below.";
 "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them.";
@@ -187,4 +188,6 @@
 "Discard" = "Discard";
 "Discard didn't work" = "Discard didn't work";
 "The file couldn't be replaced, so it was left unchanged." = "The file couldn't be replaced, so it was left unchanged.";
+"Discard couldn't be confirmed" = "Discard couldn't be confirmed";
+"The file was written but didn't read back as expected. History now shows what the file holds." = "The file was written but didn't read back as expected. History now shows what the file holds.";
 "Unreadable history" = "Unreadable history";

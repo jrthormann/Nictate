@@ -176,6 +176,7 @@
 "Recent changes to saved captures aren't on disk yet. Try again in a moment." = "Los cambios recientes de tus capturas todavía no están en el disco. Inténtalo de nuevo en un momento.";
 
 "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "No se pudieron borrar las capturas guardadas, así que no se restableció nada. Reinicia Nictate e inténtalo de nuevo.";
+"Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again." = "Nictate no pudo confirmar que se borraran las capturas guardadas, así que no se restableció nada. Reinicia Nictate e inténtalo de nuevo.";
 "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Todavía no se pudieron guardar los cambios recientes de tus capturas, así que no se restableció nada. Inténtalo de nuevo en un momento.";
 "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Cada ajuste vuelve a su valor predeterminado, excepto Abrir al iniciar sesión, que se queda como está. Nictate se reinicia. Las capturas guardadas se conservan, salvo que marques la casilla de abajo.";
 "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restaura todos los ajustes a su valor predeterminado, excepto Abrir al iniciar sesión. Las capturas guardadas se conservan, salvo que también las borres.";
@@ -187,4 +188,6 @@
 "Discard" = "Descartar";
 "Discard didn't work" = "No se pudo descartar";
 "The file couldn't be replaced, so it was left unchanged." = "No se pudo reemplazar el archivo, así que no se modificó.";
+"Discard couldn't be confirmed" = "No se pudo confirmar el descarte";
+"The file was written but didn't read back as expected. History now shows what the file holds." = "Se escribió el archivo, pero no se pudo leer tal como se escribió. El historial muestra ahora lo que contiene el archivo.";
 "Unreadable history" = "Historial ilegible";

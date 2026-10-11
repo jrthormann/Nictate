@@ -22,10 +22,19 @@ enum ResetNictate {
         // The restart ends this process, so the history must be on disk first: the deletion is confirmed by the
         // store, and pending changes are written. If either fails, nothing is reset and the user is told why.
         let deletes = deleteCaptures.state == .on
-        let ready = deletes ? History.shared.clearForReset() : History.shared.waitForPendingWrites()
-        guard ready else {
-            stop(deletes ? tr("Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.")
-                         : tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
+        if deletes {
+            switch History.shared.clearForReset() {
+            case .confirmed:
+                break
+            case .notWritten:
+                stop(tr("Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again."))
+                return
+            case .unconfirmed:
+                stop(tr("Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again."))
+                return
+            }
+        } else if !History.shared.waitForPendingWrites() {
+            stop(tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
             return
         }
         Settings.resetToDefaults()
