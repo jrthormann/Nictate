@@ -30,5 +30,10 @@ for file in Sources/Nictate/*.swift; do
     lines=$(wc -l < "$file" | tr -d ' ')
     if (( lines > 400 )); then echo "ERROR: $file has $lines lines (limit 400)"; problems=1; fi
 done
+# The default QA build starts with no synthetic history: a fixture list there would be seeded again on every launch.
+# Only that declaration is checked. Tests may still pass their own captures to History.seedFixtures.
+if ! grep -qx '    static let historyFixtures: \[String\] = \[\]' scripts/variants/BuildIdentity.test.swift; then
+    echo "ERROR: scripts/variants/BuildIdentity.test.swift must declare an empty historyFixtures (QA reseeds synthetic captures otherwise)"; problems=1
+fi
 (( problems == 0 )) && echo "Sources OK"
 exit $problems
