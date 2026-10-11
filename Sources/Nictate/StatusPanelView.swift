@@ -235,7 +235,7 @@ private struct HistoryScreen: View {
 
 /// One capture: a click copies the whole text. The trash button removes only this entry.
 private struct CaptureRow: View {
-    private var highlighted: Bool { selected || hover.on }
+    private var highlight: CaptureHighlight { captureHighlight(selected: selected, hovered: hover.on) }
 
     let text: String
     let date: Date
@@ -251,7 +251,7 @@ private struct CaptureRow: View {
                     Text(text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\t", with: " "))
                         .lineLimit(2).truncationMode(.tail)
                     if let age = History.ageLabel(for: date) {
-                        Text(age).font(.caption).foregroundStyle(highlighted ? Color.white.opacity(0.85) : .secondary)
+                        Text(age).font(.caption).foregroundStyle(highlight == .selected ? Color.white.opacity(0.85) : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,9 +264,9 @@ private struct CaptureRow: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(tr("Delete"))
         }
-        .foregroundStyle(highlighted ? Color.white : Color.primary)
+        .foregroundStyle(highlight == .selected ? Color.white : Color.primary)
         .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 5).fill(highlighted ? Color.accentColor : .clear))
+        .background(RoundedRectangle(cornerRadius: 5).fill(highlight == .selected ? Color.accentColor : highlight == .hovered ? Color.primary.opacity(0.08) : .clear))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .onHover { hover.on = $0 }
         .contextMenu {
