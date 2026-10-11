@@ -125,7 +125,8 @@ hdiutil create -srcfolder "$STAGING" -volname "$VOLUME" -fs HFS+ -format UDRW -s
 # Attached at this build's own mountpoint and not in /Volumes, so a volume with the same name cannot be confused with
 # this one. Finder styles the window it opens on that mountpoint, not the disk by name.
 mkdir "$MNT"
-hdiutil attach "$RW" -readwrite -noverify -noautoopen -nobrowse -mountpoint "$MNT" >/dev/null
+hdiutil attach "$RW" -readwrite -noverify -noautoopen -nobrowse -mountpoint "$MNT" >/dev/null \
+    || fail "could not attach the disk image; nothing was released"
 
 if osascript <<EOF
 with timeout of 20 seconds
