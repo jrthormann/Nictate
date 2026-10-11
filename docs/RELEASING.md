@@ -28,6 +28,12 @@ block its first launch; the README explains how to open it with the system's own
 - [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
       untested in the release notes.
 - [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
+- [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and beta.1 users
+      must install beta.2 by hand.
+- [ ] `codesign --verify --strict` passes, the signature lists `Nictate Local Signing`, and `spctl` reports the app as
+      rejected, which is expected for this distribution.
+- [ ] The Install steps in `README.md` and `docs/i18n/README.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
+      later, or the release notes list the versions that were not checked.
 
 ## Steps
 
@@ -81,7 +87,7 @@ block its first launch; the README explains how to open it with the system's own
    hdiutil verify build/release/X.Y.Z/Nictate-X.Y.Z.dmg
    hdiutil attach -readonly -nobrowse build/release/X.Y.Z/Nictate-X.Y.Z.dmg
    codesign --verify --strict /Volumes/Nictate/Nictate.app
-   codesign -dv /Volumes/Nictate/Nictate.app 2>&1 | grep -E 'Authority|Signature'
+   codesign -dvv /Volumes/Nictate/Nictate.app 2>&1 | grep -E 'Authority|Signature'
    /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" /Volumes/Nictate/Nictate.app/Contents/Info.plist
    hdiutil detach /Volumes/Nictate
    ```
@@ -119,8 +125,9 @@ the Mac model, and the image's SHA-256.
 
 - [ ] Download the image and `SHA256SUMS` from the release page. `shasum -a 256 -c SHA256SUMS` prints `OK`.
 - [ ] Open the image. The background, the arrow, and the icon positions are as drawn.
-- [ ] Follow the Install section of the README exactly. Note the wording of each dialog. If a dialog differs from the
-      README, correct the README before the release.
+- [ ] Follow the Install steps of the README exactly, in English or Spanish. Note the wording of each dialog. If a dialog
+      differs from the README, correct the README before the release. The steps need no Terminal command, apart from the
+      optional checksum check.
 - [ ] On first launch, Welcome opens at the Screen Recording step. Grant it, then restart Nictate from Welcome.
 - [ ] Capture a short sample of text with the shortcut, and paste it: the text is correct.
 - [ ] About shows the new version. Check for Updates reports that Nictate is up to date, since the new release is the
@@ -133,7 +140,21 @@ the Mac model, and the image's SHA-256.
 
 This is local code signing. It is not Apple Developer ID signing, and nothing here is notarized or Apple-verified.
 Developer ID signing and notarization need the paid Apple Developer Program. They are a future step, to be taken when
-adoption, contributor interest, or demonstrated demand justifies the cost.
+adoption, contributor interest, or demonstrated demand justifies the cost. Until then, the beta is distributed without
+them, and that limit is stated in the README and the release notes.
+
+Three different things are easy to confuse:
+
+- **A valid code signature** shows that the app is unchanged since it was signed. `codesign --verify --strict` checks
+  it. Nictate has one, made with the local identity. The signature identifies the signer; it does not show that Apple
+  has checked the app.
+- **Apple Developer ID signing** uses a certificate that Apple issues to a registered developer. It requires the paid
+  Apple Developer Program. Nictate does not have it.
+- **Notarization** is Apple's automated check of a signed app. A notarized app can pass Gatekeeper without the
+  approval step. It also requires the paid program. Nictate is not notarized.
+
+Gatekeeper accepts the second and third kinds. `spctl` therefore reports a Nictate build as rejected. That is expected for
+this distribution, and the release notes say so. It is not a failure of the build.
 
 `make setup` creates the "Nictate Local Signing" identity in its own keychain,
 `~/Library/Keychains/nictate-signing.keychain-db`. You choose its password, and nothing stores it. The keychain locks

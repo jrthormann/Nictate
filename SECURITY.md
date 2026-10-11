@@ -50,6 +50,16 @@ install the latest release.
   read the Keychain.
 - Nictate runs in the App Sandbox with the hardened runtime.
 
+## How Nictate is distributed
+
+- **Signed, not notarized.** Each release is signed with a local certificate. That lets macOS confirm the app hasn't
+  changed since it was built. The signature is not an Apple Developer ID signature, and Apple has not notarized the app,
+  so macOS asks you to approve it on first launch. The README explains the steps.
+- **Download only from the Releases page.** Each release lists the SHA-256 checksum of its disk image. Comparing it with
+  your download is optional.
+- **Open source doesn't make a download safe on its own.** The source is public, so anyone can read it. The checksum
+  only confirms that your file is the one that was published.
+
 No software is free of vulnerabilities. Reports help find the ones that matter.
 
 ## Principles
