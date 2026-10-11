@@ -109,7 +109,7 @@ A release is ready when all of these hold for the release commit:
 
 1. The `build-and-test` and `macos-14` CI jobs pass.
 2. The manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build, on a Mac the maintainer runs.
-3. The disk image installs after the Gatekeeper step in the README on the macOS versions the release notes list as tested.
+3. The disk image installs after the Gatekeeper step in `docs/INSTALL.md` on the macOS versions the release notes list as tested.
    A version that was not tested is listed as untested. For an experimental beta, that is a limitation, not a blocker.
 4. The CHANGELOG has a section for the version, and the app reports the same version.
 
