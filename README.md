@@ -5,21 +5,25 @@
 
 <p align="center">
   <a href="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml"><img src="https://github.com/jrthormann/Nictate/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
-  <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/jrthormann/Nictate" alt="MIT license"></a>
 </p>
 
 <p align="center">
   An independent, open-source macOS utility built to make text on your screen usable.
-  <br>
-  <a href="https://github.com/jrthormann/Nictate/releases">Download&nbsp;&rsaquo;</a>
-  &nbsp;&nbsp;
+  <br><br>
+  <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=Download&style=for-the-badge&color=545CFA" alt="Download the latest release"></a>
+  <br><br>
+  macOS 14 or later &nbsp;·&nbsp; Apple silicon and Intel &nbsp;·&nbsp; Free, MIT licensed
+  <br><br>
   <a href="#build-from-source">Build it yourself&nbsp;&rsaquo;</a>
   <br><br>
-  Made in the Dominican Republic <img src="docs/images/flag-do.svg" width="16" height="16" alt="" align="absmiddle">, powered by Coke Zero and pizza.
+  Made in the Dominican Republic <img src="docs/images/flag-do.svg" width="16" height="16" alt="" align="absmiddle">, with Coke Zero and pizza.
   <br><br>
   English&nbsp;·&nbsp;<a href="docs/i18n/README.es.md">Español</a>
 </p>
+
+> [!IMPORTANT]
+> This beta isn't notarized by Apple, so macOS asks you to approve Nictate once, on first launch. The steps are in [Install](#install) and [docs/INSTALL.md](docs/INSTALL.md). You don't need to turn off Gatekeeper.
 
 <br>
 
@@ -34,9 +38,8 @@ of a second.
 It all happens on your Mac, using Apple's Vision framework, in any language Vision reads. Nothing gets uploaded.
 Your other problems are still yours, sorry.
 
-<br>
-
-## Why Nictate?
+<details>
+<summary><strong>Why Nictate?</strong></summary>
 
 Naming an app should be easy. Should be.
 
@@ -47,6 +50,8 @@ So I did the reasonable thing: overthought it, got philosophical, and somehow en
 It's a real word. It means to blink.
 
 All that research for an app that copies text from your screen. Anyway. Nictate.
+
+</details>
 
 <br>
 
@@ -60,9 +65,8 @@ All that research for an app that copies text from your screen. Anyway. Nictate.
 <br>
 <br>
 
-Selections snap to whole screen pixels, so every edge sits exactly where you put it. The arrow keys move the
-corner one pixel at a time, and Shift plus an arrow moves it ten. It works the same way as the system screenshot
-tool, so it'll feel familiar.
+Selections snap to whole screen pixels, so every edge sits exactly where you put it. It works the same way as the
+system screenshot tool, so it'll feel familiar.
 
 <br>
 
@@ -111,7 +115,6 @@ choose to open goes to your browser, which connects the way it normally would. T
 | **Size** | About 4 MB |
 | **Languages** | English and Spanish. Text is recognized in every language Vision supports. |
 | **Built with** | Swift, AppKit, SwiftUI, Vision and ScreenCaptureKit |
-| **Network access** | Only Check for Updates, and only when you ask. Links open in your browser only when you choose. |
 | **Price** | Free |
 | **License** | MIT |
 
@@ -121,36 +124,15 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 Nictate 1.0.0-beta.2 is the current public test release: an experimental public beta. The builds in this release were
 tested on macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
-The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't. Nictate started as a side project. This beta will show
-whether anyone else needs it.
+The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't.
 
 1.0.0-beta.1 is the previous public prerelease. It stays on the [Releases page](https://github.com/jrthormann/Nictate/releases).
 
-This beta isn't notarized by Apple, so macOS asks you to approve it on first launch. See [Install](#install).
-
-Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. If you have beta.1,
-download beta.2 from the [Releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
-
 ## Install
 
-Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current release is 1.0.0-beta.2, so that's the one to download.
-
-**Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to turn off Gatekeeper or any other system-wide security protection to open Nictate. Approving Nictate once covers Nictate only.
-
-1. Open **Applications** and double-click **Nictate**.
-2. macOS shows a message that Apple couldn't verify Nictate. Dismiss it with **Done** (on macOS 27 that is the button's name), and don't choose **Move to Trash**. The exact wording depends on your macOS version.
-3. Open **System Settings**, go to **Privacy & Security**, and scroll to **Security**. Click **Open Anyway** next to the message about Nictate, then enter your password or use Touch ID.
-4. Open Nictate again. If macOS asks you to confirm, click **Open**.
-5. The welcome window asks you to **Allow screen recording**. Click **Open System Settings**, turn on Nictate in the **Screen & System Audio Recording** list (older versions of macOS may call it Screen Recording), then click **Restart Nictate** in the welcome window.
-6. Select text with <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd>, and it lands on your clipboard.
-
-**On macOS 14 Sonoma,** use this instead of steps 2 to 4: Control-click Nictate in Applications, choose **Open**, then click **Open** again. Then continue with step 5.
-
-**About the signature.** A valid code signature lets macOS confirm that the app is the same one that was built, and that it was signed with Nictate's local certificate. It isn't an Apple Developer ID signature, and Apple hasn't notarized or verified Nictate. That is why macOS asks you to approve it.
-
-**Permissions.** Nictate needs Screen Recording to read the text on your screen. It doesn't use Accessibility access. The first time Nictate has something to tell you, macOS may ask whether to allow notifications. That's optional, and Nictate works without them.
-
-**Checksum (optional).** Each release lists the SHA-256 checksum of its disk image. You can compare it with your download to confirm the file matches the published one. This needs Terminal, so it isn't part of the normal install.
+Download the disk image only from the [Releases page](https://github.com/jrthormann/Nictate/releases), open it, and drag
+Nictate into Applications. macOS then asks you to approve Nictate once. The full steps, the Screen Recording permission,
+the checksum check and the upgrade from beta.1 are in [docs/INSTALL.md](docs/INSTALL.md).
 
 <br>
 
@@ -200,7 +182,5 @@ and GitHub's public release list for Check for Updates. Release notes are in <a 
 <p align="center">
   <img src="docs/images/icon.png" width="64" height="64" alt="">
   <br>
-  <sub>Copy the text you can see. No cloud, no tracking, no bullshit.</sub>
-  <br><br>
-  <sub>🇩🇴 Built in the Dominican Republic. Runs on Coke Zero, pizza, and questionable life choices. If it works, it's a feature. If it breaks, it's open source.</sub>
+  <sub>Copy the text you can see. No cloud, no tracking.</sub>
 </p>

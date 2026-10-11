@@ -7,7 +7,7 @@ The image is signed with the local identity `Nictate Local Signing`. That is loc
 signing, and the image is not notarized. Nictate is an independent open-source project, and it does not use the paid
 Apple Developer Program. A fixed local identity gives every release the same signature, which keeps the Screen Recording
 permission across updates (an ad-hoc signature differs on every build). Because the image is not notarized, macOS may
-block its first launch; the README explains how to open it with the system's own controls.
+block its first launch; `docs/INSTALL.md` explains how to open it with the system's own controls.
 
 ## Release environment
 
@@ -25,7 +25,7 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
       are not release numbers.
 - [ ] `Sources/Nictate/Resources/Info.plist` has the new `CFBundleShortVersionString`.
 - [ ] `CHANGELOG.md` has a section for that version. Its Tested section lists only what was run.
-- [ ] The Status line in `README.md` and `docs/i18n/README.es.md` names the new version.
+- [ ] The Status line in `README.md` and `docs/i18n/README.es.md`, and the version named in `docs/INSTALL.md` and `docs/i18n/INSTALL.es.md`, name the new version.
 - [ ] `make check` and `make build` pass on the release commit, with no warnings.
 - [ ] The six manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build (`make test-app`).
 - [ ] The new tag points at the release commit. No existing tag was moved.
@@ -39,7 +39,7 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
       must install beta.2 by hand.
 - [ ] `codesign --verify --strict` passes, the app is signed with the certificate pinned in `scripts/release-signing.txt`,
       and `spctl` reports the app as rejected, which is expected for this distribution.
-- [ ] The Install steps in `README.md` and `docs/i18n/README.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
+- [ ] The Install steps in `docs/INSTALL.md` and `docs/i18n/INSTALL.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
       later, or the release notes list the versions that were not checked.
 
 ## Steps
@@ -133,8 +133,8 @@ the Mac model, and the image's SHA-256.
 
 - [ ] Download the image and `SHA256SUMS` from the release page. `shasum -a 256 -c SHA256SUMS` prints `OK`.
 - [ ] Open the image. The background, the arrow, and the icon positions are as drawn.
-- [ ] Follow the Install steps of the README exactly, in English or Spanish. Note the wording of each dialog. If a dialog
-      differs from the README, correct the README before the release. The steps need no Terminal command, apart from the
+- [ ] Follow the Install steps of `docs/INSTALL.md` exactly, in English or Spanish. Note the wording of each dialog. If a dialog
+      differs from the guide, correct the guide before the release. The steps need no Terminal command, apart from the
       optional checksum check.
 - [ ] On first launch, Welcome opens at the Screen Recording step. Grant it, then restart Nictate from Welcome.
 - [ ] Capture a short sample of text with the shortcut, and paste it: the text is correct.
