@@ -8,14 +8,16 @@
 #   BUILD_NUMBER=22 make dmg
 #   BUILD_NUMBER=22 make dmg COMMIT=<sha> OUT_DIR=<dir>
 #
-# These checks run before anything is built:
-#   - BUILD_NUMBER is required and must be a whole number. It must be above the previous release's build (docs/RELEASING.md).
+# These checks run before anything is built or written:
+#   - BUILD_NUMBER is required: a whole number without leading zeros, above the previous release's build (docs/RELEASING.md).
 #   - The working tree is clean, so the image matches a commit.
 #   - CHANGELOG.md at that commit has a section for the version in its Info.plist.
 #   - OUT_DIR/<version> does not exist yet. The folder is claimed with mkdir and never reused, so no image or checksum
 #     from an earlier release is overwritten.
 # After the build, the app must carry the same version and build number, and be signed with "Nictate Local Signing",
-# never ad hoc. Temporary files live in a mktemp folder that is removed on exit, so they never land in a release folder.
+# never ad hoc. The image is attached at a mountpoint inside this build's private folder, never under /Volumes, so no
+# volume the user has mounted is touched. Cleanup detaches only the image this build attached, and removes the private
+# folder only once that image is detached.
 # Styling the window drives Finder, so macOS may ask to let this terminal control Finder the first time.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,21 +27,44 @@ fail() { echo "error: $*" >&2; exit 1; }
 COMMIT="${COMMIT:-HEAD}"
 OUT_DIR="${OUT_DIR:-build/release}"
 VOLUME="Nictate"
-MOUNT="/Volumes/$VOLUME"
 SIGN_NAME="Nictate Local Signing"
 
 [[ -n "${BUILD_NUMBER:-}" ]] || fail "set BUILD_NUMBER above the previous release's build (beta.1 is 21), e.g. BUILD_NUMBER=22 make dmg"
-[[ "$BUILD_NUMBER" =~ '^[0-9]+$' ]] || fail "BUILD_NUMBER must be a whole number, not '$BUILD_NUMBER'"
+case "$BUILD_NUMBER" in
+    *[!0-9]*|0*) fail "BUILD_NUMBER must be a whole number without leading zeros, not '$BUILD_NUMBER'" ;;
+esac
 [[ -z "$(git status --porcelain)" ]] || fail "the working tree has changes; commit or stash them so the image matches a commit"
 SHA="$(git rev-parse --verify --quiet "$COMMIT^{commit}")" || fail "no commit named '$COMMIT'"
 
-WORK="$(mktemp -d)"
-ATTACHED=""
+# This build's private folder. Its physical path is the one hdiutil reports, so the image can be matched exactly.
+WORK="$(cd "$(mktemp -d)" && pwd -P)"
+RW="$WORK/rw.dmg"
+MNT="$WORK/mnt"
 CREATED_RELEASE=""
+
+# Prints the device of the image this build attached, matched by the image's path, which only this build uses. Prints
+# nothing when the image is not attached, so an image that attached without mounting, or only partly, is still found.
+build_image_device() {
+    hdiutil info | awk -v img="$RW" '
+        /^image-path/ { p = $0; sub(/^image-path *: */, "", p); inimg = (p == img); next }
+        /^=+$/ { inimg = 0 }
+        inimg && /^\/dev\/disk[0-9]+[ \t]/ { print $1; exit }
+    '
+}
+
 cleanup() {
-    if [[ -n "$ATTACHED" ]]; then hdiutil detach "$MOUNT" -force >/dev/null 2>&1 || true; fi
+    local dev kept=""
+    dev="$(build_image_device || true)"
+    if [[ -n "$dev" ]]; then
+        hdiutil detach "$dev" -force >/dev/null 2>&1 || true
+        [[ -z "$(build_image_device || true)" ]] || kept=1
+    fi
     if [[ -n "$CREATED_RELEASE" ]]; then rm -rf "$CREATED_RELEASE"; fi
-    rm -rf "$WORK"
+    if [[ -n "$kept" ]]; then
+        echo "warning: $RW is still attached, so $WORK was kept. Detach it with: hdiutil detach $dev -force" >&2
+    else
+        rm -rf "$WORK"
+    fi
 }
 trap cleanup EXIT
 # A signal (Ctrl-C, a kill, a closed terminal) ends the script through EXIT, so the cleanup above still runs.
@@ -56,8 +81,6 @@ mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 RELEASE_DIR="$OUT_DIR/$VERSION"
 [[ ! -e "$RELEASE_DIR" ]] || fail "$RELEASE_DIR already exists; release outputs are never overwritten (move it aside or set OUT_DIR)"
-# A volume of the same name left mounted would make Finder address the wrong disk. It is not ours, so it is not detached.
-[[ ! -d "$MOUNT" ]] || fail "$MOUNT is already mounted; eject it and run again"
 
 # Build the exact commit in a clean export, so the working tree cannot leak into the image.
 SRC="$WORK/src"
@@ -96,35 +119,34 @@ mkdir "$STAGING/.background"
 tiffutil -cathidpicheck "$WORK/background.png" "$WORK/background@2x.png" -out "$STAGING/.background/background.tiff" >/dev/null 2>&1
 
 # Room for the app plus slack for the Finder view settings (.DS_Store).
-RW="$WORK/rw.dmg"
 SIZE_KB=$(( $(du -sk "$STAGING" | cut -f1) + 4096 ))
 hdiutil create -srcfolder "$STAGING" -volname "$VOLUME" -fs HFS+ -format UDRW -size "${SIZE_KB}k" "$RW" >/dev/null
-hdiutil attach "$RW" -readwrite -noverify -noautoopen >/dev/null
-ATTACHED=1
+
+# Attached at this build's own mountpoint and not in /Volumes, so a volume with the same name cannot be confused with
+# this one. Finder styles the window it opens on that mountpoint, not the disk by name.
+mkdir "$MNT"
+hdiutil attach "$RW" -readwrite -noverify -noautoopen -nobrowse -mountpoint "$MNT" >/dev/null
 
 if osascript <<EOF
 with timeout of 20 seconds
 tell application "Finder"
-    tell disk "$VOLUME"
-        open
-        set win to container window
-        set current view of win to icon view
-        set toolbar visible of win to false
-        set statusbar visible of win to false
-        set sidebar width of win to 0
-        set bounds of win to {200, 120, 740, 480}
-        set opts to icon view options of win
-        set arrangement of opts to not arranged
-        set icon size of opts to 96
-        set text size of opts to 12
-        set label position of opts to bottom
-        set background picture of opts to file ".background:background.tiff"
-        set position of item "Nictate.app" of win to {140, 180}
-        set position of item "Applications" of win to {400, 180}
-        update without registering applications
-        delay 1
-        close
-    end tell
+    set win to make new Finder window to (POSIX file "$MNT" as alias)
+    set current view of win to icon view
+    set toolbar visible of win to false
+    set statusbar visible of win to false
+    set sidebar width of win to 0
+    set bounds of win to {200, 120, 740, 480}
+    set opts to icon view options of win
+    set arrangement of opts to not arranged
+    set icon size of opts to 96
+    set text size of opts to 12
+    set label position of opts to bottom
+    set background picture of opts to (POSIX file "$MNT/.background/background.tiff" as alias)
+    set position of item "Nictate.app" of win to {140, 180}
+    set position of item "Applications" of win to {400, 180}
+    update (target of win) without registering applications
+    delay 1
+    close win
 end tell
 end timeout
 EOF
@@ -134,8 +156,9 @@ else
     echo "warning: Finder could not style the window; the image will open with default placement" >&2
 fi
 
-hdiutil detach "$MOUNT" >/dev/null
-ATTACHED=""
+DEV="$(build_image_device || true)"
+[[ -n "$DEV" ]] || fail "this build's image is not attached, so there is nothing to package"
+hdiutil detach "$DEV" >/dev/null
 IMAGE="$WORK/Nictate-$VERSION.dmg"
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$IMAGE" >/dev/null
 
