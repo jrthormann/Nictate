@@ -36,6 +36,20 @@ Your other problems are still yours, sorry.
 
 <br>
 
+## Why Nictate?
+
+Naming an app should be easy. Should be.
+
+Every good name was taken. Blink was no longer an option. And Parpadeo? Beautiful in Spanish. Good luck getting an English speaker to pronounce that.
+
+So I did the reasonable thing: overthought it, got philosophical, and somehow ended up reading medical terminology. That's where I found nictate.
+
+It's a real word. It means to blink.
+
+All that research for an app that copies text from your screen. Anyway. Nictate.
+
+<br>
+
 ## Pixel by pixel.
 
 <picture>
@@ -105,19 +119,23 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 ## Status
 
-Nictate 1.0.0-beta.2 is an experimental public beta. It works, and I've tested it on macOS 27. I haven't tried it on
-macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome. The
-[CHANGELOG](CHANGELOG.md) lists what's tested and what isn't. Nictate started as a side project, and this beta shows whether it is useful to other people.
+Nictate 1.0.0-beta.1 is the current published prerelease: an experimental public beta. It works, and I've tested it on
+macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
+The [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't. Nictate started as a side project. This beta will show
+whether anyone else needs it.
+
+1.0.0-beta.2 is in preparation and isn't published yet. This section will change when it is.
 
 This beta isn't notarized by Apple, so macOS asks you to approve it on first launch. See [Install](#install).
 
-If you have 1.0.0-beta.1, download beta.2 from the [Releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications. Beta.1 reports itself as version 1.0.0, so its Check for Updates can't find beta.2.
+Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. When beta.2 is published,
+download it from the [Releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
 
 ## Install
 
-Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications.
+Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current published release is 1.0.0-beta.1, so that's the one to download for now.
 
-**Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to change any security setting to open Nictate.
+**Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to turn off Gatekeeper or any other system-wide security protection to open Nictate. Approving Nictate once covers Nictate only.
 
 1. Open **Applications** and double-click **Nictate**.
 2. macOS shows a message that Apple couldn't verify Nictate. Dismiss it with **Done** (on macOS 27 that is the button's name), and don't choose **Move to Trash**. The exact wording depends on your macOS version.
@@ -138,7 +156,7 @@ Download the disk image only from the [releases page](https://github.com/jrthorm
 
 ## Build from source
 
-You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). You don't need Xcode.
+You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). You don't need Xcode, which is one less thing to install.
 
 ```sh
 git clone https://github.com/jrthormann/Nictate.git
@@ -146,7 +164,7 @@ cd Nictate
 make install
 ```
 
-`make install` builds the app, copies it to Applications and opens it. `make check` runs the tests.
+`make install` builds the app, quits Nictate if it's running, replaces `/Applications/Nictate.app` with the new build, and opens it. `make check` runs the tests.
 
 <br>
 
