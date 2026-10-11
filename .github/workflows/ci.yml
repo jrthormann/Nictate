@@ -68,6 +68,7 @@ jobs:
           name: prebuilt
           path: prebuilt/prebuilt.tar
           if-no-files-found: error
+          retention-days: 1
 
   macos-14:
     # The oldest macOS Nictate supports. It compiles nothing: the macos-14
