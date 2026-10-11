@@ -36,8 +36,10 @@ esac
 [[ -z "$(git status --porcelain)" ]] || fail "the working tree has changes; commit or stash them so the image matches a commit"
 SHA="$(git rev-parse --verify --quiet "$COMMIT^{commit}")" || fail "no commit named '$COMMIT'"
 # Finder styles the disk by its name, so no other volume may carry that name. Refuse while one is mounted or attached,
-# rather than risk styling a volume that is not ours. diskutil lists every volume, mounted or not.
-if diskutil list | grep -q -w "$VOLUME"; then
+# rather than risk styling a volume that is not ours. diskutil lists every volume, mounted or not. The list is read into
+# a variable first: under pipefail, grep -q can end a pipeline with a failure, which would skip this check.
+VOLUMES="$(diskutil list)" || fail "could not list the disks"
+if grep -q -w "$VOLUME" <<<"$VOLUMES"; then
     fail "a volume named $VOLUME is mounted or attached; eject it, then run again"
 fi
 
