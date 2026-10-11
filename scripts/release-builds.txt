@@ -1,0 +1,4 @@
+# The release builds, in release order: "VERSION BUILD". make dmg packages a version only with the build listed for it
+# here, and only when that build is higher than the builds listed above it, so a build number cannot repeat or regress.
+1.0.0-beta.1 21
+1.0.0-beta.2 22

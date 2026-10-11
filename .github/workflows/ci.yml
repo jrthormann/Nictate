@@ -49,6 +49,8 @@ jobs:
         run: Tests/run_ui_tests.sh
       - name: Localization check
         run: scripts/check_strings.py
+      - name: Release packaging and signing tests
+        run: scripts/test_release.zsh
       - name: Source rules (no NSLog/print, files under 400 lines)
         run: scripts/check_sources.sh
       - name: Build app

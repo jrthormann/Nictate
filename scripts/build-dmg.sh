@@ -9,27 +9,29 @@
 #   BUILD_NUMBER=22 make dmg COMMIT=<sha> OUT_DIR=<dir>
 #
 # These checks run before anything is built or written:
-#   - BUILD_NUMBER is required: a whole number without leading zeros, above the previous release's build (docs/RELEASING.md).
+#   - BUILD_NUMBER is the build approved for the version in scripts/release-builds.txt, read from the commit, and no build
+#     that repeats or regresses an earlier release (docs/RELEASING.md).
 #   - The working tree is clean, so the image matches a commit.
 #   - CHANGELOG.md at that commit has a section for the version in its Info.plist.
 #   - OUT_DIR/<version> does not exist yet. The folder is claimed with mkdir and never reused, so no image or checksum
 #     from an earlier release is overwritten.
-# After the build, the app must carry the same version and build number, and be signed with "Nictate Local Signing",
-# never ad hoc. The build refuses to run while any volume named Nictate is present, so no volume the user has mounted is
-# touched. Cleanup detaches only the image this build attached, found by its path, and removes the private folder only
-# once that image is detached.
+# The app is signed only with the certificate pinned in scripts/release-signing.txt, from the dedicated keychain
+# (scripts/release_signing.zsh). Before packaging, the built app and the app inside the image must pass strict
+# verification, carry that certificate, and carry the requested version and build number. The build refuses to run
+# while any volume named Nictate is present, so no volume the user has mounted is touched. Cleanup detaches only the
+# image this build attached, found by its path, and removes the private folder only once that image is detached.
 # Styling the window drives Finder, so macOS may ask to let this terminal control Finder the first time.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "error: $*" >&2; exit 1; }
+source scripts/release_signing.zsh
 
 COMMIT="${COMMIT:-HEAD}"
 OUT_DIR="${OUT_DIR:-build/release}"
 VOLUME="Nictate"
-SIGN_NAME="Nictate Local Signing"
 
-[[ -n "${BUILD_NUMBER:-}" ]] || fail "set BUILD_NUMBER above the previous release's build (beta.1 is 21), e.g. BUILD_NUMBER=22 make dmg"
+[[ -n "${BUILD_NUMBER:-}" ]] || fail "set BUILD_NUMBER to the build approved for this version in scripts/release-builds.txt (1.0.0-beta.2 is 22), e.g. BUILD_NUMBER=22 make dmg"
 case "$BUILD_NUMBER" in
     *[!0-9]*|0*) fail "BUILD_NUMBER must be a whole number without leading zeros, not '$BUILD_NUMBER'" ;;
 esac
@@ -83,6 +85,14 @@ VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$WORK
 git show "$SHA:CHANGELOG.md" > "$WORK/CHANGELOG.md"
 grep -q -F "## [$VERSION]" "$WORK/CHANGELOG.md" || fail "CHANGELOG.md at ${SHA:0:7} has no '## [$VERSION]' section"
 
+# The approved build and the release certificate come from the commit too, so the image matches what was reviewed.
+git show "${SHA}:scripts/release-builds.txt" > "$WORK/release-builds.txt" 2>/dev/null \
+    || fail "${SHA:0:7} has no scripts/release-builds.txt"
+git show "${SHA}:scripts/release-signing.txt" > "$WORK/release-signing.txt" 2>/dev/null \
+    || fail "${SHA:0:7} has no scripts/release-signing.txt"
+RELEASE_SIGNING_PIN_FILE="$WORK/release-signing.txt"
+release_check_build_number "$VERSION" "$BUILD_NUMBER" "$WORK/release-builds.txt" || exit 1
+
 # A release folder is claimed with mkdir, which fails when it exists, so nothing from an earlier release is touched.
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
@@ -94,7 +104,7 @@ SRC="$WORK/src"
 mkdir "$SRC"
 git archive "$SHA" | tar -x -C "$SRC"
 cd "$SRC"
-BUILD_NUMBER="$BUILD_NUMBER" ./scripts/build-app.sh
+NICTATE_RELEASE=1 RELEASE_SIGNING_PIN_FILE="$RELEASE_SIGNING_PIN_FILE" BUILD_NUMBER="$BUILD_NUMBER" ./scripts/build-app.sh
 
 APP="$SRC/build/Nictate.app"
 PLIST="$APP/Contents/Info.plist"
@@ -103,15 +113,8 @@ PLIST="$APP/Contents/Info.plist"
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")" == "$BUILD_NUMBER" ]] \
     || fail "the built app's build number is not $BUILD_NUMBER"
 
-# An ad-hoc signature changes with every build, so macOS would ask for Screen Recording again after each update.
-# The Authority lines are printed only at -dvv.
-SIGNING="$(codesign -dvv "$APP" 2>&1 || true)"
-if [[ "$SIGNING" == *"Signature=adhoc"* ]]; then
-    fail "$APP is signed ad hoc; run make setup, then build again so the local identity signs it"
-fi
-if [[ "$SIGNING" != *"Authority=$SIGN_NAME"* ]]; then
-    fail "$APP is not signed with \"$SIGN_NAME\"; the release must use that identity"
-fi
+# The staged app must pass strict verification and be signed with the pinned certificate before it is packaged.
+release_verify_app "$APP" || exit 1
 
 STAGING="$WORK/staging"
 mkdir "$STAGING"
@@ -165,6 +168,14 @@ then
 else
     echo "warning: Finder could not style the window; the image will open with default placement" >&2
 fi
+
+# The app inside the image is the one released: it must carry the pinned certificate, the requested version, and the
+# requested build number. A failure here detaches this build's image through the cleanup and releases nothing.
+release_verify_app "$MNT/Nictate.app" || exit 1
+[[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$MNT/Nictate.app/Contents/Info.plist")" == "$VERSION" ]] \
+    || fail "the app in the image does not carry version $VERSION"
+[[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$MNT/Nictate.app/Contents/Info.plist")" == "$BUILD_NUMBER" ]] \
+    || fail "the app in the image does not carry build $BUILD_NUMBER"
 
 DEV="$(build_image_device || true)"
 [[ -n "$DEV" ]] || fail "this build's image is not attached, so there is nothing to package"

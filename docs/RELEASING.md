@@ -13,9 +13,9 @@ block its first launch; the README explains how to open it with the system's own
 
 - [ ] The release commit is on `main`, and CI passes on it (`build-and-test` and `macos-14`).
 - [ ] The image is built from that commit: `git status` is clean, and `git rev-parse --short HEAD` matches the tag.
-- [ ] `BUILD_NUMBER` is set and is above the previous release's build: beta.1 is 21, beta.2 is 22. The commit count is
-      not a release number, since the history restarted when the project moved to `jrthormann/Nictate`. CI builds use
-      the run number, which is not a release number either.
+- [ ] `scripts/release-builds.txt` lists this version with its approved build (beta.2: 22), and that build is higher than
+      the builds listed above it. `BUILD_NUMBER` must equal that approved build. The commit count and the CI run number
+      are not release numbers.
 - [ ] `Sources/Nictate/Resources/Info.plist` has the new `CFBundleShortVersionString`.
 - [ ] `CHANGELOG.md` has a section for that version. Its Tested section lists only what was run.
 - [ ] The Status line in `README.md` and `docs/i18n/README.es.md` names the new version.
@@ -30,8 +30,8 @@ block its first launch; the README explains how to open it with the system's own
 - [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
 - [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and beta.1 users
       must install beta.2 by hand.
-- [ ] `codesign --verify --strict` passes, the signature lists `Nictate Local Signing`, and `spctl` reports the app as
-      rejected, which is expected for this distribution.
+- [ ] `codesign --verify --strict` passes, the app is signed with the certificate pinned in `scripts/release-signing.txt`,
+      and `spctl` reports the app as rejected, which is expected for this distribution.
 - [ ] The Install steps in `README.md` and `docs/i18n/README.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
       later, or the release notes list the versions that were not checked.
 
@@ -69,17 +69,18 @@ block its first launch; the README explains how to open it with the system's own
    - `build/release/X.Y.Z/Nictate-X.Y.Z.dmg`, the image
    - `build/release/X.Y.Z/SHA256SUMS`, its checksum, listing only the image's name
 
-   `make dmg` stops before building if `BUILD_NUMBER` is missing or is not a whole number, if the working tree has
-   changes, if `CHANGELOG.md` has no section for the version, or if `build/release/X.Y.Z/` already exists. It never
-   reuses or overwrites a release folder, so an image or checksum from an earlier release is never replaced. To write
-   elsewhere, set `OUT_DIR=<dir>`. Use the same `BUILD_NUMBER` for every build of this release.
+   `make dmg` stops before building if `BUILD_NUMBER` is not the build approved for the version in
+   `scripts/release-builds.txt`, if the working tree has changes, if `CHANGELOG.md` has no section for the version, or
+   if `build/release/X.Y.Z/` already exists. It never reuses or overwrites a release folder, so an image or checksum
+   from an earlier release is never replaced. To write elsewhere, set `OUT_DIR=<dir>`. Use the same `BUILD_NUMBER` for
+   every build of this release.
 
    The first run may ask to let Terminal control Finder, so the window can be styled. Answer that prompt yourself.
 
-   The build signs with the identity in the dedicated keychain once `make setup` has created it. Until then it uses the
-   older identity in the login keychain, which is also stable. If the signing keychain is locked, the build asks for
-   its password in the terminal; enter it. The build refuses any app that is not signed with `Nictate Local Signing`,
-   so a successful build used the identity it should have.
+   The build signs with the certificate pinned in `scripts/release-signing.txt`, from the dedicated keychain. If the
+   keychain is locked, the build asks for its password in the terminal; enter it. The build never falls back to another
+   certificate. If the pinned certificate cannot be used, the build stops before anything is packaged, and the message
+   says what to do.
 
 6. **Check the image.**
 
@@ -161,14 +162,26 @@ Four separate things are involved. Keep them apart when writing release notes or
 `spctl` therefore reports a Nictate build as rejected. That is expected for this distribution. It is not a build failure.
 
 `make setup` creates the "Nictate Local Signing" identity in its own keychain,
-`~/Library/Keychains/nictate-signing.keychain-db`. You choose its password, and nothing stores it. The keychain locks
-when the Mac sleeps, and it is not in the search list, so only the build script names it. While it is unlocked, any
-program running as you can still sign with the key, so lock it when you are done:
-`security lock-keychain ~/Library/Keychains/nictate-signing.keychain-db`. Keep the same identity for every release.
+`~/Library/Keychains/nictate-signing.keychain-db`, and prints its SHA-1. You choose its password, and nothing stores it.
+The keychain locks when the Mac sleeps, and it is not in the search list, so only the build scripts name it. While it is
+unlocked, any program running as you can still sign with the key, so lock it when you are done:
+`security lock-keychain ~/Library/Keychains/nictate-signing.keychain-db`.
 
-Older builds used a certificate in the login keychain, which `build-app.sh` still uses as a fallback. A different
-certificate asks users for Screen Recording again, so move to the new one once and then stop using the old one. To
-remove the old identity and its trust setting, run these by hand:
+`scripts/release-signing.txt` pins the SHA-1 of the release certificate. `make dmg` signs only with that certificate,
+from the dedicated keychain, and checks the signed app against the pin before it packages anything. It never falls
+back to another certificate. If the pinned certificate is missing from the keychain, the keychain holds a different
+certificate with the same name, or the keychain stays locked, the build stops with a message that says what to do.
+Change the pin only on purpose, in a commit: a different certificate makes macOS ask every user to grant Screen
+Recording again.
+
+Development and QA builds (`make build`, `make install`, `make test-app`) keep their fallbacks: the dedicated keychain,
+then the login-keychain certificate with the same name, then ad hoc. Each one prints a warning that names the identity
+it used.
+
+To release with the pinned certificate, that certificate must be in the dedicated keychain. Either move the existing
+certificate there, if its private key can be exported, or create a new identity with `make setup`, pin its SHA-1, and
+tell users that Screen Recording must be granted once more. Then remove the old identity and its trust setting by hand
+(this script never does):
 
 ```bash
 security find-certificate -c "Nictate Local Signing" -Z ~/Library/Keychains/login.keychain-db | grep SHA-1
