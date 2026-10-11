@@ -2369,6 +2369,24 @@ do {
     check(flags == [true, false, false], "recovery: the discard is offered only when the file was detected unreadable", "\(flags)")
 }
 
+// Defaults and reset: a fresh install starts with Save Captures and Clear on Quit off, and a reset returns them to those
+// defaults without switching Save Captures back on at the next launch.
+do {
+    let suite = freshSuite("defaults-reset")
+    let fresh = Settings(defaults: suite.defaults)
+    check(!fresh.historyEnabled && !fresh.clearHistoryOnQuit, "defaults: Save Captures and Clear on Quit start off")
+    check(fresh.notificationStyle == .generic, "defaults: Copy Feedback starts at Notice Only", "\(fresh.notificationStyle)")
+    fresh.historyEnabled = true
+    fresh.clearHistoryOnQuit = true
+    fresh.notificationStyle = .none
+    Settings.resetToDefaults(in: suite.defaults)
+    let afterReset = Settings(defaults: suite.defaults)
+    check(suite.defaults.object(forKey: StorageKeys.historyEnabled) == nil, "reset: the Save Captures choice is removed")
+    check(!afterReset.historyEnabled, "reset: Save Captures is off, and is not switched on at the next launch")
+    check(!afterReset.clearHistoryOnQuit && afterReset.notificationStyle == .generic,
+          "reset: Clear on Quit and Copy Feedback return to their defaults")
+}
+
 // History rows: the keyboard selection is the only accented row, and a row under the pointer gets only a tint.
 check(captureHighlight(selected: true, hovered: true) == .selected, "highlight: the keyboard selection wins over the pointer")
 check(captureHighlight(selected: true, hovered: false) == .selected, "highlight: the keyboard selection is accented")
