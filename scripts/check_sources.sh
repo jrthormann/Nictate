@@ -30,6 +30,11 @@ for file in Sources/Nictate/*.swift; do
     lines=$(wc -l < "$file" | tr -d ' ')
     if (( lines > 400 )); then echo "ERROR: $file has $lines lines (limit 400)"; problems=1; fi
 done
+# A History row takes its identity from its capture's text. A second, index identity lets SwiftUI keep a row for a
+# list position, so a delete removes the last row on screen while the store removes the row that was pressed.
+if grep -q '\.id(index)' Sources/Nictate/StatusPanelView.swift; then
+    echo "ERROR: StatusPanelView.swift must identify History rows by their text, not by index"; problems=1
+fi
 # The default QA build starts with no synthetic history: a fixture list there would be seeded again on every launch.
 # Only that declaration is checked. Tests may still pass their own captures to History.seedFixtures.
 if ! grep -qx '    static let historyFixtures: \[String\] = \[\]' scripts/variants/BuildIdentity.test.swift; then
