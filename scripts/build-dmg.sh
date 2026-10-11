@@ -42,6 +42,8 @@ cleanup() {
     rm -rf "$WORK"
 }
 trap cleanup EXIT
+# A signal (Ctrl-C, a kill, a closed terminal) ends the script through EXIT, so the cleanup above still runs.
+trap 'exit 130' INT TERM HUP
 
 # The version comes from the commit, and the commit's changelog must describe it.
 git show "$SHA:Sources/Nictate/Resources/Info.plist" > "$WORK/Info.plist"
