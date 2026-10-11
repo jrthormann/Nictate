@@ -3,7 +3,7 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] (1.0.0-beta.2 in preparation)
+## [1.0.0-beta.2] (in preparation)
 
 Not published yet. The current published prerelease is 1.0.0-beta.1. These notes describe the next release, 1.0.0-beta.2,
 and will be finalized when it is published. Please report what you find once it is: https://github.com/jrthormann/Nictate/issues

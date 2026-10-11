@@ -123,8 +123,7 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 
 Nictate 1.0.0-beta.1 es el prelanzamiento público actual: una beta pública experimental. Funciona, y la probé en
 macOS 27. Todavía no la he probado en macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son
-bienvenidos. El [CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no. Nictate empezó como un proyecto
-personal, y esta beta muestra si es útil para otras personas.
+bienvenidos. El [CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no. Nictate empezó como un proyecto personal. Esta beta dirá si a alguien más le hace falta.
 
 La 1.0.0-beta.2 está en preparación y todavía no está publicada. Esta sección cambiará cuando lo esté.
 
@@ -134,7 +133,7 @@ La beta.1 se identifica como versión 1.0.0, así que su comprobación de actual
 
 ## Instalación
 
-Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión pública actual es la 1.0.0-beta.1.
+Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión pública actual es la 1.0.0-beta.1, así que esa es la que toca descargar por ahora.
 
 **Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas desactivar Gatekeeper ni ninguna otra protección de seguridad del sistema para abrir Nictate. Aprobar Nictate una vez solo afecta a Nictate.
 
@@ -157,7 +156,7 @@ Descarga la imagen de disco solo desde la [página de versiones](https://github.
 
 ## Compilar desde el código
 
-Necesitas macOS 14 o posterior y las herramientas de línea de comandos (`xcode-select --install`). No necesitas Xcode.
+Necesitas macOS 14 o posterior y las herramientas de línea de comandos (`xcode-select --install`). No necesitas Xcode, que es una cosa menos que instalar.
 
 ```sh
 git clone https://github.com/jrthormann/Nictate.git

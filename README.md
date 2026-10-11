@@ -121,8 +121,8 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 Nictate 1.0.0-beta.1 is the current published prerelease: an experimental public beta. It works, and I've tested it on
 macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
-The [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't. Nictate started as a side project, and this beta
-shows whether it is useful to other people.
+The [CHANGELOG](CHANGELOG.md) lists what's tested and what isn't. Nictate started as a side project. This beta will show
+whether anyone else needs it.
 
 1.0.0-beta.2 is in preparation and isn't published yet. This section will change when it is.
 
@@ -133,7 +133,7 @@ download it from the [Releases page](https://github.com/jrthormann/Nictate/relea
 
 ## Install
 
-Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current published release is 1.0.0-beta.1.
+Download the disk image only from the [releases page](https://github.com/jrthormann/Nictate/releases). Open it, and drag Nictate into Applications. The current published release is 1.0.0-beta.1, so that's the one to download for now.
 
 **Nictate isn't notarized by Apple.** It is signed with a local certificate, so macOS asks you to approve it once, before its first launch. This is a known limit of this beta. You don't need to turn off Gatekeeper or any other system-wide security protection to open Nictate. Approving Nictate once covers Nictate only.
 
@@ -156,7 +156,7 @@ Download the disk image only from the [releases page](https://github.com/jrthorm
 
 ## Build from source
 
-You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). You don't need Xcode.
+You need macOS 14 or later and the Command Line Tools (`xcode-select --install`). You don't need Xcode, which is one less thing to install.
 
 ```sh
 git clone https://github.com/jrthormann/Nictate.git
