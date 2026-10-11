@@ -36,6 +36,22 @@ Tus otros problemas, lamentablemente, siguen siendo tuyos.
 
 <br>
 
+## ¿Por qué Nictate?
+
+Ponerle nombre a una app debería ser fácil. Debería.
+
+Todos los nombres buenos estaban cogidos. Blink ya no era una opción. Y Parpadeo, muy bonito en español, pero pon a alguien que habla inglés a pronunciarlo.
+
+Así que hice lo más lógico: le di demasiadas vueltas, me puse filosófico y, por alguna razón, terminé leyendo terminología médica. Ahí apareció nictate.
+
+Una palabra real en inglés que significa parpadear.
+
+Toda esa investigación para ponerle nombre a una app que copia texto de la pantalla.
+
+En fin. Nictate.
+
+<br>
+
 ## Píxel a píxel.
 
 <picture>
@@ -105,19 +121,22 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 
 ## Estado
 
-Nictate 1.0.0-beta.2 es una beta pública experimental. Funciona, y la probé en macOS 27. Todavía no la he probado en
-macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son bienvenidos. El
-[CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no. Nictate empezó como un proyecto personal, y esta beta muestra si es útil para otras personas.
+Nictate 1.0.0-beta.1 es el prelanzamiento público actual: una beta pública experimental. Funciona, y la probé en
+macOS 27. Todavía no la he probado en macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son
+bienvenidos. El [CHANGELOG](../../CHANGELOG.md) dice qué está probado y qué no. Nictate empezó como un proyecto
+personal, y esta beta muestra si es útil para otras personas.
+
+La 1.0.0-beta.2 está en preparación y todavía no está publicada. Esta sección cambiará cuando lo esté.
 
 Esta beta no está notarizada por Apple, así que macOS te pide aprobarla al abrirla por primera vez. Consulta [Instalación](#instalación).
 
-Si tienes la 1.0.0-beta.1, descarga la beta.2 desde la página de [Releases](https://github.com/jrthormann/Nictate/releases) y reemplaza la app en Aplicaciones. La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no encuentra la beta.2.
+La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no ve las versiones nuevas. Cuando se publique la beta.2, descárgala desde la [página de Releases](https://github.com/jrthormann/Nictate/releases) y reemplaza la app en Aplicaciones.
 
 ## Instalación
 
-Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones.
+Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión pública actual es la 1.0.0-beta.1.
 
-**Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas cambiar ningún ajuste de seguridad para abrir Nictate.
+**Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas desactivar Gatekeeper ni ninguna otra protección de seguridad del sistema para abrir Nictate. Aprobar Nictate una vez solo afecta a Nictate.
 
 1. Abre **Aplicaciones** y haz doble clic en **Nictate**.
 2. macOS muestra un aviso de que Apple no pudo verificar Nictate. Ciérralo con su botón de descartar, y no elijas la opción de mover la app a la papelera. El texto exacto depende de tu versión de macOS.
@@ -146,7 +165,7 @@ cd Nictate
 make install
 ```
 
-`make install` compila la app, la copia a Aplicaciones y la abre. `make check` ejecuta las pruebas.
+`make install` compila la app, cierra Nictate si está abierta, reemplaza `/Applications/Nictate.app` por la nueva versión y la abre. `make check` ejecuta las pruebas.
 
 <br>
 

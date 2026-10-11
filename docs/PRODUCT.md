@@ -118,8 +118,8 @@ recognized exactly and copied after one shortcut and one drag. The 1.0.0-beta.1 
 
 ## Roadmap
 
-**Now: 1.0.0-beta.2, a public test release.** The scope is frozen. Only fixes go in, and the feedback decides what
-follows.
+**Now: 1.0.0-beta.1, the current public test release. Next: 1.0.0-beta.2, in preparation and not yet published.** The
+scope is frozen. Only fixes go in, and the feedback decides what follows.
 
 **Before 1.0.0 stable.** These are the plan, not promises:
 
