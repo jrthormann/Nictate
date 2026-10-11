@@ -15,9 +15,9 @@
 #   - OUT_DIR/<version> does not exist yet. The folder is claimed with mkdir and never reused, so no image or checksum
 #     from an earlier release is overwritten.
 # After the build, the app must carry the same version and build number, and be signed with "Nictate Local Signing",
-# never ad hoc. The image is attached at a mountpoint inside this build's private folder, never under /Volumes, so no
-# volume the user has mounted is touched. Cleanup detaches only the image this build attached, and removes the private
-# folder only once that image is detached.
+# never ad hoc. The build refuses to run while any volume named Nictate is present, so no volume the user has mounted is
+# touched. Cleanup detaches only the image this build attached, found by its path, and removes the private folder only
+# once that image is detached.
 # Styling the window drives Finder, so macOS may ask to let this terminal control Finder the first time.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -35,11 +35,16 @@ case "$BUILD_NUMBER" in
 esac
 [[ -z "$(git status --porcelain)" ]] || fail "the working tree has changes; commit or stash them so the image matches a commit"
 SHA="$(git rev-parse --verify --quiet "$COMMIT^{commit}")" || fail "no commit named '$COMMIT'"
+# Finder styles the disk by its name, so no other volume may carry that name. Refuse while one is mounted or attached,
+# rather than risk styling a volume that is not ours. diskutil lists every volume, mounted or not.
+if diskutil list | grep -q -w "$VOLUME"; then
+    fail "a volume named $VOLUME is mounted or attached; eject it, then run again"
+fi
 
 # This build's private folder. Its physical path is the one hdiutil reports, so the image can be matched exactly.
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
 RW="$WORK/rw.dmg"
-MNT="$WORK/mnt"
+MNT="/Volumes/$VOLUME"
 CREATED_RELEASE=""
 
 # Prints the device of the image this build attached, matched by the image's path, which only this build uses. Prints
@@ -122,32 +127,34 @@ tiffutil -cathidpicheck "$WORK/background.png" "$WORK/background@2x.png" -out "$
 SIZE_KB=$(( $(du -sk "$STAGING" | cut -f1) + 4096 ))
 hdiutil create -srcfolder "$STAGING" -volname "$VOLUME" -fs HFS+ -format UDRW -size "${SIZE_KB}k" "$RW" >/dev/null
 
-# Attached at this build's own mountpoint and not in /Volumes, so a volume with the same name cannot be confused with
-# this one. Finder styles the window it opens on that mountpoint, not the disk by name.
-mkdir "$MNT"
-hdiutil attach "$RW" -readwrite -noverify -noautoopen -nobrowse -mountpoint "$MNT" >/dev/null \
+# Attached at /Volumes/Nictate, the one place Finder lists disks by name, so the styling below can address it. The guard
+# above guarantees that name belongs to this build alone.
+hdiutil attach "$RW" -readwrite -noverify -noautoopen -mountpoint "$MNT" >/dev/null \
     || fail "could not attach the disk image; nothing was released"
 
 if osascript <<EOF
 with timeout of 20 seconds
 tell application "Finder"
-    set win to make new Finder window to (POSIX file "$MNT" as alias)
-    set current view of win to icon view
-    set toolbar visible of win to false
-    set statusbar visible of win to false
-    set sidebar width of win to 0
-    set bounds of win to {200, 120, 740, 480}
-    set opts to icon view options of win
-    set arrangement of opts to not arranged
-    set icon size of opts to 96
-    set text size of opts to 12
-    set label position of opts to bottom
-    set background picture of opts to (POSIX file "$MNT/.background/background.tiff" as alias)
-    set position of item "Nictate.app" of win to {140, 180}
-    set position of item "Applications" of win to {400, 180}
-    update (target of win) without registering applications
-    delay 1
-    close win
+    tell disk "$VOLUME"
+        open
+        set win to container window
+        set current view of win to icon view
+        set toolbar visible of win to false
+        set statusbar visible of win to false
+        set sidebar width of win to 0
+        set bounds of win to {200, 120, 740, 480}
+        set opts to icon view options of win
+        set arrangement of opts to not arranged
+        set icon size of opts to 96
+        set text size of opts to 12
+        set label position of opts to bottom
+        set background picture of opts to file ".background:background.tiff"
+        set position of item "Nictate.app" of win to {140, 180}
+        set position of item "Applications" of win to {400, 180}
+        update without registering applications
+        delay 1
+        close win
+    end tell
 end tell
 end timeout
 EOF
