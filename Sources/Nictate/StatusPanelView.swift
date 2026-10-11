@@ -222,12 +222,12 @@ private struct HistoryScreen: View {
                             CaptureRow(text: entry.text, date: entry.date, selected: model.selection == index,
                                        copy: { model.copyCapture(entry.text) },
                                        delete: { model.deleteCapture(entry.text) })
-                                .id(index)
+                                .id(entry.text)
                         }
                     }
                 }
                 .frame(maxHeight: 280)
-                .onChange(of: model.selection) { _, index in if let index { proxy.scrollTo(index) } }
+                .onChange(of: model.selection) { _, index in if let index, entries.indices.contains(index) { proxy.scrollTo(entries[index].text) } }
             }
         }
     }
