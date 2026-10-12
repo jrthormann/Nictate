@@ -74,9 +74,9 @@ final class StatusPanelModel: ObservableObject {
     var historyState: HistoryState { history.state }
     var historyFileUnreadable: Bool { history.fileIsUnreadable }
     var historyClosed: Bool { history.isClosed }
-    var hotKeyLabel: String { settings.hotKeyLabel }
-    var rotateHotKeyLabel: String { settings.rotateHotKeyLabel }
-    var codeHotKeyLabel: String? { settings.shortcut(for: .captureCode)?.label }
+    var hotKeyLabel: String { settings.shortcutLabel(for: .capture) ?? "" }
+    var rotateHotKeyLabel: String { settings.shortcutLabel(for: .rotateHistory) ?? "" }
+    var codeHotKeyLabel: String? { settings.shortcutLabel(for: .captureCode) }
     var codeMode: Bool { settings.codeMode }
 
     func captureText() { dismiss(); capture.capture(mode: .text) }

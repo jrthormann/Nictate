@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // An optional shortcut the user never set has nothing to register.
             guard let saved = settings.shortcut(for: slot) else { continue }
             if !HotKeyManager.shared.register(slot, code: saved.shortcut.code, mods: saved.shortcut.mods) {
-                refused.append(saved.label)
+                refused.append(KeyGlyph.display(saved.label))
             }
         }
         if !refused.isEmpty {

@@ -470,6 +470,17 @@ do {
     watching.cancel()
 }
 
+// Shortcut labels are shown one way everywhere (review #31): a stored private-use character reads as its key's name,
+// and what is stored never changes.
+do {
+    let prefs = Settings(defaults: freshSuite("shortcut-label").defaults)
+    prefs.setShortcut(Shortcut(code: kVK_F5, mods: cmdKey), label: "⌘\u{F708}", for: .capture)
+    check(prefs.shortcutLabel(for: .capture) == "⌘F5" && prefs.hotKeyLabel == "⌘\u{F708}",
+          "shortcut label: a stored private-use label is shown by name and stored unchanged", prefs.shortcutLabel(for: .capture) ?? "nil")
+    check(prefs.shortcutLabel(for: .rotateHistory) == prefs.rotateHotKeyLabel, "shortcut label: an ordinary label is shown exactly as stored")
+    check(prefs.shortcutLabel(for: .captureCode) == nil, "shortcut label: an unset optional shortcut has no label")
+}
+
 // Notifications: permission is asked once, at the first notification actually sent.
 do {
     var gate = NotificationGate()

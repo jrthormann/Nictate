@@ -95,6 +95,9 @@ final class Settings: ObservableObject {
         }
     }
 
+    /// The label shown for an action's shortcut in the panel, Welcome and alerts. A label stored with a private-use
+    /// character reads as its key's name (KeyGlyph.display). What is stored never changes.
+    func shortcutLabel(for slot: ShortcutSlot) -> String? { shortcut(for: slot).map { KeyGlyph.display($0.label) } }
 
     // Feedback
     var visualCue: Bool { get { flag(StorageKeys.visualCue) } set { store(newValue, StorageKeys.visualCue) } }
