@@ -2616,6 +2616,33 @@ final class LateSaveStore: HistoryStore, @unchecked Sendable {
         return .confirmed
     }
 }
+
+/// A store whose writes wait until the test releases them, so the test decides when a write is still in flight.
+/// `started` is signalled when a write begins. Each write waits for one release; `letWritesFinish` releases up to two.
+final class GatedStore: HistoryStore, @unchecked Sendable {
+    let started = DispatchSemaphore(value: 0)
+    private let release = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var stored: HistorySnapshot?
+    var saved: HistorySnapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+    func load() -> HistoryLoad { .empty }
+    func save(_ snapshot: HistorySnapshot) -> HistoryPersistOutcome {
+        started.signal()
+        release.wait()
+        lock.lock()
+        stored = snapshot
+        lock.unlock()
+        return .confirmed
+    }
+    func letWritesFinish() {
+        release.signal()
+        release.signal()
+    }
+}
 do {
     let stored = HistorySnapshot(texts: ["keep"], dates: [1_000])
     let store = LateSaveStore(stored: stored)
@@ -2707,14 +2734,23 @@ do {   // last: its 1 s write occupies the shared I/O queue
     History.flushWrites()
 }
 do {
-    let store = ScriptedStore(answers: [.empty])
+    // The first write is held, so the restart is still waiting for it when the second change arrives. The gate opens only
+    // after that change is in, so the restart cannot finish before it.
+    let store = GatedStore()
     let history = History(store: store, isEnabled: alwaysSaving)
     history.add("first")
-    settle {
-        Task { @MainActor in history.add("second") }
-        let handedOff = await history.handOff()
-        check(handedOff && store.saved?.texts == ["second", "first"],
-              "handoff: a change made while the restart waits is written before the handoff completes", "\(store.saved?.texts ?? [])")
+    let begun = store.started.wait(timeout: .now() + 5) == .success
+    check(begun, "handoff: the first write is in flight before the restart starts")
+    if begun {
+        settle {
+            let restart = Task { @MainActor in await history.handOff() }
+            await Task.yield()
+            history.add("second")
+            store.letWritesFinish()
+            let handedOff = await restart.value
+            check(handedOff && store.saved?.texts == ["second", "first"],
+                  "handoff: a change made while the restart waits is written before the handoff completes", "\(store.saved?.texts ?? [])")
+        }
     }
     History.flushWrites()
 }
