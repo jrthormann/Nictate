@@ -19,28 +19,29 @@ final class StatusPanelModel: ObservableObject {
     @Published var copyError: String?
     /// The highlighted row in the History list, as an index into `entries`. Arrow keys move it, Return copies it.
     @Published var selection: Int?
-    private let settings = Settings.shared
+    private let settings: Settings
     private let capture: CaptureCoordinator
     private let windows: WindowCoordinator
     /// Closes the panel once an action has done its job.
     var dismiss: () -> Void = {}
 
-    /// The history the panel shows. The app passes `History.shared`; tests pass a disposable one.
+    /// The history the panel shows. The app passes its shared history; tests pass a disposable one.
     private let history: History
 
     /// Changes to the history and the settings redraw the panel, not only changes to its own properties.
     private var observers = Set<AnyCancellable>()
 
-    init(capture: CaptureCoordinator, windows: WindowCoordinator, history: History = .shared) {
+    init(capture: CaptureCoordinator, windows: WindowCoordinator, history: History = .shared, settings: Settings = .shared) {
         self.capture = capture
         self.windows = windows
         self.history = history
+        self.settings = settings
         history.objectWillChange.sink { [weak self] in
             self?.objectWillChange.send()
             // The change is announced before its entries are stored, so the first match is chosen on the next pass.
             DispatchQueue.main.async { self?.keepSelectionValid() }
         }.store(in: &observers)
-        Settings.shared.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
+        settings.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &observers)
         // Command-F in the main menu asks for the search field of the History screen.
         NotificationCenter.default.publisher(for: MainMenu.findRequested)
             .sink { [weak self] _ in self?.searchFocusRequests += 1 }
@@ -86,10 +87,7 @@ final class StatusPanelModel: ObservableObject {
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
     func setLanguage(_ code: String) { settings.languages = code.isEmpty ? [] : [code] }
     func setKeepHistory(_ on: Bool) {
-        settings.historyEnabled = on
-        history.refresh()
-        // Asked after the menu has finished updating, and after the saved captures have loaded, so the question sees them.
-        if !on { Task { await HistoryClearing.historyTurnedOff() } }
+        HistoryClearing.setSaveCaptures(on, history: history, settings: settings)
     }
     func setLaunchAtLogin(_ on: Bool) { LoginItem.shared.set(on) }
     func showPreferences() { dismiss(); windows.showPreferences() }
@@ -169,11 +167,11 @@ final class StatusPanelModel: ObservableObject {
     }
 
     func clearHistory() {
-        HistoryClearing.confirmClear()
+        HistoryClearing.confirmClear(history)
     }
 
     func discardUnreadableHistory() {
-        HistoryClearing.confirmDiscardUnreadable()
+        HistoryClearing.confirmDiscardUnreadable(history)
     }
 
     func openHistory() { screen = .history }

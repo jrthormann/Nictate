@@ -1221,6 +1221,29 @@ do {
     }
 }
 
+// Finding #5: a view or model that is given the history and settings never reaches for the app's own, and Save Captures has one writer.
+// Checked in the source: the unit runner cannot build the panel or the Settings tab.
+do {
+    if let root = repoRoot {
+        func codeLines(_ name: String) -> [String] {
+            let text = (try? String(contentsOf: root.appendingPathComponent("Sources/Nictate/\(name)"), encoding: .utf8)) ?? ""
+            return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+        }
+        for name in ["StatusPanel.swift", "StatusPanelView.swift", "HistoryRecovery.swift", "GeneralTab.swift", "HistoryDeletion.swift"] {
+            let lines = codeLines(name)
+            let reached = lines.filter { $0.contains("History.shared") || $0.contains("Settings.shared") }
+            check(!lines.isEmpty && reached.isEmpty, "injection: \(name) uses the history and settings it is given", "\(reached)")
+        }
+        let defaulted = codeLines("HistoryDeletion.swift").filter { $0.contains("= .shared") }
+        check(defaulted.isEmpty, "injection: the clearing commands take the history and settings from their caller", "\(defaulted)")
+        let sources = (try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("Sources/Nictate").path)) ?? []
+        let writers = sources.filter { name in name.hasSuffix(".swift") && codeLines(name).contains { $0.contains(".historyEnabled = ") } }
+        check(writers == ["HistoryDeletion.swift"], "save captures: HistoryClearing is the only code that turns it on or off", "\(writers.sorted())")
+    } else {
+        check(false, "injection: views and models use the history and settings they are given", "repository root not found")
+    }
+}
+
 // Menu titles for links: a long address is shortened in the middle, so the host is always shown.
 do {
     let long = URL(string: "https://example.com/" + String(repeating: "a", count: 80) + "/end")!
@@ -2787,6 +2810,20 @@ do {
     History.flushWrites()
     check(history.state == .available && store.saved?.texts == ["captured right after", "kept"],
           "save captures: turning saving back on keeps the next capture at once", "\(store.saved?.texts ?? [])")
+}
+
+// Finding #5: Save Captures, from the panel or Settings, is one command on the history and settings it is given.
+do {
+    let settings = Settings(defaults: freshSuite("save-captures-command").defaults)
+    let history = History(store: ScriptedStore(answers: [.empty]), isEnabled: { settings.historyEnabled }, loadsNow: false)
+    HistoryClearing.setSaveCaptures(true, history: history, settings: settings)
+    settle { await history.finishLoading() }
+    check(settings.historyEnabled && history.state == .available,
+          "save captures: on writes the given settings and loads the given history", "\(history.state)")
+    HistoryClearing.setSaveCaptures(false, history: history, settings: settings)
+    drainMain()
+    check(!settings.historyEnabled && history.state == .disabled,
+          "save captures: off writes the given settings and stops the given history; nothing saved, so nothing is asked", "\(history.state)")
 }
 
 // The switch-off decision waits for a queued write, so the capture being written is counted.

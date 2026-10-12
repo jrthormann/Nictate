@@ -285,7 +285,9 @@ if ciRun && skips > 0 {
 // MARK: Status panel: the history is a screen of the same panel, and copying closes it
 do {
     let status = StatusItemController()
-    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-main-")), isEnabled: { true })
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
     model.reset()
     check(model.screen == .main && model.query.isEmpty, "panel: opens on the main screen with an empty search")
     model.screen = .history
@@ -296,7 +298,9 @@ do {
 // MARK: Status panel anchoring: the panel opens below its button and does not rise over the menu bar
 do {
     let status = StatusItemController()
-    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()), windows: WindowCoordinator())
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-anchor-")), isEnabled: { true })
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
     let panel = StatusPanel(model: model)
     let screen = NSScreen.main ?? NSScreen.screens[0]
     // A stand-in for the status item, placed just under the top edge the way the menu bar's icon sits.
@@ -405,6 +409,27 @@ do {
     let before = model.searchFocusRequests
     NotificationCenter.default.post(name: MainMenu.findRequested, object: nil)
     check(model.searchFocusRequests == before + 1, "find: Command-F asks the History search field for focus")
+}
+
+// Regression (finding #5): Save Captures changes the settings and history the panel was given, not the app's own.
+do {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("nictate-ui-inject-\(UUID().uuidString)")
+    let defaults = UserDefaults(suiteName: folder.path)!
+    let settings = Settings(defaults: defaults)
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-inject-")), isEnabled: { settings.historyEnabled }, loadsNow: false)
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history, settings: settings)
+    model.setKeepHistory(true)
+    let loaded = waitUntil { history.state == .available }
+    check(settings.historyEnabled && model.historyEnabled && loaded,
+          "inject: Save Captures turns on the panel's own settings and loads its own history", "\(history.state)")
+    model.setKeepHistory(false)
+    check(!settings.historyEnabled && history.state == .disabled,
+          "inject: Save Captures off changes the panel's own settings; with nothing saved nothing is asked", "\(history.state)")
+    defaults.removePersistentDomain(forName: folder.path)
+    // A suite named by a path is stored at that path with .plist added; it goes with the history files at the end.
+    historyFiles.append(folder.appendingPathExtension("plist"))
 }
 
 // Flush pending writes first, so a write cannot recreate a file after it is removed.

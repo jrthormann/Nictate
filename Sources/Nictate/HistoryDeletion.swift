@@ -63,20 +63,20 @@ enum HistoryDeletion {
 @MainActor
 enum HistoryClearing {
     /// Deletes every saved capture and the notices that may still show one.
-    static func clear(_ history: History = .shared) {
+    static func clear(_ history: History) {
         history.clear()
         Notifier.withdrawAll()
     }
 
     /// Clear History…: one confirmation, then everything goes.
-    static func confirmClear(_ history: History = .shared) {
+    static func confirmClear(_ history: History) {
         let count = history.items.count
         guard HistoryDeletion.asksBeforeClear(savedCount: count) else { return }
         if run(clearAlert(savedCount: count)) == .alertSecondButtonReturn { clear(history) }
     }
 
     /// "Discard Unreadable History": asks first, and says the deletion cannot be undone. Cancel is the default.
-    static func confirmDiscardUnreadable(_ history: History = .shared) {
+    static func confirmDiscardUnreadable(_ history: History) {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = tr("Discard unreadable history?")
@@ -102,7 +102,7 @@ enum HistoryClearing {
 
     /// After "Save Captures" is turned off: asks whether the saved captures go too. Cancel turns the switch back on.
     /// It waits for a load in flight first, so a history that is still reading is counted, not shown as empty.
-    static func historyTurnedOff(_ history: History = .shared, settings: Settings = .shared) async {
+    private static func historyTurnedOff(_ history: History, settings: Settings) async {
         // Unbounded: the count decides whether the question is asked at all, so a slow read is waited for.
         await history.finishLoading(timeout: .infinity)
         let count = history.items.count
@@ -142,6 +142,14 @@ enum HistoryClearing {
         alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\r"
         alert.addButton(withTitle: tr("Clear History")).hasDestructiveAction = true
         return alert
+    }
+
+    /// "Save Captures", from Settings or the panel: one command for both. Turning it off then asks whether the saved
+    /// captures go too, after the switch has finished moving and the saved captures have loaded.
+    static func setSaveCaptures(_ on: Bool, history: History, settings: Settings) {
+        settings.historyEnabled = on
+        history.refresh()
+        if !on { Task { await historyTurnedOff(history, settings: settings) } }
     }
 
     /// A menu bar app is not active when its menu is used, so it comes forward for the alert to be seen.

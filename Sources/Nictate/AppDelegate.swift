@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await loading?.value
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
-                HistoryClearing.clear()
+                HistoryClearing.clear(History.shared)
             }
             if BuildIdentity.isTestVariant {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")

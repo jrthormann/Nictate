@@ -19,12 +19,18 @@ final class LoginItem: ObservableObject {
 }
 
 struct GeneralTab: View {
-    @ObservedObject private var settings = Settings.shared
+    @ObservedObject private var settings: Settings
     @ObservedObject private var login = LoginItem.shared
-    @ObservedObject private var history = History.shared
+    @ObservedObject private var history: History
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Shown only while an earlier encrypted history is on this Mac and has not been imported yet.
     @StateObject private var legacyImport = LegacyImportState()
+
+    /// The app passes nothing. Import Previous History always acts on the app's history.
+    init(settings: Settings = .shared, history: History = .shared) {
+        _settings = ObservedObject(wrappedValue: settings)
+        _history = ObservedObject(wrappedValue: history)
+    }
 
     var body: some View {
         SettingsPage {
@@ -49,12 +55,12 @@ struct GeneralTab: View {
                 }
                 if history.fileIsUnreadable {
                     SettingRow("Unreadable history") {
-                        Button("Discard Unreadable History…") { HistoryClearing.confirmDiscardUnreadable() }
+                        Button("Discard Unreadable History…") { HistoryClearing.confirmDiscardUnreadable(history) }
                     }
                 }
                 if HistoryDeletion.showsClearControl(historyEnabled: settings.historyEnabled, savedCount: history.items.count) {
                     SettingRow("Saved captures") {
-                        Button("Clear History…") { HistoryClearing.confirmClear() }
+                        Button("Clear History…") { HistoryClearing.confirmClear(history) }
                             .disabled(history.items.isEmpty)
                     }
                 }
@@ -85,14 +91,9 @@ struct GeneralTab: View {
         }
     }
 
-    /// "Save Captures". Turning it off then asks whether the captures already saved go too; the question
-    /// waits for the switch to finish moving.
+    /// "Save Captures", through the command the panel shares. Turning it off then asks about the captures already saved.
     private var keepHistory: Binding<Bool> {
-        Binding(get: { settings.historyEnabled }, set: { on in
-            settings.historyEnabled = on
-            History.shared.refresh()
-            if !on { Task { await HistoryClearing.historyTurnedOff() } }
-        })
+        Binding(get: { settings.historyEnabled }, set: { HistoryClearing.setSaveCaptures($0, history: history, settings: settings) })
     }
 
     /// The recorder for an action, and for an optional one a button that removes its shortcut.
