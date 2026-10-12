@@ -75,7 +75,7 @@ global shortcut (HotKeyManager, Carbon)
 | `ContentClassifier.swift` | Pure rules that decide whether a capture is code, a table, a list or prose from its text and layout. Only confident prose loses its line breaks. Tested on a 40-text corpus (`Tests/corpus/captures.tsv`) and a held-out set. |
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
 | `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels and pill placement (unit tested). |
-| `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. |
+| `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. Deleting saved captures withdraws every banner; the system's notification center sits behind the `NoticeCenter` seam, so tests answer it by hand. |
 
 ## Scripts
 
