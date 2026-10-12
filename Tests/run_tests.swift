@@ -2426,6 +2426,30 @@ do {
           "reset: a deletion that did not read back is reported as unconfirmed, and nothing is claimed")
 }
 
+// A history that is cleared for quit or handed over for a restart offers no import; an open one does.
+do {
+    let stored = HistorySnapshot(texts: ["kept"], dates: [1_000])
+    let open = History(store: ScriptedStore(answers: [.loaded(stored)], saved: stored), isEnabled: alwaysSaving)
+    check(open.isOpenForImport, "import: an open history offers an import")
+    let quitting = History(store: ScriptedStore(answers: [.loaded(stored)], saved: stored), isEnabled: alwaysSaving)
+    _ = quitting.clearForQuit()
+    check(!quitting.isOpenForImport, "import: a history cleared on quit offers no import")
+    let handed = History(store: ScriptedStore(answers: [.loaded(stored)], saved: stored), isEnabled: alwaysSaving)
+    settle { _ = await handed.handOff() }
+    check(!handed.isOpenForImport, "import: a history handed over for a restart offers no import")
+}
+// Save Captures counts the history after its load: an unbounded wait counts a slow read, and a short bound gives up first.
+do {
+    let history = History(store: SlowReadStore(stored: HistorySnapshot(texts: ["slow"], dates: [1_000]), readDelay: 0.3), isEnabled: alwaysSaving, loadsNow: false)
+    history.refresh()
+    settle {
+        let bounded = await history.finishLoading(timeout: 0.05)
+        let unbounded = await history.finishLoading(timeout: .infinity)
+        check(!bounded && unbounded && history.items == ["slow"],
+              "load: a short wait gives up on a slow read, and an unbounded wait counts it", "bounded \(bounded), unbounded \(unbounded)")
+    }
+}
+
 // Regression: a reset without deletion waits for the pending writes, and reports a write that never finishes.
 do {
     let store = ScriptedStore(answers: [.empty])

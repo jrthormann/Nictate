@@ -44,7 +44,9 @@ enum ResetNictate {
             if !deletes {
                 // Changes still in flight must reach the file before the restart; if they cannot, nothing is reset.
                 guard await History.shared.handOff() else {
-                    stop(tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
+                    stop(History.shared.importing
+                        ? tr("Saved captures are being imported. Try again when the import finishes.")
+                        : tr("Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment."))
                     return
                 }
             }

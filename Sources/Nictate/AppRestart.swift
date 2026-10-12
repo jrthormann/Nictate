@@ -60,7 +60,9 @@ enum AppRestart {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = tr("Nictate didn't restart")
-        alert.informativeText = tr("Recent changes to saved captures aren't on disk yet. Try again in a moment.")
+        alert.informativeText = History.shared.importing
+            ? tr("Saved captures are being imported. Try again when the import finishes.")
+            : tr("Recent changes to saved captures aren't on disk yet. Try again in a moment.")
         alert.addButton(withTitle: tr("OK"))
         alert.runModal()
     }

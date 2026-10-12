@@ -56,6 +56,7 @@ final class History: ObservableObject {
     private var canWriteExisting: Bool { !importing && (state == .available || (state == .disabled && hasLoadedFile)) }
     /// True from `beginImport` to `endImport`. Reads that finish meanwhile are stale, so they are ignored.
     @Published private(set) var importing = false
+    var isOpenForImport: Bool { !closed && !importing }
     /// True once a deletion for quit or for a reset has begun, or a restart has taken the file over. From then on no
     /// read is applied and no write starts.
     private var closed = false
