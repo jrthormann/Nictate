@@ -19,9 +19,22 @@ enum ImportPreviousHistory {
         LegacyHistoryMigration.isOffered && !UserDefaults.standard.bool(forKey: StorageKeys.legacyHistoryImported)
     }
 
+    /// The history is closed: a restart or a reset is taking it over, or a deletion stopped saving. Nothing is imported.
+    private static func showUnavailable() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Import didn't start")
+        alert.informativeText = tr("Saved captures can't be imported right now. Restart Nictate, then try again.")
+        alert.addButton(withTitle: tr("OK"))
+        alert.runModal()
+    }
+
     /// Asks for confirmation, runs the import off the main thread, and reports the result. `finished` runs afterwards
     /// so the Settings row can hide itself after a successful import.
     static func confirmAndRun(finished: @escaping @MainActor () -> Void) {
+        guard !History.shared.importing else { return }
+        guard History.shared.isOpenForImport else { showUnavailable(); return }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .informational
@@ -34,11 +47,12 @@ enum ImportPreviousHistory {
         alert.addButton(withTitle: tr("Cancel"))
         alert.addButton(withTitle: tr("Import"))
         guard alert.runModal() == .alertSecondButtonReturn else { return }
+        // Refused while another import runs, or once the history is handed over for a restart or a quit.
+        guard History.shared.beginImport() else { return }
 
         let legacy = LegacyHistoryMigration.legacyURL
         let destination = JSONHistoryStore(fileURL: JSONHistoryStore.standardURL)
         Task { @MainActor in
-            History.shared.beginImport()
             let outcome = await History.performFileWork {
                 LegacyHistoryMigration.run(legacy: legacy, destination: destination) { try LegacyHistoryKeychain.existingKey() }
             }

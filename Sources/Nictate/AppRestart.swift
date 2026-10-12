@@ -27,30 +27,43 @@ enum AppRestart {
     static func now() {
         // A second press while the new instance is starting would start a third.
         guard !isRestarting else { return }
-        // The new instance reads the history file, so changes still in flight must reach it first.
-        guard History.shared.waitForPendingWrites() else {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = tr("Nictate didn't restart")
-            alert.informativeText = tr("Recent changes to saved captures aren't on disk yet. Try again in a moment.")
-            alert.addButton(withTitle: tr("OK"))
-            alert.runModal()
-            return
-        }
         isRestarting = true
-        HotKeyManager.shared.suspend()
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
-            Task { @MainActor in
-                if let error {
-                    Log.app.error("restart failed: \(error.localizedDescription, privacy: .public)")
-                    HotKeyManager.shared.resume()
-                    isRestarting = false
-                    return
+        Task { @MainActor in
+            // The new instance reads the history file, so this one hands it over first: changes still in flight are
+            // written, and nothing is written after that. The handoff is given back if the new instance cannot start.
+            guard await History.shared.handOff() else {
+                isRestarting = false
+                showNotRestarted()
+                return
+            }
+            HotKeyManager.shared.suspend()
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.createsNewApplicationInstance = true
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+                Task { @MainActor in
+                    if let error {
+                        Log.app.error("restart failed: \(error.localizedDescription, privacy: .public)")
+                        History.shared.cancelHandOff()
+                        HotKeyManager.shared.resume()
+                        isRestarting = false
+                        return
+                    }
+                    NSApp.terminate(nil)
                 }
-                NSApp.terminate(nil)
             }
         }
+    }
+
+    /// Shown when the history could not be written in time, so the restart did not start.
+    @MainActor
+    private static func showNotRestarted() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Nictate didn't restart")
+        alert.informativeText = History.shared.importing
+            ? tr("Saved captures are being imported. Try again when the import finishes.")
+            : tr("Recent changes to saved captures aren't on disk yet. Try again in a moment.")
+        alert.addButton(withTitle: tr("OK"))
+        alert.runModal()
     }
 }

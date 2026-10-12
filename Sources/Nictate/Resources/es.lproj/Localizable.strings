@@ -191,3 +191,6 @@
 "Discard couldn't be confirmed" = "No se pudo confirmar el descarte";
 "The file was written but didn't read back as expected. History now shows what the file holds." = "Se escribió el archivo, pero no se pudo leer tal como se escribió. El historial muestra ahora lo que contiene el archivo.";
 "Unreadable history" = "Historial ilegible";
+"Import didn't start" = "La importación no empezó";
+"Saved captures can't be imported right now. Restart Nictate, then try again." = "Las capturas guardadas no se pueden importar ahora. Reinicia Nictate e inténtalo de nuevo.";
+"Saved captures are being imported. Try again when the import finishes." = "Se están importando las capturas guardadas. Inténtalo de nuevo cuando termine la importación.";
