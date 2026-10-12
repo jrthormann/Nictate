@@ -18,10 +18,6 @@ enum ColorTokens {
         })
     }
 
-    private static func fixed(_ c: (CGFloat, CGFloat, CGFloat, CGFloat)) -> Color {
-        Color(nsColor: NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: c.3))
-    }
-
     /// Preview text only. In the app use NSColor.labelColor, which adapts to light, dark and Increase Contrast.
     static let ink = dynamic(light: (0.0431, 0.0431, 0.0706, 1.0000), dark: (0.9608, 0.9608, 0.9686, 1.0000))
 

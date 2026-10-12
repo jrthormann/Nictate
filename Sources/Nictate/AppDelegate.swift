@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await loading?.value
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {
-                HistoryClearing.clear()
+                HistoryClearing.clear(History.shared)
             }
             if BuildIdentity.isTestVariant {
                 Log.app.info("Test variant: history file \(JSONHistoryStore.standardURL.path)")
@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // An optional shortcut the user never set has nothing to register.
             guard let saved = settings.shortcut(for: slot) else { continue }
             if !HotKeyManager.shared.register(slot, code: saved.shortcut.code, mods: saved.shortcut.mods) {
-                refused.append(saved.label)
+                refused.append(KeyGlyph.display(saved.label))
             }
         }
         if !refused.isEmpty {

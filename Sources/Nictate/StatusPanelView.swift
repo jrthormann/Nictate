@@ -59,7 +59,7 @@ private struct MainScreen: View {
                 detections
                 captureOptions
                 MenuDivider()
-                MenuToggle(tr("Save Captures"), symbol: "clock", isOn: Binding(get: { model.keepHistory }, set: { model.setKeepHistory($0) }))
+                MenuToggle(tr("Save Captures"), symbol: "clock", isOn: Binding(get: { model.historyEnabled }, set: { model.setKeepHistory($0) }))
                 MenuToggle(tr("Launch at Login"), symbol: "power", isOn: Binding(get: { login.enabled }, set: { model.setLaunchAtLogin($0) }))
                 MenuDivider()
                 MenuAction(tr("Settings…"), shortcut: "⌘,", leadingSymbol: "gearshape", action: model.showPreferences)

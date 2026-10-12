@@ -1,7 +1,6 @@
 // Nictate: a macOS menu bar app that copies text from anywhere on your screen.
 // Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
-import AppKit
 import Carbon.HIToolbox
 import Combine
 import Foundation
@@ -95,6 +94,9 @@ final class Settings: ObservableObject {
         }
     }
 
+    /// The label shown for an action's shortcut in the panel, Welcome and alerts. A label stored with a private-use
+    /// character reads as its key's name (KeyGlyph.display). What is stored never changes.
+    func shortcutLabel(for slot: ShortcutSlot) -> String? { shortcut(for: slot).map { KeyGlyph.display($0.label) } }
 
     // Feedback
     var visualCue: Bool { get { flag(StorageKeys.visualCue) } set { store(newValue, StorageKeys.visualCue) } }
@@ -161,14 +163,5 @@ final class Settings: ObservableObject {
     static func keyEquivalent(forLabel label: String) -> String {
         // F-keys, arrows and the other named keys map to AppKit's function-key characters.
         KeyGlyph.keyEquivalent(forLabel: label)
-    }
-
-    static func modifierMask(for mods: Int) -> NSEvent.ModifierFlags {
-        var mask: NSEvent.ModifierFlags = []
-        if mods & controlKey != 0 { mask.insert(.control) }
-        if mods & optionKey != 0 { mask.insert(.option) }
-        if mods & shiftKey != 0 { mask.insert(.shift) }
-        if mods & cmdKey != 0 { mask.insert(.command) }
-        return mask
     }
 }

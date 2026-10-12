@@ -470,6 +470,17 @@ do {
     watching.cancel()
 }
 
+// Shortcut labels are shown one way everywhere (review #31): a stored private-use character reads as its key's name,
+// and what is stored never changes.
+do {
+    let prefs = Settings(defaults: freshSuite("shortcut-label").defaults)
+    prefs.setShortcut(Shortcut(code: kVK_F5, mods: cmdKey), label: "⌘\u{F708}", for: .capture)
+    check(prefs.shortcutLabel(for: .capture) == "⌘F5" && prefs.hotKeyLabel == "⌘\u{F708}",
+          "shortcut label: a stored private-use label is shown by name and stored unchanged", prefs.shortcutLabel(for: .capture) ?? "nil")
+    check(prefs.shortcutLabel(for: .rotateHistory) == prefs.rotateHotKeyLabel, "shortcut label: an ordinary label is shown exactly as stored")
+    check(prefs.shortcutLabel(for: .captureCode) == nil, "shortcut label: an unset optional shortcut has no label")
+}
+
 // Notifications: permission is asked once, at the first notification actually sent.
 do {
     var gate = NotificationGate()
@@ -1218,6 +1229,29 @@ do {
         check(writers == ["ClipboardWriter.swift"], "clipboard writer: the only caller of replaceContents", "\(writers.sorted())")
     } else {
         check(false, "clipboard writer: the only caller of replaceContents", "repository root not found")
+    }
+}
+
+// Finding #5: a view or model that is given the history and settings never reaches for the app's own, and Save Captures has one writer.
+// Checked in the source: the unit runner cannot build the panel or the Settings tab.
+do {
+    if let root = repoRoot {
+        func codeLines(_ name: String) -> [String] {
+            let text = (try? String(contentsOf: root.appendingPathComponent("Sources/Nictate/\(name)"), encoding: .utf8)) ?? ""
+            return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+        }
+        for name in ["StatusPanel.swift", "StatusPanelView.swift", "HistoryRecovery.swift", "GeneralTab.swift", "HistoryDeletion.swift"] {
+            let lines = codeLines(name)
+            let reached = lines.filter { $0.contains("History.shared") || $0.contains("Settings.shared") }
+            check(!lines.isEmpty && reached.isEmpty, "injection: \(name) uses the history and settings it is given", "\(reached)")
+        }
+        let defaulted = codeLines("HistoryDeletion.swift").filter { $0.contains("= .shared") }
+        check(defaulted.isEmpty, "injection: the clearing commands take the history and settings from their caller", "\(defaulted)")
+        let sources = (try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("Sources/Nictate").path)) ?? []
+        let writers = sources.filter { name in name.hasSuffix(".swift") && codeLines(name).contains { $0.contains(".historyEnabled = ") } }
+        check(writers == ["HistoryDeletion.swift"], "save captures: HistoryClearing is the only code that turns it on or off", "\(writers.sorted())")
+    } else {
+        check(false, "injection: views and models use the history and settings they are given", "repository root not found")
     }
 }
 
@@ -2838,6 +2872,20 @@ do {
     History.flushWrites()
     check(history.state == .available && store.saved?.texts == ["captured right after", "kept"],
           "save captures: turning saving back on keeps the next capture at once", "\(store.saved?.texts ?? [])")
+}
+
+// Finding #5: Save Captures, from the panel or Settings, is one command on the history and settings it is given.
+do {
+    let settings = Settings(defaults: freshSuite("save-captures-command").defaults)
+    let history = History(store: ScriptedStore(answers: [.empty]), isEnabled: { settings.historyEnabled }, loadsNow: false)
+    HistoryClearing.setSaveCaptures(true, history: history, settings: settings)
+    settle { await history.finishLoading() }
+    check(settings.historyEnabled && history.state == .available,
+          "save captures: on writes the given settings and loads the given history", "\(history.state)")
+    HistoryClearing.setSaveCaptures(false, history: history, settings: settings)
+    drainMain()
+    check(!settings.historyEnabled && history.state == .disabled,
+          "save captures: off writes the given settings and stops the given history; nothing saved, so nothing is asked", "\(history.state)")
 }
 
 // The switch-off decision waits for a queued write, so the capture being written is counted.

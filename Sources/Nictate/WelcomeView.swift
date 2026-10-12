@@ -58,6 +58,8 @@ struct WelcomeView: View {
         AccessibilityLook(reduceTransparency: reduceTransparency, increaseContrast: colorSchemeContrast == .increased)
     }
 
+    private var captureShortcut: String { settings.shortcutLabel(for: .capture) ?? "" }
+
     var body: some View {
         VStack(spacing: Design.Space.page) {
             Image(nsImage: NSApp.applicationIconImage)
@@ -75,7 +77,7 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: Design.Space.page) {
                 screenRecordingStep
                 step(symbol: "keyboard", tint: .accentColor,
-                     title: "Press \(settings.hotKeyLabel), then drag to select an area.",
+                     title: "Press \(captureShortcut), then drag to select an area.",
                      detail: "You can change the shortcut in Settings.")
                 step(symbol: "doc.on.clipboard", tint: .accentColor,
                      title: "Paste the text anywhere.",

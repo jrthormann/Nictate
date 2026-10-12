@@ -37,13 +37,13 @@ global shortcut (HotKeyManager, Carbon)
 | `ColorTokens.swift` | The design system's colours, one per token, with light and dark values. |
 | `AccessibilityLook.swift` | Which colour variant a surface draws with: the standard tokens, or the Increase Contrast ones. |
 | `StorageKeys.swift` | Every persisted key and window autosave name. Values are frozen: they are what users already have saved. |
-| `Settings.swift` | `ObservableObject` over `UserDefaults`; shortcut helpers. |
+| `Settings.swift` | `ObservableObject` over `UserDefaults`; shortcut helpers, and `Settings.shortcutLabel(for:)`, the shortcut label as shown. |
 | `BuildIdentity.swift` | The names that keep a build's data apart from the production app's. The QA build uses `scripts/variants/BuildIdentity.test.swift` instead. |
 | `Updates.swift` | Check for Updates: one request to GitHub's latest-release API, only on the user's click; version order and the accepted release pages are unit tested. |
 | `ResetNictate.swift` | Reset Nictate: confirmation, then every setting returns to its default and the app relaunches. Saved captures are deleted only if the box in the dialog is ticked. |
 | `History.swift` | Capture history (texts and capture times, kept aligned), at most `HistoryPolicy.maximumHistoryEntries` (15). A change is shown only after the store has saved it; Clear on Quit waits for the store's answer. Unit tested. |
 | `HistoryStore.swift` | The history as `history.json` in Application Support, written atomically and read back before a write counts as saved. No Keychain and no encryption of its own. Unit tested. |
-| `HistoryDeletion.swift` | When saved captures are deleted, and which question is asked first: the switch-off and clear alerts. |
+| `HistoryDeletion.swift` | When saved captures are deleted, and which question is asked first: the switch-off and clear alerts, and `HistoryClearing.setSaveCaptures`, the one Save Captures command. |
 | `HistoryRotation.swift` | Pure logic: which capture comes next when cycling the clipboard. |
 | `ClipboardWriter.swift` | The one place Nictate writes the clipboard. A copy counts only after its text reads back. Only Append mode reads the current clipboard, and it skips text other apps mark as concealed or transient. |
 | `Pasteboard.swift` | `NSPasteboard.replaceContents`: replaces the clipboard with a string, marked transient when the setting asks, and returns the change count. Used by `ClipboardWriter`. |
