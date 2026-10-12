@@ -65,7 +65,7 @@ enum HistoryClearing {
     /// Deletes every saved capture and the notices that may still show one.
     static func clear(_ history: History = .shared) {
         history.clear()
-        Notifier.removeAllDelivered()
+        Notifier.withdrawAll()
     }
 
     /// Clear History…: one confirmation, then everything goes.
@@ -84,6 +84,8 @@ enum HistoryClearing {
         alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\r"
         alert.addButton(withTitle: tr("Discard")).hasDestructiveAction = true
         guard run(alert) == .alertSecondButtonReturn else { return }
+        // The discarded file holds the captures, so their banners go before the file does.
+        Notifier.withdrawAll()
         Task { @MainActor in
             let outcome = await history.discardUnreadableFile()
             guard outcome != .confirmed else { return }

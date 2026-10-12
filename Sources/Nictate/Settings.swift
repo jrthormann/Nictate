@@ -7,7 +7,8 @@ import Combine
 import Foundation
 
 /// User preferences stored directly in UserDefaults under the keys in `StorageKeys`, so renaming a
-/// property can never change what is persisted. Every change notifies SwiftUI through `objectWillChange`.
+/// property can never change what is persisted. Every change notifies SwiftUI through `objectWillChange` once: a shortcut's
+/// three fields are saved as one notice, not three.
 @MainActor
 final class Settings: ObservableObject {
     static let shared = Settings()
@@ -47,6 +48,12 @@ final class Settings: ObservableObject {
         defaults.set(value, forKey: key)
     }
 
+    /// Writes several keys as one change, so observers redraw once for a shortcut's fields, not once per field.
+    private func store(_ values: KeyValuePairs<String, Any>) {
+        objectWillChange.send()
+        for (key, value) in values { defaults.set(value, forKey: key) }
+    }
+
     // Shortcut
     var hotKeyCode: Int { get { number(StorageKeys.hotKeyCode) } set { store(newValue, StorageKeys.hotKeyCode) } }
     var hotKeyMods: Int { get { number(StorageKeys.hotKeyMods) } set { store(newValue, StorageKeys.hotKeyMods) } }
@@ -74,10 +81,10 @@ final class Settings: ObservableObject {
         switch slot {
         case .capture:
             guard let shortcut else { return }
-            hotKeyCode = shortcut.code; hotKeyMods = shortcut.mods; hotKeyLabel = label
+            store([StorageKeys.hotKeyCode: shortcut.code, StorageKeys.hotKeyMods: shortcut.mods, StorageKeys.hotKeyLabel: label])
         case .rotateHistory:
             guard let shortcut else { return }
-            rotateHotKeyCode = shortcut.code; rotateHotKeyMods = shortcut.mods; rotateHotKeyLabel = label
+            store([StorageKeys.rotateHotKeyCode: shortcut.code, StorageKeys.rotateHotKeyMods: shortcut.mods, StorageKeys.rotateHotKeyLabel: label])
         case .captureCode:
             objectWillChange.send()
             if let shortcut {

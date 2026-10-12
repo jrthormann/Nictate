@@ -165,6 +165,7 @@ final class StatusPanelModel: ObservableObject {
 
     func deleteCapture(_ text: String) {
         history.remove(text)
+        Notifier.withdrawAll()
     }
 
     func clearHistory() {

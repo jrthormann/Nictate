@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if settings.clearHistoryOnQuit {
             // Notices may still show captured text, so they go whatever the outcome of the history write.
-            Notifier.removeAllDelivered()
+            Notifier.withdrawAll()
             _ = History.shared.clearForQuit()
         } else {
             // A failed wait is already logged by History; quit goes on, as it cannot wait longer than a few seconds.

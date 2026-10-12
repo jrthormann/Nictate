@@ -27,6 +27,7 @@ enum ResetNictate {
         // store, and pending changes are written. If either fails, nothing is reset and the user is told why.
         let deletes = deleteCaptures.state == .on
         if deletes {
+            Notifier.withdrawAll()
             switch History.shared.clearForReset() {
             case .confirmed:
                 break

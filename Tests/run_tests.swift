@@ -2,6 +2,7 @@
 // Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
 import AppKit
+import Combine
 import CryptoKit
 import SwiftUI
 import Carbon.HIToolbox
@@ -62,6 +63,11 @@ var testSuites: [TestSuite] = []
     var finished = false
     Task { await work(); finished = true }
     while !finished { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+}
+
+/// Lets work already handed to the main actor run, by spinning the main run loop a few times.
+@MainActor func drainMain() {
+    for _ in 0..<5 { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
 }
 
 /// A store whose answers the test scripts: each load returns the next scripted result, and saves are counted.
@@ -444,11 +450,115 @@ do {
           "storage: every other setting reads back")
 }
 
+// Shortcut settings: saving a shortcut is one change for observers (the menu bar icon, the panel), not one per stored field.
+do {
+    let prefs = Settings(defaults: freshSuite("shortcut-change").defaults)
+    var changes = 0
+    let watching = prefs.objectWillChange.sink { changes += 1 }
+    prefs.setShortcut(Shortcut(code: 1, mods: cmdKey), label: "⌘S", for: .capture)
+    check(changes == 1, "settings: saving the capture shortcut is one change", "\(changes)")
+    changes = 0
+    prefs.setShortcut(Shortcut(code: 3, mods: optionKey | cmdKey), label: "⌥⌘F", for: .rotateHistory)
+    check(changes == 1, "settings: saving the Cycle History shortcut is one change", "\(changes)")
+    changes = 0
+    prefs.setShortcut(Shortcut(code: 8, mods: cmdKey | controlKey), label: "⌃⌘C", for: .captureCode)
+    prefs.setShortcut(nil, for: .captureCode)
+    check(changes == 2, "settings: setting and removing the code shortcut are one change each", "\(changes)")
+    changes = 0
+    prefs.setShortcut(nil, for: .capture)
+    check(changes == 0, "settings: the capture shortcut cannot be removed, and nothing changes", "\(changes)")
+    watching.cancel()
+}
+
 // Notifications: permission is asked once, at the first notification actually sent.
 do {
     var gate = NotificationGate()
     check(gate.shouldRequest(), "notifications: the first notification asks for permission")
     check(!gate.shouldRequest() && !gate.shouldRequest(), "notifications: later ones do not ask again")
+}
+
+/// A notification center the test answers by hand. It records what Notifier asks and holds each answer (the permission,
+/// a banner added) until the test gives it, so a deletion can come before a late answer.
+final class RecordingCenter: NoticeCenter, @unchecked Sendable {
+    var permissionAnswers: [@Sendable (Bool) -> Void] = []
+    var added: [(identifier: String, body: String)] = []
+    var addAnswers: [@Sendable (Bool) -> Void] = []
+    var removed: [String] = []
+    var removedAll = 0
+    func requestPermission(_ answer: @escaping @Sendable (Bool) -> Void) { permissionAnswers.append(answer) }
+    func add(identifier: String, body: String, _ answer: @escaping @Sendable (Bool) -> Void) {
+        added.append((identifier, body)); addAnswers.append(answer)
+    }
+    func remove(identifier: String) { removed.append(identifier) }
+    func removeAll() { removedAll += 1 }
+}
+
+// Banners: the first waits for the permission answer, a refusal or "None" shows nothing, and later ones do not ask.
+do {
+    let center = RecordingCenter()
+    let notifier = Notifier(settings: Settings(defaults: freshSuite("notices-first").defaults), center: center)
+    notifier.notify(generic: "Text copied", text: "secret")
+    let waited = center.added.isEmpty && center.permissionAnswers.count == 1
+    center.permissionAnswers.first?(true)
+    drainMain()
+    check(waited && center.added.map(\.body) == ["Text copied"],
+          "notifications: the first banner waits for the permission answer, then shows the notice without the text", "\(center.added.map(\.body))")
+    notifier.notify(generic: "Text copied", text: "again")
+    check(center.permissionAnswers.count == 1 && center.added.count == 2, "notifications: later banners are shown without asking again")
+}
+do {
+    let center = RecordingCenter()
+    let notifier = Notifier(settings: Settings(defaults: freshSuite("notices-refused").defaults), center: center)
+    notifier.notify(generic: "Text copied", text: "secret")
+    center.permissionAnswers.first?(false)
+    drainMain()
+    check(center.added.isEmpty, "notifications: a refused permission shows no banner")
+}
+do {
+    let prefs = Settings(defaults: freshSuite("notices-none").defaults)
+    prefs.notificationStyle = .none
+    let center = RecordingCenter()
+    Notifier(settings: prefs, center: center).notify(generic: "Text copied", text: "secret")
+    check(center.permissionAnswers.isEmpty && center.added.isEmpty, "notifications: with Copy Feedback set to None, nothing is asked or shown")
+}
+// Deleting captures withdraws banners: those shown go, and those still on their way never appear.
+do {
+    let prefs = Settings(defaults: freshSuite("notices-late-answer").defaults)
+    prefs.notificationStyle = .text
+    let center = RecordingCenter()
+    let notifier = Notifier(settings: prefs, center: center)
+    notifier.notify(generic: "Text copied", text: "secret")
+    Notifier.withdrawAll(from: center)
+    center.permissionAnswers.first?(true)
+    drainMain()
+    check(center.added.isEmpty, "notifications: a banner still waiting for permission when captures are deleted is never shown", "\(center.added.map(\.body))")
+    check(center.removedAll == 1, "notifications: deleting captures takes down the banners already shown", "\(center.removedAll)")
+}
+do {
+    let center = RecordingCenter()
+    let notifier = Notifier(settings: Settings(defaults: freshSuite("notices-added-late").defaults), center: center)
+    notifier.notify(generic: "Text copied", text: "first")
+    center.permissionAnswers.first?(true)
+    drainMain()
+    notifier.notify(generic: "Text copied", text: "second")
+    let second = center.added.last?.identifier ?? ""
+    Notifier.withdrawAll(from: center)
+    center.addAnswers.last?(true)
+    drainMain()
+    check(!second.isEmpty && center.removed == [second], "notifications: a banner the system adds after captures are deleted is taken down at once", "\(center.removed)")
+}
+do {
+    let prefs = Settings(defaults: freshSuite("notices-after").defaults)
+    prefs.notificationStyle = .text
+    let center = RecordingCenter()
+    let notifier = Notifier(settings: prefs, center: center)
+    Notifier.withdrawAll(from: center)
+    notifier.notify(generic: "Text copied", text: "after")
+    center.permissionAnswers.first?(true)
+    drainMain()
+    center.addAnswers.first?(true)
+    drainMain()
+    check(center.added.map(\.body) == ["after"] && center.removed.isEmpty, "notifications: a banner asked for after a deletion is shown and kept as usual", "\(center.added.map(\.body)) \(center.removed)")
 }
 
 // Welcome: the primary button restarts only when the permission still does not apply after a visit to Settings.
