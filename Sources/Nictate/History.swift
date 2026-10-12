@@ -38,7 +38,6 @@ final class History: ObservableObject {
     @Published private(set) var isClosed = false
     /// True from `handOff` until `cancelHandOff`: a restart has taken the file over, so nothing is written meanwhile.
     private(set) var isHandedOff = false
-    @Published var query = ""
 
     private let store: any HistoryStore
     /// What the file should hold once the writes in flight are done. Changes are built here and published later.
@@ -77,7 +76,7 @@ final class History: ObservableObject {
     /// The app uses `shared`. Tests pass a store of their own, so they never touch the user's captures. With
     /// `loadsNow` the file is read at once, on the calling thread; the app loads in the background instead.
     /// Captures never expire by age: the 15-capture limit is the only thing that removes them.
-    init(store: any HistoryStore = AppHistoryStore.make(),
+    init(store: any HistoryStore,
          isEnabled: @escaping @MainActor () -> Bool = { Settings.shared.historyEnabled },
          loadsNow: Bool = true) {
         self.store = store

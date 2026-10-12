@@ -55,7 +55,6 @@ final class StatusPanelModel: ObservableObject {
     func reset() {
         screen = .main
         query = ""
-        history.query = ""
         // A highlight or an error from an earlier visit must not survive: the list may have changed since.
         selection = nil
         copyError = nil
@@ -69,7 +68,6 @@ final class StatusPanelModel: ObservableObject {
     var languages: [String] { settings.languages }
     var supportedLanguages: [String] { Recognizer.supportedLanguages }
     var historyEnabled: Bool { settings.historyEnabled }
-    var keepHistory: Bool { settings.historyEnabled }
     var historyCount: Int { history.items.count }
     var historyState: HistoryState { history.state }
     var historyFileUnreadable: Bool { history.fileIsUnreadable }
@@ -130,7 +128,6 @@ final class StatusPanelModel: ObservableObject {
         // of the search starts over; otherwise the highlight and what Return copies would be reset.
         guard text != query else { return }
         query = text
-        history.query = text
         // A new search starts at its first match, so Return always has a sensible target.
         selection = entries.isEmpty ? nil : 0
     }
@@ -179,7 +176,6 @@ final class StatusPanelModel: ObservableObject {
     func backToMain() {
         screen = .main
         query = ""
-        history.query = ""
         selection = nil
     }
 }
