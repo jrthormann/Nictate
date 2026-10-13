@@ -1804,8 +1804,9 @@ do {
           "bracket: the straight edges of the bands, stroke and keyline land on device pixels at 1x and 2x")
 
     // Contrast: the bracket against any flat background under the dim, in Light and Dark, standard and Increase Contrast.
-    // The white stroke is painted over the keyline, which sits over the background, so its colour is the white composed over
-    // the keyline. Contrast is sRGB and the worst grey level is kept. WCAG 1.4.11 asks for 3:1.
+    // The white stroke, at its own alpha, is painted over the keyline, which sits over the background, so its colour is
+    // the white composed over the keyline, as drawn. Contrast is sRGB and the worst grey level is kept.
+    // WCAG 1.4.11 asks for 3:1.
     func ratio(_ a: Double, _ b: Double) -> Double {
         let la = linear(a), lb = linear(b)
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
@@ -1813,7 +1814,7 @@ do {
     for (dimming, dark) in [("Light", false), ("Dark", true)] {
         let dim = Double(SelectionOutline.dim(dark: dark))
         for (name, style) in [("standard", standard), ("increased", increased)] {
-            let whiteAlpha = Double(style.innerAlpha), keylineAlpha = Double(style.outerAlpha)
+            let whiteAlpha = Double(SelectionBracket.strokeAlpha), keylineAlpha = Double(style.outerAlpha)
             var worst = Double.infinity
             for level in 0...255 {
                 let background = Double(level) / 255 * (1 - dim)

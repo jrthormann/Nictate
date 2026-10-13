@@ -44,7 +44,7 @@ enum SelectionDrawing {
         if let reach {
             stroke(SelectionBracket.path(around: rect, reach: reach, offset: SelectionBracket.offset,
                                          radius: SelectionBracket.radius),
-                   width: SelectionBracket.stroke, color: NSColor.white.withAlphaComponent(style.innerAlpha).cgColor,
+                   width: SelectionBracket.stroke, color: NSColor.white.withAlphaComponent(SelectionBracket.strokeAlpha).cgColor,
                    in: context)
         }
     }

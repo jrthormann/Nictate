@@ -87,6 +87,9 @@ enum SelectionBracket {
     static let offset: CGFloat = 3
     /// The radius of each bend, on the centre line. The bend is centred on the selection's corner.
     static let radius: CGFloat = 3
+    /// The white stroke's alpha under either contrast setting. It is full, not the band's `innerAlpha`, so the stroke
+    /// paints pure white over its keyline.
+    static let strokeAlpha: CGFloat = 1
     /// How far each arm runs past its corner, along the edge, on a long side. A shorter side gives less.
     static let preferredReach: CGFloat = 8
 
