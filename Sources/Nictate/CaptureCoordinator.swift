@@ -79,8 +79,9 @@ final class CaptureCoordinator {
                 scan.show()
                 ResultPill.shared.show(.reading, near: rect, screen: screen)
             }
-            // Any later exit cancels the timer and closes the line. The explicit calls below run first on the normal path.
-            defer { reading.cancel(); scan.close() }
+            // Any later exit cancels the timer, closes the line and stops the pulse. The explicit calls below run first
+            // on the normal path.
+            defer { reading.cancel(); scan.close(); status.endWorking() }
             status.beginWorking()
             let outcome = await Task.detached(priority: .userInitiated) {
                 CaptureCoordinator.process(region.image, options: options, codeClean: codeClean, cleanText: cleanText,
