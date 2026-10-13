@@ -49,7 +49,9 @@ final class ScanLine {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = true               // Clicks and scrolls reach the app underneath.
-        panel.hidesOnDeactivate = true                // Leaving Nictate (an app or Space switch) hides it at once.
+        // Set, but a probe did not see AppKit hide such a panel when its app deactivated, so that effect is unverified.
+        // The line is closed explicitly when the read ends, whichever way it ends.
+        panel.hidesOnDeactivate = true
         panel.animationBehavior = .none
         let contrast: ContrastVariant = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard
         panel.contentView = ScanLineView(size: rect.size, contrast: contrast)
