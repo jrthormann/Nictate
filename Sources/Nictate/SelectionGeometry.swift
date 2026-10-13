@@ -55,4 +55,83 @@ enum SelectionGeometry {
         let x = min(max(rect.midX - size.width / 2, bounds.minX + inset), bounds.maxX - size.width - inset)
         return CGPoint(x: x, y: min(max(y, bounds.minY + inset), bounds.maxY - size.height - inset))
     }
+
+    /// The length of a corner arm: `preferred` points, at most a third of the shorter side, rounded down to a whole
+    /// device pixel so that the end of the arm lands on the pixel grid.
+    static func cornerLength(for rect: CGRect, scale: CGFloat, preferred: CGFloat = 12) -> CGFloat {
+        let limited = min(preferred, min(rect.width, rect.height) / 3)
+        guard scale > 0 else { return limited }
+        return floor(limited * scale) / scale
+    }
+
+    /// The four strips that make one edge of `width` points: top and bottom across the full length, left and right
+    /// between them. They lie just inside `rect`, or just outside it, and never overlap.
+    static func band(around rect: CGRect, width: CGFloat, outside: Bool) -> [CGRect] {
+        if outside {
+            return [
+                CGRect(x: rect.minX, y: rect.maxY, width: rect.width, height: width),
+                CGRect(x: rect.minX, y: rect.minY - width, width: rect.width, height: width),
+                CGRect(x: rect.minX - width, y: rect.minY, width: width, height: rect.height),
+                CGRect(x: rect.maxX, y: rect.minY, width: width, height: rect.height),
+            ]
+        }
+        let between = max(0, rect.height - 2 * width)
+        return [
+            CGRect(x: rect.minX, y: rect.maxY - width, width: rect.width, height: width),
+            CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: width),
+            CGRect(x: rect.minX, y: rect.minY + width, width: width, height: between),
+            CGRect(x: rect.maxX - width, y: rect.minY + width, width: width, height: between),
+        ]
+    }
+
+    /// Two arms per corner, eight rectangles, each `length` long and `thickness` wide. Inside, the arms run from the
+    /// corner along the edges. Outside, they start at the outer corner, so together they cover the corner square
+    /// beyond the rectangle.
+    static func cornerMarks(of rect: CGRect, length: CGFloat, thickness: CGFloat, outside: Bool) -> [CGRect] {
+        // Each corner, with the direction (+1 or -1) that points into the rectangle along x and along y.
+        let corners: [(x: CGFloat, y: CGFloat, dx: CGFloat, dy: CGFloat)] = [
+            (rect.minX, rect.minY, 1, 1), (rect.maxX, rect.minY, -1, 1),
+            (rect.minX, rect.maxY, 1, -1), (rect.maxX, rect.maxY, -1, -1),
+        ]
+        return corners.flatMap { corner -> [CGRect] in
+            if outside {
+                return [spanned(corner.x - corner.dx * thickness, corner.x + corner.dx * length,
+                                corner.y, corner.y - corner.dy * thickness),
+                        spanned(corner.x, corner.x - corner.dx * thickness,
+                                corner.y - corner.dy * thickness, corner.y + corner.dy * length)]
+            }
+            return [spanned(corner.x, corner.x + corner.dx * length, corner.y, corner.y + corner.dy * thickness),
+                    spanned(corner.x, corner.x + corner.dx * thickness, corner.y, corner.y + corner.dy * length)]
+        }
+    }
+
+    /// The rectangle with opposite corners (x0, y0) and (x1, y1), in either order.
+    private static func spanned(_ x0: CGFloat, _ x1: CGFloat, _ y0: CGFloat, _ y1: CGFloat) -> CGRect {
+        CGRect(x: min(x0, x1), y: min(y0, y1), width: abs(x1 - x0), height: abs(y1 - y0))
+    }
+}
+
+/// The selection's edge: a light band just inside it and a dark band just outside, so that it shows on dark content
+/// and on white pages alike. Each band is one point wide, or two under Increase Contrast.
+enum SelectionOutline {
+    struct Style: Equatable {
+        /// The light band just inside the edge: its width in points and its white alpha.
+        let innerWidth: CGFloat
+        let innerAlpha: CGFloat
+        /// The dark band just outside the edge: its width in points and its black alpha.
+        let outerWidth: CGFloat
+        let outerAlpha: CGFloat
+    }
+
+    /// The corner marks are each band plus this many points, so they read as part of the outline.
+    static let cornerExtra: CGFloat = 1
+
+    static func style(_ variant: ContrastVariant) -> Style {
+        switch variant {
+        case .standard:
+            return Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.35)
+        case .increased:
+            return Style(innerWidth: Design.Stroke.contrast, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8)
+        }
+    }
 }

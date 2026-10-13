@@ -73,11 +73,13 @@ private final class SelectionWindow: NSWindow {
     override var canBecomeMain: Bool { false }
 }
 
-/// Draws the still, the dimming, the selection with a plain outline, and turns mouse and key input into a selection.
+/// Draws the still, the dimming, the selection with its edge and corner marks, and turns mouse and key input into a selection.
 @MainActor
 private final class SelectionView: NSView {
     private let still: DisplayStill
     private unowned let session: SelectionOverlay
+    /// The edge's bands and thickness for this appearance. Read once: the overlay lives for one selection.
+    private let outline: SelectionOutline.Style
     /// Where the selection started: the mouse-down point, or the corner Return set.
     private var anchor: CGPoint?
     /// The moving corner: the pointer, or the keyboard position.
@@ -90,6 +92,7 @@ private final class SelectionView: NSView {
     init(still: DisplayStill, session: SelectionOverlay) {
         self.still = still
         self.session = session
+        outline = SelectionOutline.style(NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard)
         super.init(frame: CGRect(origin: .zero, size: still.frame.size))
         setAccessibilityElement(true)
         setAccessibilityLabel(tr("Select the text to copy"))
@@ -211,10 +214,24 @@ private final class SelectionView: NSView {
             context.clip(to: rect)
             context.draw(still.image, in: bounds)
             context.restoreGState()
-            // A plain one-point outline, as the system screenshot tool draws it.
-            context.setStrokeColor(NSColor.white.cgColor)
-            context.setLineWidth(1)
-            context.stroke(rect.insetBy(dx: 0.5, dy: 0.5))
+            drawOutline(rect, in: context)
         }
+    }
+
+    /// The edge: a dark band just outside the selection, then a light band just inside it, each with four corner
+    /// marks that thicken it by one point. Each set is one fill, so an overlap never doubles its alpha. The two sets
+    /// do not touch, so their order does not change what shows.
+    private func drawOutline(_ rect: CGRect, in context: CGContext) {
+        let length = SelectionGeometry.cornerLength(for: rect, scale: still.scale)
+        context.setFillColor(NSColor.black.withAlphaComponent(outline.outerAlpha).cgColor)
+        context.addRects(SelectionGeometry.band(around: rect, width: outline.outerWidth, outside: true)
+            + SelectionGeometry.cornerMarks(of: rect, length: length,
+                                            thickness: outline.outerWidth + SelectionOutline.cornerExtra, outside: true))
+        context.fillPath()
+        context.setFillColor(NSColor.white.withAlphaComponent(outline.innerAlpha).cgColor)
+        context.addRects(SelectionGeometry.band(around: rect, width: outline.innerWidth, outside: false)
+            + SelectionGeometry.cornerMarks(of: rect, length: length,
+                                            thickness: outline.innerWidth + SelectionOutline.cornerExtra, outside: false))
+        context.fillPath()
     }
 }
