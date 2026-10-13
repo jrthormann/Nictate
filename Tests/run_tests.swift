@@ -1082,6 +1082,13 @@ do {
     check(plan("ABC", mode: .code) == miss(tr("No code found")), "plan: a code capture without a code is a miss")
     check(plan("") == miss(tr("No text found")), "plan: no text is a miss")
     check(plan("", mode: .code, barcode: true) == miss(tr("No text found")), "plan: an empty code is a miss")
+    // A read that Vision could not run is a failure, not an empty capture.
+    let failedRead = RecognitionResult(text: "", isBarcode: false, failed: true)
+    for mode in [CaptureMode.text, .code] {
+        let effects = CapturePlan.effects(mode: mode, result: failedRead, text: "", detections: Detections(), choices: plain, existing: nil)
+        check(effects == miss(tr("Couldn't read this area. Try again.")),
+              "plan: a failed read is reported as a failure in \(mode)")
+    }
     check(plan("hello", detections: found) == [.remember(found), .copy("hello"), .cue(.success), .announce(tr("Text copied")),
                                                .addToHistory("hello"), .notify(generic: tr("Text copied"), text: "hello")],
           "plan: a text capture remembers, copies, cues, announces, saves and notifies, in that order")

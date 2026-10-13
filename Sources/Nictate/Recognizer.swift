@@ -20,6 +20,8 @@ struct RecognitionResult: Sendable {
     let text: String
     /// QR/barcode payloads bypass text formatting and cleaning.
     let isBarcode: Bool
+    /// Vision could not read the capture. Empty text then means a failure, not a capture with nothing in it.
+    var failed = false
 }
 
 enum Recognizer {
@@ -51,7 +53,7 @@ enum Recognizer {
             try VNImageRequestHandler(cgImage: image, options: [:]).perform(options.barcodesOnly ? [barcodes] : [text, barcodes])
         } catch {
             Log.recognition.error("Vision: \(error.localizedDescription, privacy: .public)")
-            return RecognitionResult(text: "", isBarcode: false)
+            return RecognitionResult(text: "", isBarcode: false, failed: true)
         }
 
         let codes = (barcodes.results ?? []).compactMap { $0.payloadStringValue }

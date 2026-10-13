@@ -118,6 +118,7 @@
 "Language" = "Language";
 "Loading history…" = "Loading history…";
 "Couldn't copy text. Try again." = "Couldn't copy text. Try again.";
+"Couldn't read this area. Try again." = "Couldn't read this area. Try again.";
 "History is unavailable right now. New captures are still copied but won't be saved." = "History is unavailable right now. New captures are still copied but won't be saved.";
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Add new captures to the text already copied.";

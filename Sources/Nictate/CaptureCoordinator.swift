@@ -122,6 +122,8 @@ final class CaptureCoordinator {
             style = .success(words == 1 ? tr("Copied · 1 word") : tr("Copied · %d words", words))
         case .some(false):
             style = .miss(tr("Couldn't copy text. Try again."))
+        case .none where capture.result.failed:
+            style = .miss(tr("Couldn't read this area. Try again."))
         case .none:
             style = .miss(mode == .code ? tr("No code found · try a larger area") : tr("No text found · try a larger area"))
         }
