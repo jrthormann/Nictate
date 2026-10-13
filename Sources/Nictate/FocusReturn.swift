@@ -37,4 +37,10 @@ final class FocusReturn {
     static func shouldReturn(nictateIsActive: Bool, hasTarget: Bool, targetRunning: Bool, targetIsNictate: Bool) -> Bool {
         nictateIsActive && hasTarget && targetRunning && !targetIsNictate
     }
+
+    /// The rule, apart from AppKit: a shortcut pressed during a capture or while the panel is open finds Nictate
+    /// already active, so the app to return to was remembered when that action began and must be kept.
+    static func shouldRemember(captureInFlight: Bool, panelShown: Bool) -> Bool {
+        !captureInFlight && !panelShown
+    }
 }

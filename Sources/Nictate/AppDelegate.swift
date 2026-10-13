@@ -93,7 +93,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// What a shortcut does.
     private func perform(_ slot: ShortcutSlot) {
-        FocusReturn.shared.remember()
+        let busy = running?.capture.isCapturing ?? false
+        let panelShown = running?.panel.isShown ?? false
+        if FocusReturn.shouldRemember(captureInFlight: busy, panelShown: panelShown) { FocusReturn.shared.remember() }
         guard let capture = running?.capture else { return }
         switch slot {
         case .capture: capture.capture(mode: .text)

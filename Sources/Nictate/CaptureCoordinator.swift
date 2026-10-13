@@ -18,7 +18,7 @@ final class CaptureCoordinator {
     private let status: StatusItemController
     private let windows: WindowCoordinator
     private let notifier = Notifier()
-    private var isCapturing = false
+    private(set) var isCapturing = false
     /// Colors, links and emails found in the latest capture, offered in the menu.
     private(set) var lastDetections = Detections()
     /// Shared with the History screen, so Cycle History and Append mode know about its copies too.

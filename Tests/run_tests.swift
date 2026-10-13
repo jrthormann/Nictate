@@ -3214,6 +3214,13 @@ check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRu
       "focus: a terminated app is never activated")
 check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: true),
       "focus: never returns to Nictate itself")
+// A shortcut pressed during a capture, or while the panel is open, must not forget the app remembered before.
+check(FocusReturn.shouldRemember(captureInFlight: false, panelShown: false),
+      "focus: a shortcut from outside remembers the frontmost app")
+check(!FocusReturn.shouldRemember(captureInFlight: true, panelShown: false),
+      "focus: a shortcut during a capture keeps the app remembered")
+check(!FocusReturn.shouldRemember(captureInFlight: false, panelShown: true),
+      "focus: a shortcut while the panel is open keeps the app remembered")
 
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),
