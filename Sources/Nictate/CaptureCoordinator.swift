@@ -68,11 +68,16 @@ final class CaptureCoordinator {
                 FocusReturn.shared.returnIfStillActive()
                 return
             }
-            // "Reading…" appears only when recognition is slow enough to notice.
+            // The scan line and "Reading…" appear only when recognition is slow enough to notice. The line is closed
+            // before the copy, so it is never on screen when the next capture takes its stills.
+            let scan = ScanLine(rect: region.rect)
+            defer { scan.close() } // Safety net for any later early exit; the explicit close below runs first.
+            let rect = region.rect, screen = region.screen // The timer task keeps no reference to the pixels.
             let reading = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Task.sleep(for: .seconds(StatusFlash.workingDelay))
                 guard !Task.isCancelled else { return }
-                ResultPill.shared.show(.reading, near: region.rect, screen: region.screen)
+                scan.show()
+                ResultPill.shared.show(.reading, near: rect, screen: screen)
             }
             status.beginWorking()
             let outcome = await Task.detached(priority: .userInitiated) {
@@ -80,6 +85,7 @@ final class CaptureCoordinator {
                                            faithful: faithful, detect: detect)
             }.value
             reading.cancel()
+            scan.close() // Before the clipboard write, the result pill and focus return.
             status.endWorking()
             finish(outcome, mode: mode, region: region)
         }

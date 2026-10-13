@@ -1720,6 +1720,14 @@ do {
     check(!reportsCopied, "pill: Copied appears only when the clipboard took the text")
 }
 
+// Scan line: shown only for a read slow enough to notice, on a selection at least one line tall, and never under Reduce Motion.
+do {
+    check(!ScanLine.isShown(height: 200, reduceMotion: true), "scan line: never shown under Reduce Motion")
+    check(!ScanLine.isShown(height: 15, reduceMotion: false), "scan line: not shown for a selection under one line of text (15 pt)")
+    check(ScanLine.isShown(height: 16, reduceMotion: false), "scan line: shown from 16 pt, one line of text")
+    check(StatusFlash.workingDelay == 0.3, "scan line: the line and the Reading pill wait the same 300 ms")
+}
+
 // History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never
 // overwritten: the history stays unavailable until the file can be read again.
 do {
