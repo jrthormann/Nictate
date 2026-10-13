@@ -48,8 +48,9 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
   The stroke's centre line is 3 pt outside the edge, each bend has a 3 pt radius, and each arm reaches 8 pt past its
   corner, or a third of the shorter side where that is less. A bracket is drawn only when the shorter side is at least
   12 pt. Increase Contrast: the inner band is 2 pt white at 100 %, and the outer band is black at 80 %. No shadow,
-  glow, handles or size label. These values are verified in offscreen renders, and not yet verified on a live display.
-  The geometry was accepted in the 2026-10-13 visual review of those renders.
+  glow, handles or size label. These values are inspected in offscreen renders, and in held-state screenshots on a live
+  2x display and a 1x display (2026-10-13). User visual approval is pending. The geometry was accepted in the
+  2026-10-13 visual review of those renders.
 - **Result pill:** HUD material (opaque under Reduce Transparency), 14 pt corners, one line of 13 pt medium text and
   a 15 pt semibold symbol: check for copied, question mark for nothing found, warning triangle for a read or copy
   failure. Fades in and out in 200 ms (instant under Reduce Motion), stays 1.5 s or while hovered, a click dismisses
