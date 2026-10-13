@@ -42,10 +42,14 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
 - **Alerts:** Cancel is the default. A destructive alert never sits on Return.
 - **Settings rows:** grouped `Form` sections, label on the left, control on the right. No cards.
 - **Selection overlay:** the still is dimmed (28 % Light, 45 % Dark). The edge is a pair of bands on whole device
-  pixels: 1 pt white at 90 % inside, 1 pt black at 60 % outside. Four corner marks, 12 pt arms (at most a third of
-  the shorter side), thicken each band by 1 pt. Increase Contrast: 2 pt white at 100 %, black at 80 %. No shadow,
-  glow, handles or size label. (Corner marks approved 2026-10-13; this replaces the earlier rule against corner
-  decoration.)
+  pixels: 1 pt white at 90 % inside, 1 pt black at 60 % outside. The dark band closes into a ring around the corners,
+  so it replaces the square corner marks. Four round-capped corner brackets sit beyond the ring, one per corner: a
+  2 pt white stroke at 100 %, with a 1 pt black keyline at 60 % on its outer side only (80 % under Increase Contrast).
+  The stroke's centre line is 3 pt outside the edge, each bend has a 3 pt radius, and each arm reaches 8 pt past its
+  corner, or a third of the shorter side where that is less. A bracket is drawn only when the shorter side is at least
+  12 pt. Increase Contrast: the inner band is 2 pt white at 100 %, and the outer band is black at 80 %. No shadow,
+  glow, handles or size label. These values are verified in offscreen renders, and not yet verified on a live display.
+  The geometry was accepted in the 2026-10-13 visual review of those renders.
 - **Result pill:** HUD material (opaque under Reduce Transparency), 14 pt corners, one line of 13 pt medium text and
   a 15 pt semibold symbol: check for copied, question mark for nothing found, warning triangle for a read or copy
   failure. Fades in and out in 200 ms (instant under Reduce Motion), stays 1.5 s or while hovered, a click dismisses
@@ -66,7 +70,7 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
 
 ## 6. Motion & Interaction
 
-- Menu bar feedback: one blink for success, two for failure. Reduce Motion replaces it with a 150 ms fade.
+- Menu bar feedback: one blink for success, two for failure. Reduce Motion tints the icon for one second, without the blink.
 - Overlay: no animation when it appears; it must be on screen within one frame of the shortcut.
 - Scan line: 1.2 s sweep, ease in-out, fading in and out over the first and last 15 %; removed the moment
   recognition ends.
