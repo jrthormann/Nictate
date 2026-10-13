@@ -73,6 +73,28 @@ final class StandInKeyWindow: NSWindow {
 }
 @MainActor
 func descendants(of view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(descendants(of:)) }
+/// The run's windows on screen, apart from the menu bar's: what a capture adds and must take away again.
+@MainActor
+func visibleWindows() -> [NSWindow] {
+    NSApp.windows.filter { $0.isVisible && !String(describing: type(of: $0)).contains("StatusBar") }
+}
+@MainActor
+func visibleWindowIDs() -> Set<ObjectIdentifier> { Set(visibleWindows().map(ObjectIdentifier.init)) }
+/// Holds an object without keeping it alive, so a check can see that it was released.
+final class WeakRef<Object: AnyObject> {
+    weak var object: Object?
+    init(_ object: Object?) { self.object = object }
+}
+/// The threshold timer of a capture, written as CaptureCoordinator.capture(mode:) writes it: after the working delay, a
+/// read still running reveals a line that is still open. The capture itself cannot run here (see the scan line checks).
+@MainActor
+func scanTimer(for scan: ScanLine) -> Task<Void, Never> {
+    Task { @MainActor in
+        try? await Task.sleep(for: .seconds(StatusFlash.workingDelay))
+        guard ScanLine.mayReveal(readRunning: !Task.isCancelled, lineClosed: scan.isClosed) else { return }
+        scan.show()
+    }
+}
 
 MainActor.assumeIsolated {
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -273,6 +295,102 @@ MainActor.assumeIsolated {
         check(!HistoryDeletion.asksOnSwitchOff(savedCount: empty.items.count), "history deletion: an empty history asks nothing when saving is switched off")
     }
 
+    // MARK: Scan line: the window a slow read shows is gone when the read ends, however it ends
+    // A capture needs Screen Recording and a drag on the overlay, so CaptureCoordinator cannot run here. These checks
+    // drive the real ScanLine, on its own and under a timer written like the capture's (scanTimer), and end each read
+    // the way the capture does: the timer is cancelled, then the line is closed.
+    do {
+        let rect = CGRect(x: 200, y: 200, width: 200, height: 100)
+        let baseline = visibleWindowIDs()
+        if reduceMotion {
+            let line = ScanLine(rect: rect)
+            line.show()
+            check(!line.isShowing && visibleWindowIDs() == baseline, "scan line: under Reduce Motion it makes no window")
+            line.close()
+            skip("scan line: window teardown (Reduce Motion is on, so the line makes no window to take away)")
+        } else {
+            let wasActive = NSApp.isActive
+            let shown = WeakRef<NSWindow>(nil), first = WeakRef<ScanLine>(nil)
+            autoreleasepool {
+                let line = ScanLine(rect: rect)
+                first.object = line
+                line.show()
+                let added = visibleWindows().filter { !baseline.contains(ObjectIdentifier($0)) }
+                check(added.count == 1 && line.isShowing, "scan line: showing it adds exactly one window", "\(added.count)")
+                if let panel = added.first {
+                    shown.object = panel
+                    check(!panel.isKeyWindow && !panel.canBecomeKey, "scan line: its window is never key")
+                    check(panel.ignoresMouseEvents, "scan line: its window lets clicks through to the app underneath")
+                    check(panel.level == .statusBar, "scan line: its window sits at the status bar level", "\(panel.level.rawValue)")
+                    check(panel.frame == rect, "scan line: its window covers the selection and nothing more", "\(panel.frame)")
+                }
+                check(NSApp.isActive == wasActive, "scan line: showing it does not change whether Nictate is active")
+                line.close()
+                check(shown.object?.isVisible == false && !line.isShowing && visibleWindowIDs() == baseline,
+                      "scan line: closing it takes its window off the screen")
+                line.close()
+                line.show()
+                check(!line.isShowing && visibleWindowIDs() == baseline, "scan line: a second close, and a show after close, add no window")
+            }
+            check(waitUntil { shown.object == nil && first.object == nil }, "scan line: the closed line and its window are released")
+
+            // Twenty slow reads in a row: each adds one window and takes it away again, and none is kept.
+            var mismatches = 0
+            var windows: [WeakRef<NSWindow>] = []
+            for _ in 1...20 {
+                autoreleasepool {
+                    let line = ScanLine(rect: rect)
+                    line.show()
+                    let added = visibleWindows().filter { !baseline.contains(ObjectIdentifier($0)) }
+                    windows.append(WeakRef(added.first))
+                    line.close()
+                    if added.count != 1 || visibleWindowIDs() != baseline { mismatches += 1 }
+                }
+            }
+            check(mismatches == 0, "scan line: 20 shows and closes in a row each add one window and take it away", "\(mismatches) off")
+            check(waitUntil { windows.allSatisfy { $0.object == nil } }, "scan line: none of those 20 windows is kept")
+
+            var lines: [WeakRef<ScanLine>] = []
+            // A read still running at the threshold: the timer shows the line, and the end of the read takes it away.
+            autoreleasepool {
+                let scan = ScanLine(rect: rect)
+                lines.append(WeakRef(scan))
+                let reading = scanTimer(for: scan)
+                check(waitUntil { scan.isShowing } && visibleWindowIDs().count == baseline.count + 1,
+                      "scan line, end of read: a read still running at 300 ms shows the line")
+                reading.cancel(); scan.close()
+                check(!scan.isShowing && visibleWindowIDs() == baseline,
+                      "scan line, end of read: a read ending after 300 ms takes the line away at once")
+            }
+            waitPast(StatusFlash.workingDelay)
+            check(visibleWindowIDs() == baseline, "scan line, end of read: nothing brings the line back afterwards")
+
+            // A read over before the threshold: the timer finds it ended and shows nothing.
+            autoreleasepool {
+                let scan = ScanLine(rect: rect)
+                lines.append(WeakRef(scan))
+                let reading = scanTimer(for: scan)
+                reading.cancel(); scan.close()
+            }
+            waitPast(StatusFlash.workingDelay)
+            check(visibleWindowIDs() == baseline, "scan line, end of read: a read ending before 300 ms never shows the line")
+
+            // The timer falls due as the read ends: both wait for the main thread, and the end of the read runs first.
+            autoreleasepool {
+                let scan = ScanLine(rect: rect)
+                lines.append(WeakRef(scan))
+                let reading = scanTimer(for: scan)
+                waitPast(0.05) // The timer has begun its 300 ms.
+                // The main thread stays busy past the threshold, so the timer's wake-up queues behind the end of the
+                // read.
+                Thread.sleep(forTimeInterval: StatusFlash.workingDelay + 0.2)
+                reading.cancel(); scan.close()
+            }
+            waitPast(StatusFlash.workingDelay)
+            check(visibleWindowIDs() == baseline, "scan line, end of read: a timer due in the same turn as the end shows nothing")
+            check(waitUntil { lines.allSatisfy { $0.object == nil } }, "scan line: each line is released once its read has ended")
+        }
+    }
 }
 
 if notes > 0 { print("\n\(notes) NOTE\(notes == 1 ? "" : "S") (environment, not failures)") }
