@@ -70,26 +70,18 @@ final class CaptureCoordinator {
             }
             // The scan line and "Reading…" appear only when recognition is slow enough to notice. The line is closed
             // before the copy, so it is never on screen when the next capture takes its stills.
-            let scan = ScanLine(rect: region.rect)
-            let rect = region.rect, screen = region.screen // The timer task keeps no reference to the pixels.
-            let reading = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(StatusFlash.workingDelay))
-                // A read that has ended, or a line already closed, reveals nothing (see ScanLine.mayReveal).
-                guard ScanLine.mayReveal(readRunning: !Task.isCancelled, lineClosed: scan.isClosed) else { return }
-                scan.show()
-                ResultPill.shared.show(.reading, near: rect, screen: screen)
-            }
+            let reading = ReadingPresentation(rect: region.rect, screen: region.screen)
+            reading.start()
             // Any later exit cancels the timer, closes the line and stops the pulse. The explicit calls below run first
             // on the normal path. It cannot take down a "Reading…" pill the timer has shown, so an early exit added
             // between the timer and the result must show a result (through showResult) or hide the pill.
-            defer { reading.cancel(); scan.close(); status.endWorking() }
+            defer { reading.end(); status.endWorking() }
             status.beginWorking()
             let outcome = await Task.detached(priority: .userInitiated) {
                 CaptureCoordinator.process(region.image, options: options, codeClean: codeClean, cleanText: cleanText,
                                            faithful: faithful, detect: detect)
             }.value
-            reading.cancel()
-            scan.close() // Before the clipboard write, the result pill and focus return.
+            reading.end() // Before the clipboard write, the result pill and focus return.
             status.endWorking()
             finish(outcome, mode: mode, region: region)
         }

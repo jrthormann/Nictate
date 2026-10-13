@@ -99,17 +99,6 @@ final class WeakRef<Object: AnyObject> {
     weak var object: Object?
     init(_ object: Object?) { self.object = object }
 }
-/// A copy of the threshold timer in CaptureCoordinator.capture(mode:), without its "Reading…" pill: after the working
-/// delay, a read still running reveals a line that is still open. The capture itself cannot run here (see the scan line
-/// checks).
-@MainActor
-func scanTimer(for scan: ScanLine) -> Task<Void, Never> {
-    Task { @MainActor in
-        try? await Task.sleep(for: .seconds(StatusFlash.workingDelay))
-        guard ScanLine.mayReveal(readRunning: !Task.isCancelled, lineClosed: scan.isClosed) else { return }
-        scan.show()
-    }
-}
 
 MainActor.assumeIsolated {
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -312,8 +301,7 @@ MainActor.assumeIsolated {
 
     // MARK: Scan line: the window a slow read shows is gone when the read ends, however it ends
     // A capture needs Screen Recording and a drag on the overlay, so CaptureCoordinator cannot run here. These checks
-    // drive the real ScanLine, on its own and under a timer written like the capture's (scanTimer), and end each read
-    // the way the capture does: the timer is cancelled, then the line is closed.
+    // drive the real ScanLine on its own. The reading presentation after them is the capture's own timer, line and pill.
     do {
         let rect = CGRect(x: 200, y: 200, width: 200, height: 100)
         let baseline = visibleWindowIDs()
@@ -323,7 +311,7 @@ MainActor.assumeIsolated {
             check(!line.isShowing && visibleWindowIDs() == baseline,
                   "scan line: under Reduce Motion it makes no window", scanState(line, baseline))
             line.close()
-            skip("scan line: window teardown and end-of-read checks (Reduce Motion is on: the line makes no window)")
+            skip("scan line: window teardown checks (Reduce Motion is on: the line makes no window)")
         } else {
             let shown = WeakRef<NSWindow>(nil), first = WeakRef<ScanLine>(nil)
             autoreleasepool {
@@ -373,53 +361,87 @@ MainActor.assumeIsolated {
             check(mismatches == 0, "scan line: 20 shows and closes in a row each add one window and take it away", "\(mismatches) off")
             check(waitUntil { windows.allSatisfy { $0.object == nil } }, "scan line: none of those 20 windows is kept",
                   "\(windows.filter { $0.object != nil }.count) of \(windows.count) kept")
-
-            var lines: [WeakRef<ScanLine>] = []
-            // A read still running at the threshold: the timer shows the line, and the end of the read takes it away.
-            autoreleasepool {
-                let scan = ScanLine(rect: rect)
-                lines.append(WeakRef(scan))
-                let reading = scanTimer(for: scan)
-                check(waitUntil { scan.isShowing } && visibleWindowIDs().count == baseline.count + 1,
-                      "scan line, end of read: a read still running at 300 ms shows the line",
-                      scanState(scan, baseline))
-                reading.cancel(); scan.close()
-                check(!scan.isShowing && visibleWindowIDs() == baseline,
-                      "scan line, end of read: a read ending after 300 ms takes the line away at once",
-                      scanState(scan, baseline))
-            }
-            waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: nothing brings the line back afterwards",
-                  windowDelta(baseline))
-
-            // A read over before the threshold: the timer finds it ended and shows nothing.
-            autoreleasepool {
-                let scan = ScanLine(rect: rect)
-                lines.append(WeakRef(scan))
-                let reading = scanTimer(for: scan)
-                reading.cancel(); scan.close()
-            }
-            waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: a read ending before 300 ms never shows the line",
-                  windowDelta(baseline))
-
-            // The timer falls due as the read ends: both wait for the main thread, and the end of the read runs first.
-            autoreleasepool {
-                let scan = ScanLine(rect: rect)
-                lines.append(WeakRef(scan))
-                let reading = scanTimer(for: scan)
-                waitPast(0.05) // The timer has begun its 300 ms.
-                // The main thread stays busy past the threshold, so the timer's wake-up queues behind the end of the
-                // read.
-                Thread.sleep(forTimeInterval: StatusFlash.workingDelay + 0.2)
-                reading.cancel(); scan.close()
-            }
-            waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: a timer due in the same turn as the end shows nothing",
-                  windowDelta(baseline))
-            check(waitUntil { lines.allSatisfy { $0.object == nil } }, "scan line: each line is released once its read has ended",
-                  "\(lines.filter { $0.object != nil }.count) of \(lines.count) kept")
         }
+    }
+
+    // MARK: Reading presentation: the capture's timer, scan line and "Reading…" pill, as the capture runs them
+    // The capture starts a presentation when its read begins and ends it when the read ends, however the read ends.
+    // Under Reduce Motion the line makes no window, so the pill is the only one.
+    do {
+        let rect = CGRect(x: 200, y: 200, width: 200, height: 100)
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        ResultPill.shared.hide(animated: false)
+        let baseline = visibleWindowIDs()
+        // Each presentation is held here only by a weak reference, so the release check can see it go.
+        var presentations: [WeakRef<ReadingPresentation>] = []
+        autoreleasepool {
+            // A slow read: nothing for the working delay, then the line and the pill together.
+            let slow = ReadingPresentation(rect: rect, screen: screen)
+            presentations.append(WeakRef(slow))
+            slow.start()
+            waitPast(0.2)
+            check(visibleWindowIDs() == baseline, "reading: nothing shows before the 300 ms working delay", windowDelta(baseline))
+            let expected = reduceMotion ? 1 : 2
+            check(waitUntil { visibleWindowIDs().count == baseline.count + expected },
+                  "reading: at 300 ms the pill shows, with the scan line too unless Reduce Motion is on", windowDelta(baseline))
+            let added = visibleWindows().filter { !baseline.contains(ObjectIdentifier($0)) }
+            let linePanel = added.first { $0.frame == rect }
+            let pillPanel = added.first { $0.frame != rect }
+            let pillAtPlace = pillPanel.map {
+                $0.frame.origin == SelectionGeometry.pillOrigin(size: $0.frame.size, below: rect, within: screen)
+            } ?? false
+            check(pillAtPlace, "reading: the pill sits where a result pill sits, below the selection",
+                  pillPanel.map { "\($0.frame)" } ?? "no pill window")
+            if reduceMotion {
+                check(linePanel == nil, "reading: under Reduce Motion the scan line makes no window", windowDelta(baseline))
+            } else {
+                check(linePanel?.ignoresMouseEvents == true, "reading: the scan line covers the selection and lets clicks through",
+                      "frames \(added.map(\.frame))")
+            }
+            slow.end()
+            check(reduceMotion || linePanel?.isVisible == false,
+                  "reading: ending the read takes the line's window off at once, before any run-loop turn",
+                  linePanel.map { windowState($0) } ?? "no line window")
+            check(pillPanel?.isVisible == true, "reading: ending the read leaves the pill up for the result", windowDelta(baseline))
+            ResultPill.shared.hide(animated: false)
+            check(visibleWindowIDs() == baseline, "reading: with the pill hidden, the windows equal the baseline", windowDelta(baseline))
+        }
+        autoreleasepool {
+            // A fast read: it ends at 100 ms, and for half a second after that nothing shows.
+            let fast = ReadingPresentation(rect: rect, screen: screen)
+            presentations.append(WeakRef(fast))
+            fast.start()
+            waitPast(0.1)
+            fast.end()
+            waitPast(0.5)
+            check(visibleWindowIDs() == baseline, "reading: a read ending at 100 ms shows nothing, not even after the working delay",
+                  windowDelta(baseline))
+        }
+        autoreleasepool {
+            // The timer falls due as the read ends. The main thread stays busy past the working delay, so the timer's
+            // wake-up queues behind the end of the read, and the end cancels the timer before it can reveal anything.
+            let busy = ReadingPresentation(rect: rect, screen: screen)
+            presentations.append(WeakRef(busy))
+            busy.start()
+            waitPast(0.05) // The timer has begun its working delay.
+            Thread.sleep(forTimeInterval: StatusFlash.workingDelay + 0.2)
+            busy.end()
+            waitPast(StatusFlash.workingDelay)
+            check(visibleWindowIDs() == baseline, "reading: a timer due in the same turn as the end shows nothing", windowDelta(baseline))
+        }
+        autoreleasepool {
+            // Ended twice, then started: nothing shows, and the presentation is released.
+            let late = ReadingPresentation(rect: rect, screen: screen)
+            presentations.append(WeakRef(late))
+            late.end()
+            late.end()
+            late.start()
+        }
+        waitPast(StatusFlash.workingDelay)
+        check(visibleWindowIDs() == baseline, "reading: ended twice, then started, shows nothing", windowDelta(baseline))
+        check(waitUntil { presentations.allSatisfy { $0.object == nil } },
+              "reading: each presentation is released once its read has ended",
+              "\(presentations.filter { $0.object != nil }.count) of \(presentations.count) kept")
     }
 }
 

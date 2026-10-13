@@ -77,6 +77,7 @@ global shortcut (HotKeyManager, Carbon)
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
 | `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, the outline bands (a closed ring outside the selection), and the four corner brackets (`SelectionBracket`, unit tested). |
 | `ScanLine.swift` | The scan line over the selection while a slow read runs: a borderless, click-through window with no image, shown after the 300 ms working delay and closed before the result. |
+| `ReadingPresentation.swift` | One capture's slow-read presentation: the scan line and the "Reading…" pill start together after the 300 ms working delay, and `end` cancels the timer and closes the line before the result. Holds rectangles, never pixels. |
 | `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. Deleting saved captures withdraws every banner; the system's notification center sits behind the `NoticeCenter` seam, so tests answer it by hand. |
 
 ## Scripts
