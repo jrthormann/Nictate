@@ -72,6 +72,7 @@ global shortcut (HotKeyManager, Carbon)
 | `TextPipeline.swift` / `LinkPolicy.swift` | Pure rules extracted from the capture code: what a recognized capture becomes before it is copied, and which QR/barcode links may be offered to open (unit tested). |
 | `ScreenStill.swift` | ScreenCaptureKit stills per display; the first complete frame of a short stream. Nothing is written to disk. |
 | `SelectionOverlay.swift` | The selection windows and their view: dimming, outline, keyboard and mouse. |
+| `SelectionDrawing.swift` | What the overlay paints over its still: the still, the dim, and the selection with its edge. Drawn on a bare `CGContext`, so `make render` (`Tests/render_capture.swift`) draws the same pixels into PNG files. |
 | `ContentClassifier.swift` | Pure rules that decide whether a capture is code, a table, a list or prose from its text and layout. Only confident prose loses its line breaks. Tested on a 40-text corpus (`Tests/corpus/captures.tsv`) and a held-out set. |
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
 | `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, and the outline bands and corner marks (unit tested). |

@@ -203,35 +203,8 @@ private final class SelectionView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let rect = selection
         let selected = anchor != nil && SelectionGeometry.isRegion(rect)
-
-        context.draw(still.image, in: bounds)
-        // The dim is 28 % in Light and 45 % in Dark (SelectionOutline.dim).
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        context.setFillColor(NSColor.black.withAlphaComponent(SelectionOutline.dim(dark: dark)).cgColor)
-        context.fill(bounds)
-        if selected {
-            context.saveGState()
-            context.clip(to: rect)
-            context.draw(still.image, in: bounds)
-            context.restoreGState()
-            drawOutline(rect, in: context)
-        }
-    }
-
-    /// The edge: a dark band just outside the selection, then a light band just inside it, each with four corner
-    /// marks that thicken it by one point. Each set is one fill, so an overlap never doubles its alpha. The two sets
-    /// do not touch, so their order does not change what shows.
-    private func drawOutline(_ rect: CGRect, in context: CGContext) {
-        let length = SelectionGeometry.cornerLength(for: rect, scale: still.scale)
-        context.setFillColor(NSColor.black.withAlphaComponent(outline.outerAlpha).cgColor)
-        context.addRects(SelectionGeometry.band(around: rect, width: outline.outerWidth, outside: true)
-            + SelectionGeometry.cornerMarks(of: rect, length: length,
-                                            thickness: outline.outerWidth + SelectionOutline.cornerExtra, outside: true))
-        context.fillPath()
-        context.setFillColor(NSColor.white.withAlphaComponent(outline.innerAlpha).cgColor)
-        context.addRects(SelectionGeometry.band(around: rect, width: outline.innerWidth, outside: false)
-            + SelectionGeometry.cornerMarks(of: rect, length: length,
-                                            thickness: outline.innerWidth + SelectionOutline.cornerExtra, outside: false))
-        context.fillPath()
+        SelectionDrawing.draw(still: still.image, in: bounds, selection: selected ? rect : nil, dark: dark,
+                              style: outline, scale: still.scale, context: context)
     }
 }
