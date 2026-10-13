@@ -52,8 +52,10 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
   it. "Copied" appears only after the clipboard read-back.
 - **Empty states:** composed, not blank. History says what to do: "Press ⇧⌘2 and drag over any text."
 - **Progress:** past 0.3 s of recognition, the menu bar icon pulses, the Reading pill appears, and a 2 pt
-  white-and-black line sweeps the selected area top to bottom. Under Reduce Motion the icon rests dimmed, the dot is
-  still and the line is not shown. No circular spinner.
+  white-and-black line sweeps the selected area top to bottom. The line is not drawn on a selection less than 16 pt
+  tall, whatever its width, and the Reading pill still appears. Its peak opacity is 60 %, or 90 % under Increase
+  Contrast, and its black half uses the outline's dark alpha: 35 %, or 80 % under Increase Contrast. Under Reduce
+  Motion the icon rests dimmed, the dot is still and the line is not shown. No circular spinner.
 
 ## 5. Layout Principles
 
