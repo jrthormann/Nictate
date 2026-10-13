@@ -95,7 +95,9 @@ private final class SelectionView: NSView {
         outline = SelectionOutline.style(NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard)
         super.init(frame: CGRect(origin: .zero, size: still.frame.size))
         setAccessibilityElement(true)
+        setAccessibilityRole(.layoutArea)   // A canvas the user draws a selection on, not an unknown element.
         setAccessibilityLabel(tr("Select the text to copy"))
+        setAccessibilityHelp(tr("Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel."))
     }
 
     required init?(coder: NSCoder) { nil }

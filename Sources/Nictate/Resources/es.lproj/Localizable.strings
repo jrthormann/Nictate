@@ -88,6 +88,7 @@
 "Delete Captures" = "Borrar capturas";
 "No captures yet" = "Todavía no hay capturas";
 "Select the text to copy" = "Selecciona el texto que quieres copiar";
+"Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel." = "Pulsa Return para empezar una esquina, mueve la otra con las flechas y pulsa Return para copiar o Esc para cancelar.";
 "The screen could not be read" = "No se pudo leer la pantalla";
 "Reading…" = "Leyendo…";
 "Copied · 1 word" = "Copiado · 1 palabra";

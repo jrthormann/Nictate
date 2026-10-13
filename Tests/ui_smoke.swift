@@ -42,6 +42,8 @@ func waitUntil(_ timeout: Double = 4, _ condition: () -> Bool) -> Bool {
 final class Marker: @unchecked Sendable { var fired = false }
 /// Set from inside the link question's modal alert: whether the alert was up, and whether a pill of the capture was on screen.
 final class QuestionProbe: @unchecked Sendable { var asked = false; var pillUp = true }
+/// Receives what a selection on a test still returns: the chosen region, or nil when it was cancelled, and whether it has ended.
+final class OverlayProbe: @unchecked Sendable { var done = false; var region: SelectedRegion? }
 /// Waits until a block queued on the main queue for `seconds` from now has run. Anything the code under test
 /// queued there for an earlier moment has then run too, however busy the machine: the way to show that
 /// something does NOT happen without guessing a margin.
@@ -482,6 +484,63 @@ MainActor.assumeIsolated {
         check(probe.asked, "link question: Open this link? was asked")
         check(probe.asked && !probe.pillUp, "link question: no pill is on screen while the question waits")
         check(waitUntil { visibleWindowIDs() == baseline }, "link question: once answered, no window is left", windowDelta(baseline))
+    }
+
+    // MARK: Selection overlay: VoiceOver hears a layout area with keyboard help, and the keyboard alone selects, copies and cancels
+    do {
+        let context = CGContext(data: nil, width: 240, height: 120, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 0.5, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 240, height: 120))
+        let still = DisplayStill(frame: CGRect(x: 120, y: 120, width: 240, height: 120), scale: 1, image: context.makeImage()!)
+        let baseline = visibleWindowIDs()
+        @MainActor
+        func key(_ view: NSView, _ code: Int, _ characters: String, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                             windowNumber: view.window?.windowNumber ?? 0, context: nil, characters: characters,
+                             charactersIgnoringModifiers: characters, isARepeat: false, keyCode: UInt16(code))!
+        }
+        // Starts a selection on the still and returns the overlay's view once its window is on screen.
+        @MainActor
+        func openOverlay(_ probe: OverlayProbe) -> NSView? {
+            Task { @MainActor in
+                probe.region = await SelectionOverlay.select([still])
+                probe.done = true
+            }
+            waitUntil { NSApp.windows.contains { $0.isVisible && $0.level == .screenSaver } }
+            return NSApp.windows.first { $0.isVisible && $0.level == .screenSaver }?.contentView
+        }
+
+        let selecting = OverlayProbe()
+        let view = openOverlay(selecting)
+        check(view?.accessibilityRole() == .layoutArea, "overlay: VoiceOver hears a layout area, not an unknown element",
+              "role \(String(describing: view?.accessibilityRole()))")
+        check(view?.accessibilityLabel() == tr("Select the text to copy"), "overlay: VoiceOver still hears the label",
+              "\(view?.accessibilityLabel() ?? "nil")")
+        check(view?.accessibilityHelp() == tr("Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel."),
+              "overlay: VoiceOver's hint gives the keyboard path", "\(view?.accessibilityHelp() ?? "nil")")
+        if let view {
+            // Whatever the pointer's position, the start corner goes to the bottom left: the arrows stop at the edges.
+            for _ in 0..<30 { view.keyDown(with: key(view, kVK_LeftArrow, "\u{F702}", .shift)) }
+            for _ in 0..<30 { view.keyDown(with: key(view, kVK_DownArrow, "\u{F701}", .shift)) }
+            view.keyDown(with: key(view, kVK_Return, "\r"))
+            for _ in 0..<10 { view.keyDown(with: key(view, kVK_RightArrow, "\u{F703}", .shift)) }
+            for _ in 0..<5 { view.keyDown(with: key(view, kVK_UpArrow, "\u{F700}", .shift)) }
+            view.keyDown(with: key(view, kVK_Return, "\r"))
+        }
+        let selected = waitUntil { selecting.done }
+        let region = selecting.region
+        check(selected && region?.rect == CGRect(x: 120, y: 120, width: 100, height: 50) && region?.image.width == 100 && region?.image.height == 50,
+              "overlay: the keyboard alone selects an area and confirms it", "region \(String(describing: region?.rect))")
+        check(waitUntil { visibleWindowIDs() == baseline }, "overlay: confirming closes every overlay window", windowDelta(baseline))
+
+        let cancelling = OverlayProbe()
+        if let cancelled = openOverlay(cancelling) {
+            cancelled.keyDown(with: key(cancelled, kVK_Escape, "\u{1b}"))
+        }
+        let cancelEnded = waitUntil { cancelling.done }
+        check(cancelEnded && cancelling.region == nil && visibleWindowIDs() == baseline,
+              "overlay: Esc cancels and closes every overlay window", "region \(cancelling.region != nil), \(windowDelta(baseline))")
     }
 }
 

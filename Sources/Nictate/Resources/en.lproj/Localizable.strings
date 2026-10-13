@@ -89,6 +89,7 @@
 "Delete Captures" = "Delete Captures";
 "No captures yet" = "No captures yet";
 "Select the text to copy" = "Select the text to copy";
+"Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel." = "Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel.";
 "The screen could not be read" = "The screen could not be read";
 "Reading…" = "Reading…";
 "Copied · 1 word" = "Copied · 1 word";
