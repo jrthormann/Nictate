@@ -3,9 +3,16 @@
 
 import AppKit
 
-/// The line beside a selection that says what the capture did: "Copied · 11 words", "No text found · try a
-/// larger area", or "Reading…" while a large selection is recognized. It fades after 1.5 s, stays while the
-/// pointer rests on it, and a click dismisses it.
+/// The line beside a selection that says what the capture did. CaptureCoordinator.resultStyle picks the outcome:
+/// - copied, only once the clipboard has read the text back: a green check, "Copied · 11 words" ("1 word" for one);
+/// - nothing found: an orange question mark, "No text found · try a larger area" ("No code found" in Code mode);
+/// - the read failed, Vision could not read the area: an orange warning triangle, "Couldn't read this area. Try
+///   again.";
+/// - the copy failed, the clipboard refused the text or did not read it back: the same triangle, "Couldn't copy text.
+///   Try again.";
+/// - "Reading…" with a breathing accent dot (still under Reduce Motion), while a read runs past 0.3 s.
+/// A result fades after 1.5 s; "Reading…" sets no timer, and the result replaces it. The pill stays while the pointer
+/// rests on it, and a click dismisses it.
 @MainActor
 final class ResultPill {
     enum Style: Equatable {
