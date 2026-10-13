@@ -12,8 +12,8 @@ import AppKit
 /// - the copy failed, the clipboard refused the text or did not read it back: the same triangle, "Couldn't copy text.
 ///   Try again.";
 /// - "Reading…" with a breathing accent dot (still under Reduce Motion), while a read runs past 0.3 s.
-/// A result fades after 1.5 s; "Reading…" sets no timer, and the result replaces it. The pill stays while the pointer
-/// rests on it, and a click dismisses it.
+/// A result fades after 1.5 s; "Reading…" sets no timer, and the result replaces it, unless a link question takes it down
+/// first (CaptureCoordinator.openLink). The pill stays while the pointer rests on it, and a click dismisses it.
 @MainActor
 final class ResultPill {
     enum Style: Equatable {

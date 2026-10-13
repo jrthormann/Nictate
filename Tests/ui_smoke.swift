@@ -40,6 +40,8 @@ func waitUntil(_ timeout: Double = 4, _ condition: () -> Bool) -> Bool {
 }
 /// Set by a block on the main queue, so a test can wait for it to have run.
 final class Marker: @unchecked Sendable { var fired = false }
+/// Set from inside the link question's modal alert: whether the alert was up, and whether a pill of the capture was on screen.
+final class QuestionProbe: @unchecked Sendable { var asked = false; var pillUp = true }
 /// Waits until a block queued on the main queue for `seconds` from now has run. Anything the code under test
 /// queued there for an earlier moment has then run too, however busy the machine: the way to show that
 /// something does NOT happen without guessing a margin.
@@ -448,6 +450,38 @@ MainActor.assumeIsolated {
         check(waitUntil { presentations.allSatisfy { $0.object == nil } },
               "reading: each presentation is released once its read has ended",
               "\(presentations.filter { $0.object != nil }.count) of \(presentations.count) kept")
+    }
+
+    // MARK: Link question: no pill of a capture sits over "Open this link?" while it waits, and none is left after the answer
+    do {
+        let rect = CGRect(x: 200, y: 200, width: 200, height: 100)
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        ResultPill.shared.hide(animated: false)
+        let baseline = visibleWindowIDs()
+        ResultPill.shared.show(.reading, near: rect, screen: screen)
+        let pillID = visibleWindows().first { !baseline.contains(ObjectIdentifier($0)) }.map(ObjectIdentifier.init)
+        let saved = Settings.shared.barcodeAction
+        defer { Settings.shared.barcodeAction = saved }
+        Settings.shared.barcodeAction = "ask"
+        let probe = QuestionProbe()
+        // AppKit documents abortModal for a timer in the modal panel run loop mode; the abort counts as Cancel.
+        let answer = Timer(timeInterval: 0.2, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                probe.asked = NSApp.modalWindow != nil
+                probe.pillUp = pillID.map { visibleWindowIDs().contains($0) } ?? true
+                if NSApp.modalWindow != nil { NSApp.abortModal() }
+            }
+        }
+        RunLoop.main.add(answer, forMode: .modalPanel)
+        if Settings.shared.barcodeAction == "ask" {                       // never reach NSWorkspace.open in a test run
+            CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator())
+                .openLink(URL(string: "https://example.com/nictate-ui-question")!)
+        }
+        answer.invalidate()
+        check(pillID != nil, "link question: the Reading pill was up before the question")
+        check(probe.asked, "link question: Open this link? was asked")
+        check(probe.asked && !probe.pillUp, "link question: no pill is on screen while the question waits")
+        check(waitUntil { visibleWindowIDs() == baseline }, "link question: once answered, no window is left", windowDelta(baseline))
     }
 }
 

@@ -157,12 +157,16 @@ final class CaptureCoordinator {
             return
         }
         if opening == .ask {
+            // Nothing of a capture may sit over the question: "Reading…" has ended, and the result shows once it is answered.
+            ResultPill.shared.hide(animated: false)
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = tr("Open this link?")
             alert.informativeText = url.absoluteString
             alert.addButton(withTitle: tr("Open"))
             alert.addButton(withTitle: tr("Cancel"))
+            // NSAlert gives Escape only to a button titled "Cancel" in English, so set it for every language.
+            alert.buttons[1].keyEquivalent = "\u{1B}"
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         NSWorkspace.shared.open(url)
