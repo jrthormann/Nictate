@@ -164,9 +164,8 @@ final class CaptureCoordinator {
             alert.messageText = tr("Open this link?")
             alert.informativeText = url.absoluteString
             alert.addButton(withTitle: tr("Open"))
-            alert.addButton(withTitle: tr("Cancel"))
-            // NSAlert gives Escape only to a button titled "Cancel" in English, so set it for every language.
-            alert.buttons[1].keyEquivalent = "\u{1B}"
+            // Escape cancels the question in every language: the Cancel button's key equivalent is set explicitly.
+            alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\u{1B}"
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         NSWorkspace.shared.open(url)
