@@ -112,22 +112,26 @@ final class CaptureCoordinator {
         if copied == true { FocusReturn.shared.returnIfStillActive() }
     }
 
-    /// The pill beside the selection: the word count when text was copied, the refusal when the clipboard did not take
-    /// it, otherwise what was missing (`copied` is nil when there was nothing to copy).
     private func showResult(_ capture: Capture, mode: CaptureMode, copied: Bool?, region: SelectedRegion) {
-        let style: ResultPill.Style
+        let style = Self.resultStyle(copied: copied, failed: capture.result.failed, mode: mode, text: capture.text)
+        ResultPill.shared.show(style, near: region.rect, screen: region.screen)
+    }
+
+    /// The pill beside the selection: "Copied" with the word count only when the clipboard took the text, a failure when
+    /// it refused the text or Vision could not read the area, and otherwise what was missing. `copied` is nil when there
+    /// was nothing to copy.
+    static func resultStyle(copied: Bool?, failed: Bool, mode: CaptureMode, text: String) -> ResultPill.Style {
         switch copied {
         case .some(true):
-            let words = capture.text.split(whereSeparator: \.isWhitespace).count
-            style = .success(words == 1 ? tr("Copied · 1 word") : tr("Copied · %d words", words))
+            let words = text.split(whereSeparator: \.isWhitespace).count
+            return .success(words == 1 ? tr("Copied · 1 word") : tr("Copied · %d words", words))
         case .some(false):
-            style = .miss(tr("Couldn't copy text. Try again."))
-        case .none where capture.result.failed:
-            style = .miss(tr("Couldn't read this area. Try again."))
+            return .failure(tr("Couldn't copy text. Try again."))
+        case .none where failed:
+            return .failure(tr("Couldn't read this area. Try again."))
         case .none:
-            style = .miss(mode == .code ? tr("No code found · try a larger area") : tr("No text found · try a larger area"))
+            return .miss(mode == .code ? tr("No code found · try a larger area") : tr("No text found · try a larger area"))
         }
-        ResultPill.shared.show(style, near: region.rect, screen: region.screen)
     }
 
     private func perform(_ effect: CaptureEffect) {

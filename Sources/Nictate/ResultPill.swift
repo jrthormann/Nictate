@@ -11,7 +11,10 @@ final class ResultPill {
     enum Style: Equatable {
         case reading
         case success(String)
+        /// Nothing was found, so nothing was copied: a question mark.
         case miss(String)
+        /// The capture could not be read or copied: a warning triangle, so it is not taken for an empty area.
+        case failure(String)
     }
 
     static let shared = ResultPill()
@@ -36,8 +39,17 @@ final class ResultPill {
         let size = content.fittingSize
         panel.setFrame(CGRect(origin: SelectionGeometry.pillOrigin(size: size, below: rect, within: screen), size: size),
                        display: false)
-        panel.animator().alphaValue = 1
+        // A pill that is not on screen fades in from clear. One already up keeps its place and only changes its text.
+        if !panel.isVisible { panel.alphaValue = 0 }
         panel.orderFrontRegardless()
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            panel.alphaValue = 1
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = ResultPill.fadeSeconds
+                panel.animator().alphaValue = 1
+            }
+        }
         if style != .reading { scheduleFade() }
     }
 
@@ -130,7 +142,7 @@ private final class PillContent: NSVisualEffectView {
     private static func text(for style: ResultPill.Style) -> String {
         switch style {
         case .reading: tr("Reading…")
-        case .success(let text), .miss(let text): text
+        case .success(let text), .miss(let text), .failure(let text): text
         }
     }
 
@@ -162,6 +174,9 @@ private final class PillContent: NSVisualEffectView {
             tint = .systemGreen
         case .miss:
             symbol = "questionmark.circle.fill"
+            tint = .systemOrange
+        case .failure:
+            symbol = "exclamationmark.triangle.fill"
             tint = .systemOrange
         }
         let view = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage())

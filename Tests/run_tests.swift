@@ -1689,6 +1689,37 @@ do {
     }
 }
 
+// Result pill: each outcome has its own line, and "Copied" only when the clipboard took the text.
+do {
+    let copiedWords = CaptureCoordinator.resultStyle(copied: true, failed: false, mode: .text, text: "one two three")
+    check(copiedWords == .success(tr("Copied · %d words", 3)), "pill: a copy reports its word count")
+    check(CaptureCoordinator.resultStyle(copied: true, failed: false, mode: .text, text: "word") == .success(tr("Copied · 1 word")),
+          "pill: a copy of one word says 1 word")
+    let refused = CaptureCoordinator.resultStyle(copied: false, failed: false, mode: .text, text: "one")
+    check(refused == .failure(tr("Couldn't copy text. Try again.")), "pill: a refused copy is a failure, never Copied")
+    let unread = CaptureCoordinator.resultStyle(copied: nil, failed: true, mode: .text, text: "")
+    check(unread == .failure(tr("Couldn't read this area. Try again.")), "pill: a read Vision could not run is a failure")
+    let nothing = CaptureCoordinator.resultStyle(copied: nil, failed: false, mode: .text, text: "")
+    check(nothing == .miss(tr("No text found · try a larger area")), "pill: an empty area says no text was found")
+    let noCode = CaptureCoordinator.resultStyle(copied: nil, failed: false, mode: .code, text: "")
+    check(noCode == .miss(tr("No code found · try a larger area")), "pill: an empty code capture says no code was found")
+
+    let outcomes = [copiedWords, refused, unread, nothing]
+    check(outcomes.indices.allSatisfy { i in outcomes.indices.allSatisfy { j in i == j || outcomes[i] != outcomes[j] } },
+          "pill: the four outcomes give four different styles")
+    var reportsCopied = false
+    for copied in [nil, false] as [Bool?] {
+        for failed in [false, true] {
+            for mode in [CaptureMode.text, .code] {
+                if case .success = CaptureCoordinator.resultStyle(copied: copied, failed: failed, mode: mode, text: "some text") {
+                    reportsCopied = true
+                }
+            }
+        }
+    }
+    check(!reportsCopied, "pill: Copied appears only when the clipboard took the text")
+}
+
 // History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never
 // overwritten: the history stays unavailable until the file can be read again.
 do {
