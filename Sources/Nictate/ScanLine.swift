@@ -21,11 +21,22 @@ final class ScanLine {
         !reduceMotion && height >= minimumHeight
     }
 
+    /// Whether the threshold timer may reveal the line and the Reading pill. Only a read still running at the threshold
+    /// does: the end of a read cancels the timer and closes the line, so a late firing finds neither. A capture starts
+    /// its timer only after its selection is chosen, so a drag never reaches it. A pure rule, so the tests cover it.
+    static func mayReveal(readRunning: Bool, lineClosed: Bool) -> Bool {
+        readRunning && !lineClosed
+    }
+
     private let rect: CGRect   // Global points. No image, no still.
     private var panel: NSPanel?
-    private var isClosed = false
+    /// Set by `close`. A closed line is never shown again.
+    private(set) var isClosed = false
 
     init(rect: CGRect) { self.rect = rect }
+
+    /// Whether a window is on screen for the line. Tests read it; the coordinator does not.
+    var isShowing: Bool { panel != nil }
 
     func show() {
         guard !isClosed, panel == nil, Self.isShown(height: rect.height,

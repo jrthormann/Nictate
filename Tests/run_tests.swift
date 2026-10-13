@@ -1726,6 +1726,23 @@ do {
     check(!ScanLine.isShown(height: 15, reduceMotion: false), "scan line: not shown for a selection under one line of text (15 pt)")
     check(ScanLine.isShown(height: 16, reduceMotion: false), "scan line: shown from 16 pt, one line of text")
     check(StatusFlash.workingDelay == 0.3, "scan line: the line and the Reading pill wait the same 300 ms")
+
+    // The threshold timer reveals the line and the Reading pill only for a read still running at 300 ms, and never a closed line.
+    check(ScanLine.mayReveal(readRunning: true, lineClosed: false), "scan line: a read still running at 300 ms reveals the line and the pill")
+    check(!ScanLine.mayReveal(readRunning: false, lineClosed: false), "scan line: a read that ended before 300 ms reveals nothing")
+    check(!ScanLine.mayReveal(readRunning: true, lineClosed: true), "scan line: a line already closed is never revealed")
+    check(!ScanLine.mayReveal(readRunning: false, lineClosed: true), "scan line: a timer firing after the end is a no-op")
+
+    // Cleanup: a line closed before its timer fires, or closed twice, gets no window; neither does a line under one line of text.
+    let closedEarly = ScanLine(rect: CGRect(x: 0, y: 0, width: 200, height: 100))
+    check(!closedEarly.isShowing, "scan line: a new line has no window until it is shown")
+    closedEarly.close()
+    closedEarly.show()
+    closedEarly.close()
+    check(closedEarly.isClosed && !closedEarly.isShowing, "scan line: a show after close adds no window, and a second close is harmless")
+    let short = ScanLine(rect: CGRect(x: 0, y: 0, width: 200, height: 15))
+    short.show()
+    check(!short.isShowing, "scan line: a 15 pt selection gets no window")
 }
 
 // History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never

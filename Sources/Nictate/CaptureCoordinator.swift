@@ -71,14 +71,16 @@ final class CaptureCoordinator {
             // The scan line and "Reading…" appear only when recognition is slow enough to notice. The line is closed
             // before the copy, so it is never on screen when the next capture takes its stills.
             let scan = ScanLine(rect: region.rect)
-            defer { scan.close() } // Safety net for any later early exit; the explicit close below runs first.
             let rect = region.rect, screen = region.screen // The timer task keeps no reference to the pixels.
             let reading = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(StatusFlash.workingDelay))
-                guard !Task.isCancelled else { return }
+                // A read that has ended, or a line already closed, reveals nothing (see ScanLine.mayReveal).
+                guard ScanLine.mayReveal(readRunning: !Task.isCancelled, lineClosed: scan.isClosed) else { return }
                 scan.show()
                 ResultPill.shared.show(.reading, near: rect, screen: screen)
             }
+            // Any later exit cancels the timer and closes the line. The explicit calls below run first on the normal path.
+            defer { reading.cancel(); scan.close() }
             status.beginWorking()
             let outcome = await Task.detached(priority: .userInitiated) {
                 CaptureCoordinator.process(region.image, options: options, codeClean: codeClean, cleanText: cleanText,
