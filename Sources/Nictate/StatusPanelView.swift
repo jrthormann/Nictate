@@ -19,12 +19,12 @@ struct StatusPanelView: View {
         .onExitCommand(perform: escape)
     }
 
-    /// Esc clears the search first, then goes back, then closes the panel.
+    /// Esc clears the search first, then goes back (a picker closes instead), then closes the panel.
     private func escape() {
-        switch model.screen {
-        case .history where !model.query.isEmpty: model.searchChanged("")
-        case .history: model.backToMain()
-        case .main: model.closeReturningFocus()
+        switch StatusPanelModel.escape(screen: model.screen, query: model.query, isPicker: model.isPicker) {
+        case .clearSearch: model.searchChanged("")
+        case .back: model.backToMain()
+        case .close: model.closeReturningFocus()
         }
     }
 }
@@ -47,13 +47,12 @@ private struct MainScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 MenuAction(tr("Capture Text"), shortcut: model.hotKeyLabel, leadingSymbol: "text.viewfinder", action: model.captureText)
                 MenuAction(tr("Capture QR Code or Barcode"), shortcut: model.codeHotKeyLabel, leadingSymbol: "qrcode.viewfinder", action: model.captureCode)
-                if model.historyEnabled {
-                    MenuAction(tr("Cycle History"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "arrow.triangle.2.circlepath", action: model.cycleHistory)
-                }
-                // Saved captures stay reachable while saving is off, so they can be read or deleted.
+                // Saved captures stay reachable while saving is off, so they can be read or deleted. The row also shows the
+                // shortcut that opens the same list as a picker.
                 if HistoryDeletion.showsHistoryRow(historyEnabled: model.historyEnabled, savedCount: model.historyCount,
                                                    unreadable: model.historyFileUnreadable) {
-                    MenuAction(tr("History"), leadingSymbol: "clock.arrow.circlepath", trailingSymbol: "chevron.right", action: model.openHistory)
+                    MenuAction(tr("Recent Captures"), shortcut: model.rotateHotKeyLabel, leadingSymbol: "clock.arrow.circlepath",
+                               trailingSymbol: "chevron.right", action: model.openHistory)
                 }
                 MenuDivider()
                 detections
@@ -159,8 +158,10 @@ private struct HistoryScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            MenuAction(tr("Back"), leadingSymbol: "chevron.left", action: model.backToMain)
-            MenuDivider()
+            if !model.isPicker {
+                MenuAction(tr("Back"), leadingSymbol: "chevron.left", action: model.backToMain)
+                MenuDivider()
+            }
             TextField(tr("Search history"), text: Binding(get: { model.query }, set: { model.searchChanged($0) }))
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
@@ -168,12 +169,13 @@ private struct HistoryScreen: View {
                 .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
                 .onSubmit { model.copySelected() }
                 .padding(.horizontal, 10).padding(.vertical, 4)
-            stateNote
+            RecentCapturesNote(model: model)
             HistoryRecoveryNotes(model: model)
             if let copyError = model.copyError {
                 Text(copyError).font(.caption).foregroundStyle(.red).padding(.horizontal, 10)
             }
             content
+            if model.isPicker { RecentCapturesHints() }
             if model.historyCount > 0 {
                 MenuDivider()
                 MenuAction(tr("Clear History…"), destructive: true, action: model.clearHistory)
@@ -184,19 +186,6 @@ private struct HistoryScreen: View {
         .onChange(of: model.searchFocusRequests) { _, _ in searchFocused = true }
     }
 
-    /// Says when the saved captures are not shown, so an empty list is never mistaken for an empty history.
-    @ViewBuilder private var stateNote: some View {
-        switch model.historyState {
-        case .loading:
-            Text(tr("Loading history…")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
-        case .unavailable:
-            Text(tr("History is unavailable right now. New captures are still copied but won't be saved."))
-                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
-        case .available, .disabled:
-            EmptyView()
-        }
-    }
-
     @ViewBuilder private var content: some View {
         let entries = model.entries
         // While the history loads, or cannot be read, the note above says so: "No captures yet" would be false.
@@ -205,9 +194,13 @@ private struct HistoryScreen: View {
             EmptyView()
         } else if model.historyCount == 0 {
             VStack(spacing: 4) {
-                Text(tr("No captures yet")).font(.headline)
-                Text(tr("Press %@, then drag to select an area.", model.hotKeyLabel))
-                    .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                if !model.historyEnabled {
+                    RecentCapturesSavingOff()
+                } else {
+                    Text(tr("No captures yet")).font(.headline)
+                    Text(tr("Press %@, then drag to select an area.", model.hotKeyLabel))
+                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
             }
             .frame(maxWidth: .infinity).padding(.vertical, 20)
         } else if entries.isEmpty {
@@ -243,6 +236,7 @@ private struct CaptureRow: View {
     let copy: () -> Void
     let delete: () -> Void
     @StateObject private var hover = HoverFlag()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
@@ -251,13 +245,13 @@ private struct CaptureRow: View {
                     Text(text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\t", with: " "))
                         .lineLimit(2).truncationMode(.tail)
                     if let age = History.ageLabel(for: date) {
-                        Text(age).font(.caption).foregroundStyle(highlight == .selected ? Color.white.opacity(0.85) : .secondary)
+                        Text(age).font(RecentCapturesNote.noteFont).foregroundStyle(highlight == .selected ? Color.white.opacity(0.85) : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RecentCapturesPressStyle(reduceMotion: reduceMotion))
             .accessibilityHint(tr("Copies the whole capture"))
             .accessibilityAction(named: tr("Copy")) { copy() }
             Button(action: delete) { Image(systemName: "trash").font(.caption) }
@@ -267,6 +261,7 @@ private struct CaptureRow: View {
         .foregroundStyle(highlight == .selected ? Color.white : Color.primary)
         .padding(.horizontal, 10).padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 5).fill(highlight == .selected ? Color.accentColor : highlight == .hovered ? Color.primary.opacity(0.08) : .clear))
+        .animation(RecentCapturesMotion.animation(.selection, reduceMotion: reduceMotion), value: highlight)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .onHover { hover.on = $0 }
         .contextMenu {
