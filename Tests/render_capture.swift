@@ -204,8 +204,17 @@ func firstDifference(_ picture: RenderBitmap, _ expected: RenderBitmap, in box: 
     return nil
 }
 
-/// Check 3: the four corners are mirror images. The window around the top left corner must equal its reflections
-/// in the selection's vertical and horizontal centre lines, which are the other three corners.
+/// Two packed pixels whose channels differ by at most one level of 255. Anti-aliasing rounds a mirror image that much.
+func nearlyEqual(_ a: UInt32, _ b: UInt32) -> Bool {
+    (0..<4).allSatisfy { channel in
+        let shift = UInt32(24 - 8 * channel)
+        return abs(Int((a >> shift) & 0xFF) - Int((b >> shift) & 0xFF)) <= 1
+    }
+}
+
+/// Check 3: the four corners are mirror images. The window around the top left corner must match its reflections
+/// in the selection's vertical and horizontal centre lines, which are the other three corners, to one level of 255.
+/// The geometry is exactly symmetric; the one level is rounding in the 8-bit anti-aliasing.
 func cornerMismatch(_ picture: RenderBitmap, box: RenderBox, radius: Int) -> String? {
     // Pixel column x reflects to minX + maxX - 1 - x, and row y to minY + maxY - 1 - y.
     let sumX = box.minX + box.maxX - 1, sumY = box.minY + box.maxY - 1
@@ -213,8 +222,8 @@ func cornerMismatch(_ picture: RenderBitmap, box: RenderBox, radius: Int) -> Str
         for x in stride(from: box.minX - radius, to: box.minX + radius, by: 1) {
             let value = picture.pixel(x, y)
             let mirrorX = sumX - x, mirrorY = sumY - y
-            if picture.pixel(mirrorX, y) != value || picture.pixel(x, mirrorY) != value
-                || picture.pixel(mirrorX, mirrorY) != value {
+            if !nearlyEqual(picture.pixel(mirrorX, y), value) || !nearlyEqual(picture.pixel(x, mirrorY), value)
+                || !nearlyEqual(picture.pixel(mirrorX, mirrorY), value) {
                 return "pixel (\(x), \(y))"
             }
         }

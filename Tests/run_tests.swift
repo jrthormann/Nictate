@@ -1601,7 +1601,7 @@ do {
     check(edge.x == 8, "pill: is kept on screen at the left edge", "\(edge)")
 }
 
-// Selection outline: a light band inside and a dark band outside each edge, with four corner marks, on whole device pixels.
+// Selection outline: a light band just inside each edge, and a dark band just outside it that closes into a ring at the corners.
 do {
     func linear(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
     func overlaps(_ a: CGRect, _ b: CGRect) -> Bool {
@@ -1613,22 +1613,11 @@ do {
           "outline: the standard edge is 1 pt white at 90 % inside and 1 pt black at 60 % outside")
     check(increased == SelectionOutline.Style(innerWidth: 2, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8),
           "outline: Increase Contrast is 2 pt white at 100 % inside and 1 pt black at 80 % outside")
-    check(SelectionOutline.cornerExtra == 1, "outline: each corner mark thickens its band by 1 pt")
     check(SelectionOutline.dim(dark: false) == 0.28 && SelectionOutline.dim(dark: true) == 0.45,
           "outline: the dim over the still is 28 % in Light and 45 % in Dark")
 
-    // Corner arms: 12 pt, at most a third of the shorter side, rounded down to whole pixels.
-    let large = CGRect(x: 0, y: 0, width: 200, height: 100), small = CGRect(x: 0, y: 0, width: 30, height: 20)
-    let tiny = CGRect(x: 0, y: 0, width: 4, height: 4)
-    check(SelectionGeometry.cornerLength(for: large, scale: 2) == 12, "outline: corner arms are 12 pt on a large selection at 2x")
-    check(SelectionGeometry.cornerLength(for: small, scale: 2) == 6.5,
-          "outline: corner arms are a third of the shorter side, on a whole pixel, at 2x")
-    check(SelectionGeometry.cornerLength(for: small, scale: 1) == 6, "outline: corner arms are whole points at 1x")
-    check(SelectionGeometry.cornerLength(for: tiny, scale: 1) == 1 && SelectionGeometry.cornerLength(for: tiny, scale: 2) == 1,
-          "outline: corner arms on a 4 pt selection are 1 pt")
-
-    // Every edge of every band and corner mark lands on a device pixel, at 1x and 2x, in both styles, on an ordinary
-    // selection, a 4 pt one and a large one.
+    // Every edge of every band lands on a device pixel, at 1x and 2x, in both styles, on an ordinary selection, a 4 pt
+    // one and a large one.
     for scale in [CGFloat(1), 2] {
         let origin = SelectionGeometry.snapped(CGPoint(x: 10.3, y: 20.7), scale: scale)
         let ends = [("ordinary", SelectionGeometry.snapped(CGPoint(x: 70.9, y: 61.2), scale: scale)),
@@ -1641,55 +1630,44 @@ do {
                 for outside in [false, true] {
                     let width = outside ? style.outerWidth : style.innerWidth
                     rects += SelectionGeometry.band(around: selection, width: width, outside: outside)
-                    rects += SelectionGeometry.cornerMarks(of: selection, length: SelectionGeometry.cornerLength(for: selection, scale: scale),
-                                                           thickness: width + SelectionOutline.cornerExtra, outside: outside)
                 }
                 let aligned = rects.allSatisfy { r in
                     [r.minX, r.maxX, r.minY, r.maxY].allSatisfy { v in abs(v * scale - (v * scale).rounded()) < 1e-6 }
                 }
-                check(aligned, "outline: every band and corner mark has its edges on a device pixel (\(name), \(size), \(scale)x)")
+                check(aligned, "outline: every band has its edges on a device pixel (\(name), \(size), \(scale)x)")
             }
         }
     }
 
-    // The light band and its marks lie inside the selection; the dark band and its marks only touch it from outside;
-    // the strips of one band never overlap; the dark corner marks cover the outer corner squares. Checked on an ordinary
-    // selection, a 4 pt one and a large one, in both styles. On a 4 pt side the light marks of opposite corners overlap
-    // under Increase Contrast; they are one fill, so the overlap adds no alpha, and they still lie inside the selection.
+    // The light band lies inside the selection. The dark ring only touches it from outside, closes around the four corner
+    // squares and covers each one in full. The strips of each band never share area. Checked on a 120 x 80, a 12 x 12 and
+    // an 800 x 600 selection, in both styles.
     let frames = [("120 x 80", CGRect(x: 40, y: 30, width: 120, height: 80)),
-                  ("4 x 4", CGRect(x: 40, y: 30, width: 4, height: 4)),
+                  ("12 x 12", CGRect(x: 40, y: 30, width: 12, height: 12)),
                   ("800 x 600", CGRect(x: 40, y: 30, width: 800, height: 600))]
-    var cases: [(name: String, frame: CGRect, style: SelectionOutline.Style)] = []
     for (size, frame) in frames {
         for (name, style) in [("standard", standard), ("increased", increased)] {
-            cases.append(("\(name), \(size)", frame, style))
+            let inner = SelectionGeometry.band(around: frame, width: style.innerWidth, outside: false)
+            let ring = SelectionGeometry.band(around: frame, width: style.outerWidth, outside: true)
+            check(inner.allSatisfy { frame.contains($0) }, "outline: the light band lies inside the selection (\(name), \(size))")
+            check(ring.allSatisfy { r in
+                let shared = frame.intersection(r)
+                return shared.isNull || shared.width * shared.height == 0
+            }, "outline: the dark ring never enters the selection (\(name), \(size))")
+            for strips in [inner, ring] {
+                let pairs = strips.indices.flatMap { i in strips.indices.filter { $0 > i }.map { (i, $0) } }
+                check(!pairs.contains { overlaps(strips[$0.0], strips[$0.1]) },
+                      "outline: the strips of one band never share area (\(name), \(size))")
+            }
+            // The four corner squares, just beyond the selection's corners, each lie inside one strip of the ring.
+            let w = style.outerWidth
+            let squares = [CGRect(x: frame.minX - w, y: frame.maxY, width: w, height: w),
+                           CGRect(x: frame.maxX, y: frame.maxY, width: w, height: w),
+                           CGRect(x: frame.minX - w, y: frame.minY - w, width: w, height: w),
+                           CGRect(x: frame.maxX, y: frame.minY - w, width: w, height: w)]
+            check(squares.allSatisfy { square in ring.contains { $0.contains(square) } },
+                  "outline: the dark ring covers the four corner squares (\(name), \(size))")
         }
-    }
-    for (name, frame, style) in cases {
-        let length = SelectionGeometry.cornerLength(for: frame, scale: 2)
-        let inner = SelectionGeometry.band(around: frame, width: style.innerWidth, outside: false)
-        let outer = SelectionGeometry.band(around: frame, width: style.outerWidth, outside: true)
-        let innerMarks = SelectionGeometry.cornerMarks(of: frame, length: length, thickness: style.innerWidth + SelectionOutline.cornerExtra, outside: false)
-        let outerMarks = SelectionGeometry.cornerMarks(of: frame, length: length, thickness: style.outerWidth + SelectionOutline.cornerExtra, outside: true)
-        check((inner + innerMarks).allSatisfy { frame.contains($0) }, "outline: the light band and its corner marks lie inside the selection (\(name))")
-        check((outer + outerMarks).allSatisfy { r in
-            let shared = frame.intersection(r)
-            return shared.isNull || shared.width * shared.height == 0
-        }, "outline: the dark band and its corner marks never enter the selection (\(name))")
-        for strips in [inner, outer] {
-            let pairs = strips.indices.flatMap { i in strips.indices.filter { $0 > i }.map { (i, $0) } }
-            check(!pairs.contains { overlaps(strips[$0.0], strips[$0.1]) }, "outline: the strips of one band do not overlap (\(name))")
-        }
-        // The outer corner squares, beyond the selection's corners, are covered by the dark corner marks.
-        let outerThickness = style.outerWidth + SelectionOutline.cornerExtra
-        let outerCorners = [CGPoint(x: frame.minX, y: frame.minY), CGPoint(x: frame.maxX, y: frame.minY),
-                            CGPoint(x: frame.minX, y: frame.maxY), CGPoint(x: frame.maxX, y: frame.maxY)]
-        let squares = outerCorners.map { c in
-            CGPoint(x: c.x + (c.x == frame.minX ? -outerThickness / 2 : outerThickness / 2),
-                    y: c.y + (c.y == frame.minY ? -outerThickness / 2 : outerThickness / 2))
-        }
-        check(squares.allSatisfy { p in outerMarks.contains { $0.contains(p) } },
-              "outline: the dark corner marks cover the four outer corner squares (\(name))")
     }
 
     // Contrast between the two bands on any content: the light band over black content is the least bright it gets,
@@ -1705,6 +1683,162 @@ do {
                   String(format: "%.2f:1", ratio))
         }
     }
+}
+
+// Corner brackets: a round white stroke with a black keyline on its outer side, bent around each selection corner just
+// outside the selection, where a side is long enough for one. Checked on the centre line and on the stroked outlines.
+do {
+    let standard = SelectionOutline.style(.standard), increased = SelectionOutline.style(.increased)
+    let stroke = SelectionBracket.stroke, offset = SelectionBracket.offset, radius = SelectionBracket.radius
+    // The keyline is the dark band's width: it runs on the stroke's path, a width farther out (SelectionDrawing).
+    let keyline = standard.outerWidth
+    func linear(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+    /// The white stroke and the keyline of one bracket set, stroked as SelectionDrawing strokes them. Nil where no bracket is drawn.
+    func strokes(_ frame: CGRect, scale: CGFloat) -> (white: CGPath, keyline: CGPath)? {
+        guard let reach = SelectionBracket.reach(for: frame, scale: scale) else { return nil }
+        let white = SelectionBracket.path(around: frame, reach: reach, offset: offset, radius: radius)
+        let dark = SelectionBracket.path(around: frame, reach: reach, offset: offset + keyline / 2, radius: radius + keyline / 2)
+        return (white.copy(strokingWithWidth: stroke, lineCap: .round, lineJoin: .round, miterLimit: 10),
+                dark.copy(strokingWithWidth: stroke + keyline, lineCap: .round, lineJoin: .round, miterLimit: 10))
+    }
+    func cornersOf(_ frame: CGRect) -> [CGPoint] {
+        [CGPoint(x: frame.minX, y: frame.minY), CGPoint(x: frame.maxX, y: frame.minY),
+         CGPoint(x: frame.minX, y: frame.maxY), CGPoint(x: frame.maxX, y: frame.maxY)]
+    }
+    /// Points on a 0.25 pt grid within `reach` points of a corner: the only places a bracket can be.
+    func nearPoints(_ corner: CGPoint, reach: CGFloat) -> [CGPoint] {
+        let steps = Int(reach * 4)
+        return (-steps...steps).flatMap { i in
+            (-steps...steps).map { j in CGPoint(x: corner.x + CGFloat(i) / 4, y: corner.y + CGFloat(j) / 4) }
+        }
+    }
+    /// How far a point can go from `start` along `step` before the stroke. Counted in quarter points and taken from the
+    /// sample before the first one inside the stroke, so it never overstates the clear run.
+    func clearRun(_ stroke: CGPath, from start: CGPoint, along step: CGVector) -> CGFloat {
+        for i in 1...400 {
+            let t = CGFloat(i) / 4
+            if stroke.contains(CGPoint(x: start.x + step.dx * t, y: start.y + step.dy * t)) { return t - 0.25 }
+        }
+        return 100
+    }
+
+    // Reach: a third of the shorter side, at most 8 pt, on whole device pixels; a side under 12 pt gets no bracket.
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 200, height: 100), scale: 2) == 8,
+          "bracket: reach is 8 pt on a large selection at 2x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 30, height: 20), scale: 2) == 6.5,
+          "bracket: reach is a third of the shorter side, on a whole pixel, at 2x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 30, height: 20), scale: 1) == 6,
+          "bracket: reach is whole points at 1x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 12, height: 40), scale: 1) == 4,
+          "bracket: a 12 pt side is the least that gets a bracket, with reach 4")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 11, height: 40), scale: 1) == nil
+          && SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 4, height: 4), scale: 2) == nil,
+          "bracket: an 11 pt side and a 4 pt selection get no bracket")
+
+    let frames = [CGRect(x: 40, y: 30, width: 120, height: 80), CGRect(x: 40, y: 30, width: 12, height: 12),
+                  CGRect(x: 40, y: 30, width: 800, height: 600)]
+    // The stroke and keyline never enter the outer band, which is the selection grown by the dark band's width.
+    for frame in frames {
+        for scale in [CGFloat(1), 2] {
+            let size = "\(Int(frame.width)) x \(Int(frame.height)), \(Int(scale))x"
+            guard let shapes = strokes(frame, scale: scale) else {
+                check(false, "bracket: drawn on a \(size) selection")
+                continue
+            }
+            let outerBand = frame.insetBy(dx: -keyline, dy: -keyline)
+            let samples = cornersOf(frame).flatMap { nearPoints($0, reach: 10) }
+            check(samples.contains { shapes.white.contains($0) } && samples.contains { shapes.keyline.contains($0) },
+                  "bracket: the sample grid meets the stroke and the keyline (\(size))")
+            check(!samples.contains { outerBand.contains($0) && (shapes.white.contains($0) || shapes.keyline.contains($0)) },
+                  "bracket: the stroke and keyline never enter the outer band (\(size))")
+        }
+    }
+
+    // The four corners are mirror images: the top left corner's stroke and keyline reflect onto the other three exactly.
+    for frame in frames {
+        for scale in [CGFloat(1), 2] {
+            let size = "\(Int(frame.width)) x \(Int(frame.height)), \(Int(scale))x"
+            guard let shapes = strokes(frame, scale: scale) else { continue }
+            let sumX = frame.minX + frame.maxX, sumY = frame.minY + frame.maxY
+            let symmetric = nearPoints(CGPoint(x: frame.minX, y: frame.minY), reach: 10).allSatisfy { p in
+                let reflections = [CGPoint(x: sumX - p.x, y: p.y), CGPoint(x: p.x, y: sumY - p.y),
+                                   CGPoint(x: sumX - p.x, y: sumY - p.y)]
+                return reflections.allSatisfy { q in
+                    shapes.white.contains(q) == shapes.white.contains(p) && shapes.keyline.contains(q) == shapes.keyline.contains(p)
+                }
+            }
+            check(symmetric, "bracket: the four corners are mirror images (\(size))")
+        }
+    }
+
+    // Facing tips: on every side from 12 to 60 pt, and on the long and short sides alike, the two brackets at the ends of an
+    // edge leave at least 1 pt clear between their visible tips, round caps included. Measured along the stroke's centre line
+    // from the middle of each edge, at 1x and 2x.
+    var narrowest = CGFloat.infinity
+    for side in 12...60 {
+        for (width, height) in [(side, side), (60, side), (side, 60)] {
+            for scale in [CGFloat(1), 2] {
+                let frame = CGRect(x: 40, y: 30, width: CGFloat(width), height: CGFloat(height))
+                guard let shapes = strokes(frame, scale: scale) else {
+                    narrowest = 0
+                    continue
+                }
+                let top = CGPoint(x: frame.midX, y: frame.maxY + offset), left = CGPoint(x: frame.minX - offset, y: frame.midY)
+                let across = clearRun(shapes.white, from: top, along: CGVector(dx: 1, dy: 0))
+                    + clearRun(shapes.white, from: top, along: CGVector(dx: -1, dy: 0))
+                let down = clearRun(shapes.white, from: left, along: CGVector(dx: 0, dy: 1))
+                    + clearRun(shapes.white, from: left, along: CGVector(dx: 0, dy: -1))
+                narrowest = min(narrowest, across, down)
+            }
+        }
+    }
+    check(narrowest >= 1, "bracket: facing tips stay at least 1 pt apart on every side from 12 to 60 pt",
+          String(format: "narrowest %.2f pt", narrowest))
+
+    // The straight sides of the bands, the stroke and the keyline land on whole device pixels at 1x and 2x.
+    let whiteEdges = [offset - stroke / 2, offset + stroke / 2]
+    let keylineEdges = [offset + keyline / 2 - (stroke + keyline) / 2, offset + keyline / 2 + (stroke + keyline) / 2]
+    let edges = [CGFloat(0), standard.innerWidth, increased.innerWidth, standard.outerWidth, increased.outerWidth]
+        + whiteEdges + keylineEdges
+    check([CGFloat(1), 2].allSatisfy { scale in edges.allSatisfy { abs($0 * scale - ($0 * scale).rounded()) < 1e-9 } },
+          "bracket: the straight edges of the bands, stroke and keyline land on device pixels at 1x and 2x")
+
+    // Contrast: the bracket against any flat background under the dim, in Light and Dark, standard and Increase Contrast.
+    // The white stroke is painted over the keyline, which sits over the background, so its colour is the white composed over
+    // the keyline. Contrast is sRGB and the worst grey level is kept. WCAG 1.4.11 asks for 3:1.
+    func ratio(_ a: Double, _ b: Double) -> Double {
+        let la = linear(a), lb = linear(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+    for (dimming, dark) in [("Light", false), ("Dark", true)] {
+        let dim = Double(SelectionOutline.dim(dark: dark))
+        for (name, style) in [("standard", standard), ("increased", increased)] {
+            let whiteAlpha = Double(style.innerAlpha), keylineAlpha = Double(style.outerAlpha)
+            var worst = Double.infinity
+            for level in 0...255 {
+                let background = Double(level) / 255 * (1 - dim)
+                let keylineColour = (1 - keylineAlpha) * background
+                let whiteColour = whiteAlpha + (1 - whiteAlpha) * keylineColour
+                worst = min(worst, max(ratio(whiteColour, background), ratio(keylineColour, background)))
+            }
+            check(worst >= 3, "bracket: at least 3:1 against any flat background, \(dimming), \(name)",
+                  String(format: "%.2f:1", worst))
+        }
+    }
+
+    // The four drag directions give the same selection, and so the same brackets.
+    let drags = [(CGPoint(x: 40, y: 30), CGPoint(x: 160, y: 110)), (CGPoint(x: 160, y: 110), CGPoint(x: 40, y: 30)),
+                 (CGPoint(x: 40, y: 110), CGPoint(x: 160, y: 30)), (CGPoint(x: 160, y: 30), CGPoint(x: 40, y: 110))]
+    let dragged = drags.map { SelectionGeometry.rect(from: $0.0, to: $0.1, within: CGRect(x: 0, y: 0, width: 900, height: 700)) }
+    check(dragged.allSatisfy { $0 == dragged[0] }, "bracket: the four drag directions give the same selection")
+    let samples = cornersOf(dragged[0]).flatMap { nearPoints($0, reach: 10) }
+    let signatures = dragged.map { rect -> (CGRect, [Bool]) in
+        let path = SelectionBracket.path(around: rect, reach: SelectionBracket.reach(for: rect, scale: 2) ?? 0,
+                                         offset: offset, radius: radius)
+        return (path.boundingBox, samples.map { path.contains($0) })
+    }
+    check(signatures.allSatisfy { $0.0 == signatures[0].0 && $0.1 == signatures[0].1 },
+          "bracket: the four drag directions draw the same brackets")
 }
 
 // Result pill: each outcome has its own line, and "Copied" only when the clipboard took the text.

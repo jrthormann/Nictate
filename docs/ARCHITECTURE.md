@@ -75,7 +75,7 @@ global shortcut (HotKeyManager, Carbon)
 | `SelectionDrawing.swift` | What the overlay paints over its still: the still, the dim, and the selection with its edge. Drawn on a bare `CGContext`, so `make render` (`Tests/render_capture.swift`) draws the same pixels into PNG files. |
 | `ContentClassifier.swift` | Pure rules that decide whether a capture is code, a table, a list or prose from its text and layout. Only confident prose loses its line breaks. Tested on a 40-text corpus (`Tests/corpus/captures.tsv`) and a held-out set. |
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
-| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, and the outline bands and corner marks (unit tested). |
+| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, the outline bands (a closed ring outside the selection), and the four corner brackets (`SelectionBracket`, unit tested). |
 | `ScanLine.swift` | The scan line over the selection while a slow read runs: a borderless, click-through window with no image, shown after the 300 ms working delay and closed before the result. |
 | `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. Deleting saved captures withdraws every banner; the system's notification center sits behind the `NoticeCenter` seam, so tests answer it by hand. |
 

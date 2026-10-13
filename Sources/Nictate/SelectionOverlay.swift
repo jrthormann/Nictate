@@ -73,7 +73,7 @@ private final class SelectionWindow: NSWindow {
     override var canBecomeMain: Bool { false }
 }
 
-/// Draws the still, the dimming, the selection with its edge and corner marks, and turns mouse and key input into a selection.
+/// Draws the still, the dimming, the selection with its edge and four corner brackets, and turns mouse and key input into a selection.
 @MainActor
 private final class SelectionView: NSView {
     private let still: DisplayStill

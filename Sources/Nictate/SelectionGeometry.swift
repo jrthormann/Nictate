@@ -56,21 +56,14 @@ enum SelectionGeometry {
         return CGPoint(x: x, y: min(max(y, bounds.minY + inset), bounds.maxY - size.height - inset))
     }
 
-    /// The length of a corner arm: `preferred` points, at most a third of the shorter side, rounded down to a whole
-    /// device pixel so that the end of the arm lands on the pixel grid.
-    static func cornerLength(for rect: CGRect, scale: CGFloat, preferred: CGFloat = 12) -> CGFloat {
-        let limited = min(preferred, min(rect.width, rect.height) / 3)
-        guard scale > 0 else { return limited }
-        return floor(limited * scale) / scale
-    }
-
     /// The four strips that make one edge of `width` points: top and bottom across the full length, left and right
-    /// between them. They lie just inside `rect`, or just outside it, and never overlap.
+    /// between them. They lie just inside `rect`, or just outside it, and never share area. Outside, the top and bottom
+    /// strips also run `width` past each end, so the four strips close a ring that covers the corner squares.
     static func band(around rect: CGRect, width: CGFloat, outside: Bool) -> [CGRect] {
         if outside {
             return [
-                CGRect(x: rect.minX, y: rect.maxY, width: rect.width, height: width),
-                CGRect(x: rect.minX, y: rect.minY - width, width: rect.width, height: width),
+                CGRect(x: rect.minX - width, y: rect.maxY, width: rect.width + 2 * width, height: width),
+                CGRect(x: rect.minX - width, y: rect.minY - width, width: rect.width + 2 * width, height: width),
                 CGRect(x: rect.minX - width, y: rect.minY, width: width, height: rect.height),
                 CGRect(x: rect.maxX, y: rect.minY, width: width, height: rect.height),
             ]
@@ -83,36 +76,59 @@ enum SelectionGeometry {
             CGRect(x: rect.maxX - width, y: rect.minY + width, width: width, height: between),
         ]
     }
+}
 
-    /// Two arms per corner, eight rectangles, each `length` long and `thickness` wide. Inside, the arms run from the
-    /// corner along the edges. Outside, they start at the outer corner, so together they cover the corner square
-    /// beyond the rectangle.
-    static func cornerMarks(of rect: CGRect, length: CGFloat, thickness: CGFloat, outside: Bool) -> [CGRect] {
-        // Each corner, with the direction (+1 or -1) that points into the rectangle along x and along y.
+/// The corner brackets: a round-capped white stroke that bends around each corner of the selection, just outside it,
+/// with a black keyline on its outer side. SelectionDrawing strokes both, from the same path.
+enum SelectionBracket {
+    /// The white stroke's width.
+    static let stroke: CGFloat = 2
+    /// The distance from the selection's edge to the stroke's centre line: the dark band, a gap of one point, the stroke.
+    static let offset: CGFloat = 3
+    /// The radius of each bend, on the centre line. The bend is centred on the selection's corner.
+    static let radius: CGFloat = 3
+    /// How far each arm runs past its corner, along the edge, on a long side. A shorter side gives less.
+    static let preferredReach: CGFloat = 8
+
+    /// How far each arm runs past its corner, in points: `preferredReach`, or a third of the shorter side where that is
+    /// less, rounded down to a whole device pixel. Nil below `radius + stroke / 2`, where the arm would have no straight
+    /// part past its bend, so no bracket is drawn.
+    static func reach(for rect: CGRect, scale: CGFloat) -> CGFloat? {
+        let limited = min(preferredReach, min(rect.width, rect.height) / 3)
+        let distance = scale > 0 ? floor(limited * scale) / scale : limited
+        return distance >= radius + stroke / 2 ? distance : nil
+    }
+
+    /// The centre line of the four brackets around `rect`. Each arm ends `reach` past its corner, counting the round
+    /// cap, and runs along a line `offset` outside the edge, with its bend `radius` on the centre line. The top left
+    /// corner is built once and mirrored into the other three, so the four are identical.
+    static func path(around rect: CGRect, reach: CGFloat, offset: CGFloat, radius: CGFloat) -> CGPath {
+        // The arm's end, before its round cap, which adds half the stroke: the visible tip is `reach`.
+        let end = reach - stroke / 2
+        // One corner in its own space: the origin is the selection's corner, and +x and +y point into the selection.
+        let oneCorner = CGMutablePath()
+        oneCorner.move(to: CGPoint(x: -offset, y: end))
+        oneCorner.addLine(to: CGPoint(x: -offset, y: -offset + radius))
+        oneCorner.addArc(tangent1End: CGPoint(x: -offset, y: -offset),
+                         tangent2End: CGPoint(x: -offset + radius, y: -offset), radius: radius)
+        oneCorner.addLine(to: CGPoint(x: end, y: -offset))
+        // Each corner's position, and its direction (+1 or -1) into the rectangle along x and along y.
         let corners: [(x: CGFloat, y: CGFloat, dx: CGFloat, dy: CGFloat)] = [
             (rect.minX, rect.minY, 1, 1), (rect.maxX, rect.minY, -1, 1),
             (rect.minX, rect.maxY, 1, -1), (rect.maxX, rect.maxY, -1, -1),
         ]
-        return corners.flatMap { corner -> [CGRect] in
-            if outside {
-                return [spanned(corner.x - corner.dx * thickness, corner.x + corner.dx * length,
-                                corner.y, corner.y - corner.dy * thickness),
-                        spanned(corner.x, corner.x - corner.dx * thickness,
-                                corner.y - corner.dy * thickness, corner.y + corner.dy * length)]
-            }
-            return [spanned(corner.x, corner.x + corner.dx * length, corner.y, corner.y + corner.dy * thickness),
-                    spanned(corner.x, corner.x + corner.dx * thickness, corner.y, corner.y + corner.dy * length)]
+        let brackets = CGMutablePath()
+        for corner in corners {
+            brackets.addPath(oneCorner, transform: CGAffineTransform(a: corner.dx, b: 0, c: 0, d: corner.dy,
+                                                                     tx: corner.x, ty: corner.y))
         }
-    }
-
-    /// The rectangle with opposite corners (x0, y0) and (x1, y1), in either order.
-    private static func spanned(_ x0: CGFloat, _ x1: CGFloat, _ y0: CGFloat, _ y1: CGFloat) -> CGRect {
-        CGRect(x: min(x0, x1), y: min(y0, y1), width: abs(x1 - x0), height: abs(y1 - y0))
+        return brackets
     }
 }
 
 /// The selection's edge: a light band just inside it and a dark band just outside, so that it shows on dark content
-/// and on white pages alike. Each band is one point wide, or two under Increase Contrast.
+/// and on white pages alike. Each band is one point wide, or two under Increase Contrast. The dark band closes into a
+/// ring around the corners; the brackets (SelectionBracket) sit beyond it.
 enum SelectionOutline {
     struct Style: Equatable {
         /// The light band just inside the edge: its width in points and its white alpha.
@@ -122,9 +138,6 @@ enum SelectionOutline {
         let outerWidth: CGFloat
         let outerAlpha: CGFloat
     }
-
-    /// The corner marks are each band plus this many points, so they read as part of the outline.
-    static let cornerExtra: CGFloat = 1
 
     static func style(_ variant: ContrastVariant) -> Style {
         switch variant {
