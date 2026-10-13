@@ -76,6 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Nictate is no longer the active app: a focus return has landed, or the user moved on (see FocusReturn).
+    func applicationDidResignActive(_ notification: Notification) {
+        FocusReturn.shared.nictateResignedActive()
+    }
+
     private func registerShortcuts() {
         var refused: [String] = []
         for slot in ShortcutSlot.allCases {

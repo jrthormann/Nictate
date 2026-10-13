@@ -57,6 +57,7 @@ final class CaptureCoordinator {
                 if Permissions.isGranted {
                     status.cue(.failure)
                     status.announce(tr("The screen could not be read"))
+                    FocusReturn.shared.returnIfStillActive() // Started from the panel, Nictate is active.
                 } else {
                     Permissions.request()
                     windows.showWelcome()
@@ -111,7 +112,8 @@ final class CaptureCoordinator {
         let copied = planned.compactMap(\.copiedText).first.map { clipboard.writeVerified($0) }
         for effect in CapturePlan.settled(planned, copied: copied ?? false) { perform(effect) }
         showResult(capture, mode: mode, copied: copied, region: region)
-        if copied == true { FocusReturn.shared.returnIfStillActive() }
+        // Every outcome gives focus back, copied or not (FR-15). A link the user opened has already let it go.
+        FocusReturn.shared.returnIfStillActive()
     }
 
     private func showResult(_ capture: Capture, mode: CaptureMode, copied: Bool?, region: SelectedRegion) {
@@ -168,7 +170,8 @@ final class CaptureCoordinator {
             alert.addButton(withTitle: tr("Cancel")).keyEquivalent = "\u{1B}"
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
-        NSWorkspace.shared.open(url)
+        // The user chose the browser, so the app they came from is let go and never brought back over the page.
+        if NSWorkspace.shared.open(url) { FocusReturn.shared.forget() }
     }
 
     /// Puts the next older capture on the clipboard, wrapping around after the oldest in the rotation.

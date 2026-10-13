@@ -3221,6 +3221,16 @@ check(!FocusReturn.shouldRemember(captureInFlight: true, panelShown: false),
       "focus: a shortcut during a capture keeps the app remembered")
 check(!FocusReturn.shouldRemember(captureInFlight: false, panelShown: true),
       "focus: a shortcut while the panel is open keeps the app remembered")
+// A retry straight after a miss can find Nictate still in front while the return is under way: the app is kept then,
+// and only then. Settings opened on purpose, an app that has quit, or another app in front never keep it.
+check(FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: true, originRunning: true),
+      "focus: a shortcut pressed before the return lands keeps the app to return to")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: false, originRunning: true),
+      "focus: a shortcut pressed in Settings forgets an app from an earlier action")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: true, originRunning: false),
+      "focus: an app that has quit is not kept")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: true, returnPending: true, originRunning: true),
+      "focus: the app in front replaces the remembered one")
 
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),

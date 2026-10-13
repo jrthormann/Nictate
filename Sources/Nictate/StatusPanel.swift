@@ -100,7 +100,8 @@ final class StatusPanelModel: ObservableObject {
     }
 
     func copyDetected(_ value: String) { dismiss(); capture.copyDetected(value); FocusReturn.shared.returnIfStillActive() }
-    func openDetected(_ url: URL) { dismiss(); capture.openLink(url) }
+    /// Open leaves the browser in front. Cancel gives focus back, as the panel has already closed.
+    func openDetected(_ url: URL) { dismiss(); capture.openLink(url); FocusReturn.shared.returnIfStillActive() }
 
     // MARK: History screen
 
