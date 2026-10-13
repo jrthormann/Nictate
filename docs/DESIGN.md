@@ -17,13 +17,14 @@ Light and Dark values are defined in `Sources/Nictate/ColorTokens.swift`.
 - **Charcoal Ink** (#0B0B12 / #F5F5F7): primary text. Off-black, never `#000000`.
 - **Muted Steel** (#636366 / #98989D): secondary text, metadata, captions. Contrast checked at 4.5:1 or better.
 - **Hairline** (black 12% / white 12%): structural separators only.
-- **Indigo Accent** (#545CFA / #7B80FF): the one accent. Primary actions, focus rings, the selection outline.
+- **Indigo Accent** (#545CFA / #7B80FF): the one accent. Primary actions and focus rings.
 - **Success Green** (#1D7A33 / #30D158): "Copied" feedback only.
-- **Warning Amber** (#B35400 / #FF9F0A): "No text found" feedback only.
+- **Warning Amber** (#B35400 / #FF9F0A): capture problems only: "No text found" (question mark), and
+  "Couldn't read this area" and "Couldn't copy text" (warning triangle).
 - **Danger Red** (#D70015 / #FF453A): destructive actions only (Reset, Delete captures).
 
 Rules: one accent. Feedback colours never decorate. The cyan scan beam belongs to the app icon and the
-menu bar blink; it does not appear in ordinary UI.
+menu bar blink; it does not appear in ordinary UI. The capture scan line is white and black, never the cyan beam.
 
 ## 3. Typography Rules
 
@@ -39,12 +40,19 @@ menu bar blink; it does not appear in ordinary UI.
   Destructive buttons use the danger role and have no keyboard default.
 - **Alerts:** Cancel is the default. A destructive alert never sits on Return.
 - **Settings rows:** grouped `Form` sections, label on the left, control on the right. No cards.
-- **Selection overlay:** the still is dimmed (28 % light, 45 % dark), the selection is a one-point white outline
-  with no shadow, glow or corner decoration. The size label is removed; the outline is the whole UI.
-- **Result pill:** system window background at 94 % opacity, one line of text, a symbol in its semantic colour.
-  Fades after 1.5 s, stays while hovered, a click dismisses it.
+- **Selection overlay:** the still is dimmed (28 % Light, 45 % Dark). The edge is a pair of bands on whole device
+  pixels: 1 pt white at 90 % inside, 1 pt black at 35 % outside. Four corner marks, 12 pt arms (at most a third of
+  the shorter side), thicken each band by 1 pt. Increase Contrast: 2 pt white at 100 %, black at 80 %. No shadow,
+  glow, handles or size label. (Corner marks approved 2026-10-13; this replaces the earlier rule against corner
+  decoration.)
+- **Result pill:** HUD material (opaque under Reduce Transparency), 14 pt corners, one line of 13 pt medium text and
+  a 15 pt semibold symbol: check for copied, question mark for nothing found, warning triangle for a read or copy
+  failure. Fades in and out in 200 ms (instant under Reduce Motion), stays 1.5 s or while hovered, a click dismisses
+  it. "Copied" appears only after the clipboard read-back.
 - **Empty states:** composed, not blank. History says what to do: "Press ⇧⌘2 and drag over any text."
-- **Progress:** a short pulse while recognition runs longer than 0.3 s. No circular spinner.
+- **Progress:** past 0.3 s of recognition, the menu bar icon pulses, the Reading pill appears, and a 2 pt
+  white-and-black line sweeps the selected area top to bottom. Under Reduce Motion the icon rests dimmed, the dot is
+  still and the line is not shown. No circular spinner.
 
 ## 5. Layout Principles
 
@@ -57,7 +65,9 @@ menu bar blink; it does not appear in ordinary UI.
 
 - Menu bar feedback: one blink for success, two for failure. Reduce Motion replaces it with a 150 ms fade.
 - Overlay: no animation when it appears; it must be on screen within one frame of the shortcut.
-- Result pill: 200 ms fade out. No slide, no bounce.
+- Scan line: 1.2 s sweep, ease in-out, fading in and out over the first and last 15 %; removed the moment
+  recognition ends.
+- Result pill: 200 ms fade in and out. No slide, no bounce.
 - Animate opacity and transform only.
 
 ## 7. Anti-Patterns (Banned)

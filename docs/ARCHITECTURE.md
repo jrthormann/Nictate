@@ -74,7 +74,8 @@ global shortcut (HotKeyManager, Carbon)
 | `SelectionOverlay.swift` | The selection windows and their view: dimming, outline, keyboard and mouse. |
 | `ContentClassifier.swift` | Pure rules that decide whether a capture is code, a table, a list or prose from its text and layout. Only confident prose loses its line breaks. Tested on a 40-text corpus (`Tests/corpus/captures.tsv`) and a held-out set. |
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
-| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels and pill placement (unit tested). |
+| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, and the outline bands and corner marks (unit tested). |
+| `ScanLine.swift` | The scan line over the selection while a slow read runs: a borderless, click-through window with no image, shown after the 300 ms working delay and closed before the result. |
 | `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. Deleting saved captures withdraws every banner; the system's notification center sits behind the `NoticeCenter` seam, so tests answer it by hand. |
 
 ## Scripts
