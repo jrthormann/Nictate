@@ -242,7 +242,10 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         popover.contentViewController = host
     }
 
-    var isShown: Bool { popover.isShown }
+    var isShown: Bool { popover.isShown || (floating?.isVisible ?? false) }
+    /// The Recent Captures panel, used by the shortcut. It can show over full-screen apps, where the menu bar is hidden.
+    private var floating: FloatingPanel?
+    private var floatingHost: NSHostingController<StatusPanelView>?
     /// The window that draws the panel, once it is shown.
     var window: NSWindow? { popover.contentViewController?.view.window }
 
@@ -250,6 +253,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
+            floating?.orderOut(nil)
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
             FocusReturn.shared.remember()
@@ -262,6 +266,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
 
     func close() {
         popover.performClose(nil)
+        floating?.orderOut(nil)
     }
 
     /// Closes the popover and runs `action` once it has closed, or at once when it is not shown. One action waits at a time.
@@ -283,30 +288,66 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         action()
     }
 
-    /// The shortcut's action: the Recent Captures list, anchored to the menu bar icon. Nothing is copied on open. The app
-    /// the user is in is remembered first, so focus can return to it after a copy or Escape. If the icon cannot be seen,
-    /// the panel cannot anchor, so the user is told why instead.
+    /// The shortcut's action: the Recent Captures list in a panel that also shows over full-screen apps. Nothing is copied
+    /// on open. The app the user is in is remembered first, so focus can return to it after a copy or Escape.
     func showRecentCaptures(relativeTo button: NSView) {
-        guard !popover.isShown else { return }
-        guard let window = button.window, window.isVisible else {
-            showIconHidden()
-            return
-        }
+        guard !isShown else { return }
         FocusReturn.shared.remember()
         model.reset()
         model.openPicker()
-        NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
+        presentFloating(below: button)
     }
 
-    private func showIconHidden() {
+    private func presentFloating(below button: NSView) {
+        let host = NSHostingController(rootView: StatusPanelView(model: model))
+        host.view.layoutSubtreeIfNeeded()
+        let size = host.view.fittingSize
+        let backdrop = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+        backdrop.material = .popover
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.wantsLayer = true
+        backdrop.layer?.cornerRadius = 10
+        backdrop.layer?.masksToBounds = true
+        host.view.frame = backdrop.bounds
+        host.view.autoresizingMask = [.width, .height]
+        backdrop.addSubview(host.view)
+        let panel = FloatingPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .fullSizeContentView],
+                                  backing: .buffered, defer: false)
+        panel.contentView = backdrop
+        panel.isFloatingPanel = true
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        panel.hidesOnDeactivate = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.setFrameTopLeftPoint(origin(for: size, below: button))
+        floatingHost = host
+        floating = panel
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = tr("Recent Captures can't open")
-        alert.informativeText = tr("Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again.")
-        alert.addButton(withTitle: tr("OK"))
-        alert.runModal()
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    /// Just below the menu bar icon when it can be seen. Otherwise at the top middle of the main screen, below the menu bar.
+    private func origin(for size: NSSize, below button: NSView) -> NSPoint {
+        if let window = button.window, window.isVisible {
+            let icon = window.convertToScreen(button.convert(button.bounds, to: nil))
+            return NSPoint(x: icon.midX - size.width / 2, y: icon.minY)
+        }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return .zero }
+        return NSPoint(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.maxY)
+    }
+}
+
+/// The Recent Captures panel. It takes keyboard focus, so the arrow keys and Escape reach the list, and it closes when the
+/// user clicks elsewhere, as the popover does.
+final class FloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+
+    override func resignKey() {
+        super.resignKey()
+        orderOut(nil)
     }
 }
 

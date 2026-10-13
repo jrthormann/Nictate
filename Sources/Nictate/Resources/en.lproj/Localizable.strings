@@ -22,8 +22,6 @@
 "Could not activate the shortcut" = "Could not activate the shortcut";
 "Cut" = "Cut";
 "Recent Captures" = "Recent Captures";
-"Recent Captures can't open" = "Recent Captures can't open";
-"Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again." = "Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again.";
 "Save Captures is off. New captures aren't saved." = "Save Captures is off. New captures aren't saved.";
 "Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them." = "Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them.";
 "Arrow keys choose, Return copies, Escape closes" = "Arrow keys choose, Return copies, Escape closes";

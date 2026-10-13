@@ -21,8 +21,6 @@
 "Could not activate the shortcut" = "No se pudo activar el atajo";
 "Cut" = "Cortar";
 "Recent Captures" = "Capturas recientes";
-"Recent Captures can't open" = "No se pueden mostrar las capturas recientes";
-"Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again." = "El icono de Nictate está oculto en la barra de menús o fuera de la pantalla. Muéstralo y vuelve a pulsar el atajo.";
 "Save Captures is off. New captures aren't saved." = "Guardar capturas está desactivado. Las nuevas capturas no se guardan.";
 "Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them." = "Guardar capturas está desactivado, así que las nuevas capturas no se conservan. Actívalo en el menú para conservarlas.";
 "Arrow keys choose, Return copies, Escape closes" = "Las flechas eligen, Intro copia y Esc cierra";
