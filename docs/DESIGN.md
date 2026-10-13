@@ -42,7 +42,7 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
 - **Alerts:** Cancel is the default. A destructive alert never sits on Return.
 - **Settings rows:** grouped `Form` sections, label on the left, control on the right. No cards.
 - **Selection overlay:** the still is dimmed (28 % Light, 45 % Dark). The edge is a pair of bands on whole device
-  pixels: 1 pt white at 90 % inside, 1 pt black at 35 % outside. Four corner marks, 12 pt arms (at most a third of
+  pixels: 1 pt white at 90 % inside, 1 pt black at 60 % outside. Four corner marks, 12 pt arms (at most a third of
   the shorter side), thicken each band by 1 pt. Increase Contrast: 2 pt white at 100 %, black at 80 %. No shadow,
   glow, handles or size label. (Corner marks approved 2026-10-13; this replaces the earlier rule against corner
   decoration.)
@@ -54,7 +54,7 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
 - **Progress:** past 0.3 s of recognition, the menu bar icon pulses, the Reading pill appears, and a 2 pt
   white-and-black line sweeps the selected area top to bottom. The line is not drawn on a selection less than 16 pt
   tall, whatever its width, and the Reading pill still appears. Its peak opacity is 60 %, or 90 % under Increase
-  Contrast, and its black half uses the outline's dark alpha: 35 %, or 80 % under Increase Contrast. Under Reduce
+  Contrast, and its black half uses the outline's dark alpha: 60 %, or 80 % under Increase Contrast. Under Reduce
   Motion the icon rests dimmed, the dot is still and the line is not shown. No circular spinner.
 
 ## 5. Layout Principles

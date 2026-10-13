@@ -1609,8 +1609,8 @@ do {
         return !shared.isNull && shared.width * shared.height > 0
     }
     let standard = SelectionOutline.style(.standard), increased = SelectionOutline.style(.increased)
-    check(standard == SelectionOutline.Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.35),
-          "outline: the standard edge is 1 pt white at 90 % inside and 1 pt black at 35 % outside")
+    check(standard == SelectionOutline.Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.6),
+          "outline: the standard edge is 1 pt white at 90 % inside and 1 pt black at 60 % outside")
     check(increased == SelectionOutline.Style(innerWidth: 2, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8),
           "outline: Increase Contrast is 2 pt white at 100 % inside and 1 pt black at 80 % outside")
     check(SelectionOutline.cornerExtra == 1, "outline: each corner mark thickens its band by 1 pt")

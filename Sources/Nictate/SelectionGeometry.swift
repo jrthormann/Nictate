@@ -129,7 +129,7 @@ enum SelectionOutline {
     static func style(_ variant: ContrastVariant) -> Style {
         switch variant {
         case .standard:
-            return Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.35)
+            return Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.6)
         case .increased:
             return Style(innerWidth: Design.Stroke.contrast, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8)
         }
