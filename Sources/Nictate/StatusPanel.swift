@@ -5,10 +5,36 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// What the Recent Captures list says above, or instead of, its entries. Kept apart from the view so the rules are tested.
+enum RecentCapturesNotice: Equatable {
+    case nothing, loading, unavailable, savingOff, savingOffWithCaptures, noCaptures
+
+    static func of(state: HistoryState, count: Int, historyEnabled: Bool) -> RecentCapturesNotice {
+        if state == .loading { return .loading }
+        if state == .unavailable { return .unavailable }
+        if !historyEnabled { return count == 0 ? .savingOff : .savingOffWithCaptures }
+        return count == 0 ? .noCaptures : .nothing
+    }
+}
+
 /// What the menu bar panel shows and does. The history is a second screen of the same panel, never a window.
 @MainActor
 final class StatusPanelModel: ObservableObject {
     enum Screen { case main, history }
+    enum EscapeAction: Equatable { case clearSearch, back, close }
+
+    /// What Escape does on each screen. A list opened with the shortcut is a picker: Escape closes it.
+    static func escape(screen: Screen, query: String, isPicker: Bool) -> EscapeAction {
+        switch screen {
+        case .history where !query.isEmpty: return .clearSearch
+        case .history where isPicker: return .close
+        case .history: return .back
+        case .main: return .close
+        }
+    }
+
+    /// True when the list was opened with the shortcut. A picker has no Back row, and Escape closes it.
+    @Published private(set) var isPicker = false
 
     @Published var screen: Screen = .main {
         // Opening History highlights its first match, so Return always has a target.
@@ -56,6 +82,7 @@ final class StatusPanelModel: ObservableObject {
     /// Called each time the panel opens: the main screen, with a fresh search.
     func reset() {
         screen = .main
+        isPicker = false
         query = ""
         // A highlight or an error from an earlier visit must not survive: the list may have changed since.
         selection = nil
@@ -82,7 +109,11 @@ final class StatusPanelModel: ObservableObject {
     /// A capture takes its stills straight away, so it starts only once the panel is gone: its fade-out would be in the picture.
     func captureText() { dismissThen { [capture] in capture.capture(mode: .text) } }
     func captureCode() { dismissThen { [capture] in capture.capture(mode: .code) } }
-    func cycleHistory() { dismiss(); capture.rotateHistory(); FocusReturn.shared.returnIfStillActive() }
+    /// The shortcut's list: the saved captures, opened as a picker. Nothing is copied until a row is chosen.
+    func openPicker() {
+        isPicker = true
+        screen = .history
+    }
     /// Escape closes the panel and gives focus back to the app the user came from.
     func closeReturningFocus() { dismiss(); FocusReturn.shared.returnIfStillActive() }
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
@@ -250,6 +281,32 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         guard let action = afterClose else { return }
         afterClose = nil
         action()
+    }
+
+    /// The shortcut's action: the Recent Captures list, anchored to the menu bar icon. Nothing is copied on open. The app
+    /// the user is in is remembered first, so focus can return to it after a copy or Escape. If the icon cannot be seen,
+    /// the panel cannot anchor, so the user is told why instead.
+    func showRecentCaptures(relativeTo button: NSView) {
+        guard !popover.isShown else { return }
+        guard let window = button.window, window.isVisible else {
+            showIconHidden()
+            return
+        }
+        FocusReturn.shared.remember()
+        model.reset()
+        model.openPicker()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func showIconHidden() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = tr("Recent Captures can't open")
+        alert.informativeText = tr("Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again.")
+        alert.addButton(withTitle: tr("OK"))
+        alert.runModal()
     }
 }
 

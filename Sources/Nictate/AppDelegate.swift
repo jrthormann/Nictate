@@ -98,14 +98,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// What a shortcut does.
     private func perform(_ slot: ShortcutSlot) {
-        let busy = running?.capture.isCapturing ?? false
-        let panelShown = running?.panel.isShown ?? false
-        if FocusReturn.shouldRemember(captureInFlight: busy, panelShown: panelShown) { FocusReturn.shared.remember() }
-        guard let capture = running?.capture else { return }
+        guard let running else { return }
+        // Recent Captures remembers the app to return to itself, and only when it opens. It stays closed during a capture,
+        // so a copy from it cannot race the capture's own copy.
+        if slot == .rotateHistory {
+            if !running.capture.isCapturing { running.status.showRecentCaptures() }
+            return
+        }
+        if FocusReturn.shouldRemember(captureInFlight: running.capture.isCapturing, panelShown: running.panel.isShown) {
+            FocusReturn.shared.remember()
+        }
         switch slot {
-        case .capture: capture.capture(mode: .text)
-        case .rotateHistory: capture.rotateHistory()
-        case .captureCode: capture.capture(mode: .code)
+        case .capture: running.capture.capture(mode: .text)
+        case .captureCode: running.capture.capture(mode: .code)
+        case .rotateHistory: break
         }
     }
 

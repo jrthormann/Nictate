@@ -8,7 +8,6 @@
 "Automatic" = "Automatic";
 "Bring All to Front" = "Bring All to Front";
 "Cancel" = "Cancel";
-"Capture %d of %d" = "Capture %d of %d";
 "Capture QR Code or Barcode" = "Capture QR Code or Barcode";
 "Capture Text" = "Capture Text";
 "Clear History" = "Clear History";
@@ -22,7 +21,12 @@
 "Copy text from anywhere on your screen. Everything is recognized on your Mac, offline." = "Copy text from anywhere on your screen. Everything is recognized on your Mac, offline.";
 "Could not activate the shortcut" = "Could not activate the shortcut";
 "Cut" = "Cut";
-"Cycle History" = "Cycle History";
+"Recent Captures" = "Recent Captures";
+"Recent Captures can't open" = "Recent Captures can't open";
+"Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again." = "Nictate's icon is hidden in the menu bar or off screen. Show it, then press the shortcut again.";
+"Save Captures is off. New captures aren't saved." = "Save Captures is off. New captures aren't saved.";
+"Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them." = "Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them.";
+"Arrow keys choose, Return copies, Escape closes" = "Arrow keys choose, Return copies, Escape closes";
 "Delete" = "Delete";
 "Delete all %d saved captures?" = "Delete all %d saved captures?";
 "Delete the %d saved captures too?" = "Delete the %d saved captures too?";
@@ -38,7 +42,6 @@
 "Hide Nictate" = "Hide Nictate";
 "Hide Others" = "Hide Others";
 "History" = "History";
-"History is empty" = "History is empty";
 "Include ⌘ or ⌃: ⌥ with a letter types a character in every app." = "Include ⌘ or ⌃: ⌥ with a letter types a character in every app.";
 "Keep Line Breaks" = "Keep Line Breaks";
 "Languages" = "Languages";

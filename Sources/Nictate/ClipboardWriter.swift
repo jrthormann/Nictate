@@ -3,9 +3,9 @@
 
 import AppKit
 
-/// The one place Nictate writes the clipboard: captures, Cycle History, the History screen and the menu all
-/// go through it. Each write is read back once, and only a write that reads back is remembered, so Cycle History and
-/// Append mode know what the clipboard holds while nothing else has been copied.
+/// The one place Nictate writes the clipboard: captures, Recent Captures, the History screen and the menu all
+/// go through it. Each write is read back once, and only a write that reads back is remembered, so Append mode
+/// knows what the clipboard holds while nothing else has been copied.
 @MainActor
 final class ClipboardWriter {
     static let shared = ClipboardWriter()
@@ -29,11 +29,6 @@ final class ClipboardWriter {
         guard pasteboard.string(forType: .string) == text else { return false }
         lastWrite = ClipboardWrite(changeCount: changeCount, text: text)
         return true
-    }
-
-    /// The text of the latest write while it is still on the clipboard, otherwise nil.
-    var ownText: String? {
-        HistoryRotation.ownClipboard(changeCount: pasteboard.changeCount, lastWrite: lastWrite)
     }
 
     /// What Append mode would add to.

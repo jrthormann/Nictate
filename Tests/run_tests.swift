@@ -337,15 +337,6 @@ check(TextCleaner.clipboardText(new: "second", existing: "first", appendMode: fa
       "append off ignores the delimiter")
 
 // History rotation
-let trio = ["c", "b", "a"]   // newest first
-check(HistoryRotation.nextIndex(items: [], clipboard: "x") == nil, "rotation: empty history")
-check(HistoryRotation.nextIndex(items: trio, clipboard: nil) == 0, "rotation: empty clipboard gets the newest")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "overwritten") == 0, "rotation: overwritten clipboard gets the newest")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "c") == 1, "rotation: newest -> second")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "b") == 2, "rotation: second -> third")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "a") == 0, "rotation: wraps after the oldest")
-check(HistoryRotation.nextIndex(items: ["only"], clipboard: "only") == 0, "rotation: single item")
-
 // Append separator: three choices; any other stored value reads as a new line.
 do {
     let prefs = Settings(defaults: freshSuite("separator").defaults)
@@ -696,9 +687,6 @@ do {
         let bundle = Bundle(path: resources + "/\(probe.lang).lproj")
         let quit = bundle?.localizedString(forKey: "Quit Nictate", value: nil, table: nil)
         check(quit == probe.quit, "languages: \(probe.lang) translates the quit item", quit ?? "no bundle")
-        let position = bundle?.localizedString(forKey: "Capture %d of %d", value: nil, table: nil) ?? ""
-        let formatted = String(format: position, 2, 5)
-        check(formatted.contains("2") && formatted.contains("5") && !formatted.contains("%"), "languages: \(probe.lang) keeps both placeholders working", formatted)
     }
     for lang in ["fr", "de", "it"] {
         check(!FileManager.default.fileExists(atPath: resources + "/\(lang).lproj"), "languages: only en and es ship, not \(lang)")
@@ -1026,29 +1014,13 @@ do {
     check(!ShortcutRule.isAcceptableForRecording(mods: 0), "shortcut rule: no modifier is rejected")
 }
 
-// Rotation depth: the clamp lives in HistoryRotation, so a stored depth below zero or history being off
-// leaves nothing to cycle, and a depth past the history just takes all of it.
-do {
-    let five = ["e", "d", "c", "b", "a"]
-    check(HistoryRotation.items(five, depth: -1, historyEnabled: true).isEmpty, "rotation depth: -1 cycles nothing")
-    check(HistoryRotation.items(five, depth: 0, historyEnabled: true).isEmpty, "rotation depth: 0 cycles nothing")
-    check(HistoryRotation.items(five, depth: 1, historyEnabled: true) == ["e"], "rotation depth: 1 keeps the newest")
-    check(HistoryRotation.items(five, depth: 1000, historyEnabled: true) == five, "rotation depth: 1000 takes the whole history")
-    check(HistoryRotation.items(five, depth: 10, historyEnabled: false).isEmpty, "rotation depth: history off cycles nothing")
-}
-
-// Cycle History never reads the clipboard: it remembers what Nictate last wrote and the pasteboard's change
-// count after that write. Anything copied since (by any app) changes the count, so rotation restarts.
+// Append mode never reads the clipboard it did not write: it remembers what Nictate last wrote and the pasteboard's
+// change count after that write. Anything copied since (by any app) changes the count, so the write is no longer known.
 do {
     let write = ClipboardWrite(changeCount: 41, text: "c")
-    check(HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write) == "c", "rotation clipboard: our own write is known")
-    check(HistoryRotation.ownClipboard(changeCount: 42, lastWrite: write) == nil, "rotation clipboard: a later copy is unknown")
-    check(HistoryRotation.ownClipboard(changeCount: 0, lastWrite: nil) == nil, "rotation clipboard: nothing written yet")
-    let trio = ["c", "b", "a"]
-    check(HistoryRotation.nextIndex(items: trio, clipboard: HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write)) == 1,
-          "rotation clipboard: after our write of the newest, the second")
-    check(HistoryRotation.nextIndex(items: trio, clipboard: HistoryRotation.ownClipboard(changeCount: 50, lastWrite: write)) == 0,
-          "rotation clipboard: after someone else's copy, the newest")
+    check(HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write) == "c", "clipboard ownership: our own write is known")
+    check(HistoryRotation.ownClipboard(changeCount: 42, lastWrite: write) == nil, "clipboard ownership: a later copy is unknown")
+    check(HistoryRotation.ownClipboard(changeCount: 0, lastWrite: nil) == nil, "clipboard ownership: nothing written yet")
 }
 
 // Opening a link: the sink itself only lets web and mail addresses through, whatever handed it the URL.
@@ -1210,19 +1182,16 @@ do {
 do {
     let board = NSPasteboard(name: NSPasteboard.Name("nictate-test-\(UUID().uuidString)"))
     let writer = ClipboardWriter(pasteboard: board)
-    check(writer.lastWrite == nil && writer.ownText == nil, "clipboard writer: nothing written yet")
+    check(writer.lastWrite == nil, "clipboard writer: nothing written yet")
     check(writer.writeVerified("b", transient: false) && writer.lastWrite == ClipboardWrite(changeCount: board.changeCount, text: "b"),
           "clipboard writer: the recorded count is the one the write produced")
-    let trio = ["c", "b", "a"]
-    check(HistoryRotation.nextIndex(items: trio, clipboard: writer.ownText) == 2,
-          "clipboard writer: after a History window copy of the second, rotation moves on to the third")
     _ = writer.writeVerified("b", transient: true)
     check(writer.existingForAppend() == ExistingClipboard(text: "b", isPrivate: false),
           "clipboard writer: a History window copy with the private setting stays appendable")
     board.clearContents()
     board.setString("elsewhere", forType: .string)
-    check(writer.ownText == nil && HistoryRotation.nextIndex(items: trio, clipboard: writer.ownText) == 0,
-          "clipboard writer: a copy by another app restarts rotation")
+    check(HistoryRotation.ownClipboard(changeCount: board.changeCount, lastWrite: writer.lastWrite) == nil,
+          "clipboard writer: a copy by another app is not ours")
     board.releaseGlobally()
 
     // Only ClipboardWriter writes the clipboard: no other source calls replaceContents directly.
@@ -3288,6 +3257,36 @@ do {
           "capture session: unreadable stills with no Esc report the failure")
     check(session.stillsReturned(available: false) == .stop, "capture session: the failure is reported once")
 }
+
+// Recent Captures: the list says why it is empty or unavailable, and Escape closes the picker without a copy.
+check(RecentCapturesNotice.of(state: .available, count: 0, historyEnabled: false) == .savingOff,
+      "recent captures: saving off with nothing saved says so")
+check(RecentCapturesNotice.of(state: .available, count: 2, historyEnabled: false) == .savingOffWithCaptures,
+      "recent captures: saving off still lists what was saved, with a note")
+check(RecentCapturesNotice.of(state: .available, count: 0, historyEnabled: true) == .noCaptures,
+      "recent captures: an empty history with saving on says no captures yet")
+check(RecentCapturesNotice.of(state: .available, count: 2, historyEnabled: true) == .nothing,
+      "recent captures: a list with captures needs no notice")
+check(RecentCapturesNotice.of(state: .loading, count: 0, historyEnabled: true) == .loading,
+      "recent captures: a history still loading is not called empty")
+check(RecentCapturesNotice.of(state: .unavailable, count: 0, historyEnabled: true) == .unavailable,
+      "recent captures: an unreadable history is not called empty")
+check(StatusPanelModel.escape(screen: .history, query: "", isPicker: true) == .close,
+      "recent captures: Escape closes the picker")
+check(StatusPanelModel.escape(screen: .history, query: "abc", isPicker: true) == .clearSearch,
+      "recent captures: Escape clears the search before it closes")
+check(StatusPanelModel.escape(screen: .history, query: "", isPicker: false) == .back,
+      "history: Escape goes back from a list opened from the menu")
+check(StatusPanelModel.escape(screen: .main, query: "", isPicker: false) == .close,
+      "panel: Escape closes the main screen")
+
+// Motion: the list's changes are brief and vanish under Reduce Motion, so no motion ever holds up an action.
+check(RecentCapturesMotion.duration(.selection, reduceMotion: false) <= 0.2,
+      "motion: the selection moves in 0.2 s or less")
+check(RecentCapturesMotion.duration(.press, reduceMotion: false) <= 0.2,
+      "motion: a press answers in 0.2 s or less")
+check(RecentCapturesMotion.duration(.selection, reduceMotion: true) == 0 && RecentCapturesMotion.duration(.press, reduceMotion: true) == 0,
+      "motion: Reduce Motion removes the motion")
 
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),

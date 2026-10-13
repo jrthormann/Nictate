@@ -36,7 +36,7 @@ struct GeneralTab: View {
         SettingsPage {
             SettingsSection("Keyboard Shortcuts") {
                 SettingRow("Capture Text") { shortcutControl(.capture, name: tr("Capture Text")) }
-                SettingRow("Cycle History") { shortcutControl(.rotateHistory, name: tr("Cycle History")) }
+                SettingRow("Recent Captures") { shortcutControl(.rotateHistory, name: tr("Recent Captures")) }
                 SettingRow("Scan QR or Barcode") { shortcutControl(.captureCode, name: tr("Scan QR or Barcode")) }
                 SettingCaption("Click a shortcut to change it.")
             }
