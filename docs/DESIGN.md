@@ -19,8 +19,9 @@ Light and Dark values are defined in `Sources/Nictate/ColorTokens.swift`.
 - **Hairline** (black 12% / white 12%): structural separators only.
 - **Indigo Accent** (#545CFA / #7B80FF): the one accent. Primary actions and focus rings.
 - **Success Green** (#1D7A33 / #30D158): "Copied" feedback only.
-- **Warning Amber** (#B35400 / #FF9F0A): capture problems only: "No text found" (question mark), and
-  "Couldn't read this area" and "Couldn't copy text" (warning triangle).
+- **Warning Amber** (#B35400 / #FF9F0A): capture problems only. The result pill draws its symbols in the system
+  orange, not in this token: a question mark for "No text found", and a warning triangle for "Couldn't read this
+  area" and "Couldn't copy text".
 - **Danger Red** (#D70015 / #FF453A): destructive actions only (Reset, Delete captures).
 
 Rules: one accent. Feedback colours never decorate. The cyan scan beam belongs to the app icon and the
