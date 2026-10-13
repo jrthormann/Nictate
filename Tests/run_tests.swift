@@ -1614,6 +1614,8 @@ do {
     check(increased == SelectionOutline.Style(innerWidth: 2, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8),
           "outline: Increase Contrast is 2 pt white at 100 % inside and 1 pt black at 80 % outside")
     check(SelectionOutline.cornerExtra == 1, "outline: each corner mark thickens its band by 1 pt")
+    check(SelectionOutline.dim(dark: false) == 0.28 && SelectionOutline.dim(dark: true) == 0.45,
+          "outline: the dim over the still is 28 % in Light and 45 % in Dark")
 
     // Corner arms: 12 pt, at most a third of the shorter side, rounded down to whole pixels.
     let large = CGRect(x: 0, y: 0, width: 200, height: 100), small = CGRect(x: 0, y: 0, width: 30, height: 20)
@@ -1625,30 +1627,45 @@ do {
     check(SelectionGeometry.cornerLength(for: tiny, scale: 1) == 1 && SelectionGeometry.cornerLength(for: tiny, scale: 2) == 1,
           "outline: corner arms on a 4 pt selection are 1 pt")
 
-    // Every edge of every band and corner mark lands on a device pixel, at 1x and 2x, in both styles.
+    // Every edge of every band and corner mark lands on a device pixel, at 1x and 2x, in both styles, on an ordinary
+    // selection, a 4 pt one and a large one.
     for scale in [CGFloat(1), 2] {
         let origin = SelectionGeometry.snapped(CGPoint(x: 10.3, y: 20.7), scale: scale)
-        let far = SelectionGeometry.snapped(CGPoint(x: 70.9, y: 61.2), scale: scale)
-        let selection = SelectionGeometry.rect(from: origin, to: far, within: CGRect(x: 0, y: 0, width: 200, height: 200))
-        for (name, style) in [("standard", standard), ("increased", increased)] {
-            var rects: [CGRect] = []
-            for outside in [false, true] {
-                let width = outside ? style.outerWidth : style.innerWidth
-                rects += SelectionGeometry.band(around: selection, width: width, outside: outside)
-                rects += SelectionGeometry.cornerMarks(of: selection, length: SelectionGeometry.cornerLength(for: selection, scale: scale),
-                                                       thickness: width + SelectionOutline.cornerExtra, outside: outside)
+        let ends = [("ordinary", SelectionGeometry.snapped(CGPoint(x: 70.9, y: 61.2), scale: scale)),
+                    ("4 pt", CGPoint(x: origin.x + 4, y: origin.y + 4)),
+                    ("large", SelectionGeometry.snapped(CGPoint(x: 810.4, y: 620.9), scale: scale))]
+        for (size, far) in ends {
+            let selection = SelectionGeometry.rect(from: origin, to: far, within: CGRect(x: 0, y: 0, width: 900, height: 700))
+            for (name, style) in [("standard", standard), ("increased", increased)] {
+                var rects: [CGRect] = []
+                for outside in [false, true] {
+                    let width = outside ? style.outerWidth : style.innerWidth
+                    rects += SelectionGeometry.band(around: selection, width: width, outside: outside)
+                    rects += SelectionGeometry.cornerMarks(of: selection, length: SelectionGeometry.cornerLength(for: selection, scale: scale),
+                                                           thickness: width + SelectionOutline.cornerExtra, outside: outside)
+                }
+                let aligned = rects.allSatisfy { r in
+                    [r.minX, r.maxX, r.minY, r.maxY].allSatisfy { v in abs(v * scale - (v * scale).rounded()) < 1e-6 }
+                }
+                check(aligned, "outline: every band and corner mark has its edges on a device pixel (\(name), \(size), \(scale)x)")
             }
-            let aligned = rects.allSatisfy { r in
-                [r.minX, r.maxX, r.minY, r.maxY].allSatisfy { v in abs(v * scale - (v * scale).rounded()) < 1e-6 }
-            }
-            check(aligned, "outline: every band and corner mark has its edges on a device pixel (\(name), \(scale)x)")
         }
     }
 
     // The light band and its marks lie inside the selection; the dark band and its marks only touch it from outside;
-    // the strips of one band never overlap.
-    let frame = CGRect(x: 40, y: 30, width: 120, height: 80)
-    for (name, style) in [("standard", standard), ("increased", increased)] {
+    // the strips of one band never overlap; the dark corner marks cover the outer corner squares. Checked on an ordinary
+    // selection, a 4 pt one and a large one, in both styles. On a 4 pt side the light marks of opposite corners overlap
+    // under Increase Contrast; they are one fill, so the overlap adds no alpha, and they still lie inside the selection.
+    let frames = [("120 x 80", CGRect(x: 40, y: 30, width: 120, height: 80)),
+                  ("4 x 4", CGRect(x: 40, y: 30, width: 4, height: 4)),
+                  ("800 x 600", CGRect(x: 40, y: 30, width: 800, height: 600))]
+    var cases: [(name: String, frame: CGRect, style: SelectionOutline.Style)] = []
+    for (size, frame) in frames {
+        for (name, style) in [("standard", standard), ("increased", increased)] {
+            cases.append(("\(name), \(size)", frame, style))
+        }
+    }
+    for (name, frame, style) in cases {
         let length = SelectionGeometry.cornerLength(for: frame, scale: 2)
         let inner = SelectionGeometry.band(around: frame, width: style.innerWidth, outside: false)
         let outer = SelectionGeometry.band(around: frame, width: style.outerWidth, outside: true)
@@ -1678,7 +1695,8 @@ do {
     // Contrast between the two bands on any content: the light band over black content is the least bright it gets,
     // and the dark band over white content that the overlay dims is the brightest it gets. Each dimming level, in both
     // styles, must keep them 3:1 apart (WCAG 1.4.11) or more.
-    for (dimming, dim) in [("Light", 0.28), ("Dark", 0.45)] {
+    for (dimming, dark) in [("Light", false), ("Dark", true)] {
+        let dim = SelectionOutline.dim(dark: dark)
         for (name, style) in [("standard", standard), ("increased", increased)] {
             let lightest = style.innerAlpha
             let darkest = (1 - style.outerAlpha) * (1 - dim)

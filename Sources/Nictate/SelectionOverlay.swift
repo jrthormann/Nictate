@@ -205,9 +205,9 @@ private final class SelectionView: NSView {
         let selected = anchor != nil && SelectionGeometry.isRegion(rect)
 
         context.draw(still.image, in: bounds)
-        // The spec dims the screen 28 % in Light and 45 % in Dark.
+        // The dim is 28 % in Light and 45 % in Dark (SelectionOutline.dim).
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        context.setFillColor(NSColor.black.withAlphaComponent(dark ? 0.45 : 0.28).cgColor)
+        context.setFillColor(NSColor.black.withAlphaComponent(SelectionOutline.dim(dark: dark)).cgColor)
         context.fill(bounds)
         if selected {
             context.saveGState()

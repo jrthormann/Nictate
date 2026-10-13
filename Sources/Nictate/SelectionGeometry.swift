@@ -134,4 +134,10 @@ enum SelectionOutline {
             return Style(innerWidth: Design.Stroke.contrast, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8)
         }
     }
+
+    /// The black dim over the still outside the selection: 28 % in Light, 45 % in Dark. The overlay draws it with this
+    /// value, and the tests read it from here, so they follow any change.
+    static func dim(dark: Bool) -> CGFloat {
+        dark ? 0.45 : 0.28
+    }
 }
