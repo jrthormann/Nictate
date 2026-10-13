@@ -12,7 +12,7 @@ enum RecentCapturesMotion {
     static func duration(_ kind: Kind, reduceMotion: Bool) -> Double {
         if reduceMotion { return 0 }
         switch kind {
-        case .selection: return 0.12
+        case .selection: return 0.18
         case .press: return 0.08
         }
     }
