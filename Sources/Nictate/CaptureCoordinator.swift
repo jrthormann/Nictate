@@ -80,7 +80,8 @@ final class CaptureCoordinator {
                 ResultPill.shared.show(.reading, near: rect, screen: screen)
             }
             // Any later exit cancels the timer, closes the line and stops the pulse. The explicit calls below run first
-            // on the normal path.
+            // on the normal path. It cannot take down a "Reading…" pill the timer has shown, so an early exit added
+            // between the timer and the result must show a result (through showResult) or hide the pill.
             defer { reading.cancel(); scan.close(); status.endWorking() }
             status.beginWorking()
             let outcome = await Task.detached(priority: .userInitiated) {

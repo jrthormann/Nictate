@@ -5,7 +5,8 @@ import AppKit
 
 /// The line beside a selection that says what the capture did. CaptureCoordinator.resultStyle picks the outcome:
 /// - copied, only once the clipboard has read the text back: a green check, "Copied · 11 words" ("1 word" for one);
-/// - nothing found: an orange question mark, "No text found · try a larger area" ("No code found" in Code mode);
+/// - nothing found: an orange question mark, "No text found · try a larger area", or
+///   "No code found · try a larger area" for a QR or barcode capture;
 /// - the read failed, Vision could not read the area: an orange warning triangle, "Couldn't read this area. Try
 ///   again.";
 /// - the copy failed, the clipboard refused the text or did not read it back: the same triangle, "Couldn't copy text.
