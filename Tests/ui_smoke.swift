@@ -80,13 +80,28 @@ func visibleWindows() -> [NSWindow] {
 }
 @MainActor
 func visibleWindowIDs() -> Set<ObjectIdentifier> { Set(visibleWindows().map(ObjectIdentifier.init)) }
+/// How the run's windows on screen differ from `baseline`, for a failed check to print: "windows +1 -0" is one extra.
+@MainActor
+func windowDelta(_ baseline: Set<ObjectIdentifier>) -> String {
+    let now = visibleWindowIDs()
+    return "windows +\(now.subtracting(baseline).count) -\(baseline.subtracting(now).count)"
+}
+/// A scan line's state, for a failed check to print: whether it holds a window, and the windows against `baseline`.
+@MainActor
+func scanState(_ line: ScanLine, _ baseline: Set<ObjectIdentifier>) -> String {
+    "showing \(line.isShowing), \(windowDelta(baseline))"
+}
+/// Whether a window a check watches is on screen, off it, or already released, for a failed check to print.
+@MainActor
+func windowState(_ window: NSWindow?) -> String { window.map { $0.isVisible ? "visible" : "hidden" } ?? "released" }
 /// Holds an object without keeping it alive, so a check can see that it was released.
 final class WeakRef<Object: AnyObject> {
     weak var object: Object?
     init(_ object: Object?) { self.object = object }
 }
-/// The threshold timer of a capture, written as CaptureCoordinator.capture(mode:) writes it: after the working delay, a
-/// read still running reveals a line that is still open. The capture itself cannot run here (see the scan line checks).
+/// A copy of the threshold timer in CaptureCoordinator.capture(mode:), without its "Reading…" pill: after the working
+/// delay, a read still running reveals a line that is still open. The capture itself cannot run here (see the scan line
+/// checks).
 @MainActor
 func scanTimer(for scan: ScanLine) -> Task<Void, Never> {
     Task { @MainActor in
@@ -305,11 +320,11 @@ MainActor.assumeIsolated {
         if reduceMotion {
             let line = ScanLine(rect: rect)
             line.show()
-            check(!line.isShowing && visibleWindowIDs() == baseline, "scan line: under Reduce Motion it makes no window")
+            check(!line.isShowing && visibleWindowIDs() == baseline,
+                  "scan line: under Reduce Motion it makes no window", scanState(line, baseline))
             line.close()
-            skip("scan line: window teardown (Reduce Motion is on, so the line makes no window to take away)")
+            skip("scan line: window teardown and end-of-read checks (Reduce Motion is on: the line makes no window)")
         } else {
-            let wasActive = NSApp.isActive
             let shown = WeakRef<NSWindow>(nil), first = WeakRef<ScanLine>(nil)
             autoreleasepool {
                 let line = ScanLine(rect: rect)
@@ -319,20 +334,28 @@ MainActor.assumeIsolated {
                 check(added.count == 1 && line.isShowing, "scan line: showing it adds exactly one window", "\(added.count)")
                 if let panel = added.first {
                     shown.object = panel
-                    check(!panel.isKeyWindow && !panel.canBecomeKey, "scan line: its window is never key")
+                    check(!panel.isKeyWindow && !panel.canBecomeKey, "scan line: its window is never key",
+                          "key \(panel.isKeyWindow), can become key \(panel.canBecomeKey)")
+                    check(panel.styleMask.contains(.nonactivatingPanel),
+                          "scan line: its window never activates Nictate")
+                    check(panel.contentView?.isAccessibilityElement() == false,
+                          "scan line: its view is hidden from VoiceOver",
+                          panel.contentView.map { "element \($0.isAccessibilityElement())" } ?? "no content view")
                     check(panel.ignoresMouseEvents, "scan line: its window lets clicks through to the app underneath")
                     check(panel.level == .statusBar, "scan line: its window sits at the status bar level", "\(panel.level.rawValue)")
                     check(panel.frame == rect, "scan line: its window covers the selection and nothing more", "\(panel.frame)")
                 }
-                check(NSApp.isActive == wasActive, "scan line: showing it does not change whether Nictate is active")
                 line.close()
                 check(shown.object?.isVisible == false && !line.isShowing && visibleWindowIDs() == baseline,
-                      "scan line: closing it takes its window off the screen")
+                      "scan line: closing it takes its window off the screen",
+                      "window \(windowState(shown.object)), \(scanState(line, baseline))")
                 line.close()
                 line.show()
-                check(!line.isShowing && visibleWindowIDs() == baseline, "scan line: a second close, and a show after close, add no window")
+                check(!line.isShowing && visibleWindowIDs() == baseline, "scan line: a second close, and a show after close, add no window",
+                      scanState(line, baseline))
             }
-            check(waitUntil { shown.object == nil && first.object == nil }, "scan line: the closed line and its window are released")
+            check(waitUntil { shown.object == nil && first.object == nil }, "scan line: the closed line and its window are released",
+                  "window \(windowState(shown.object)), line \(first.object == nil ? "released" : "kept")")
 
             // Twenty slow reads in a row: each adds one window and takes it away again, and none is kept.
             var mismatches = 0
@@ -348,7 +371,8 @@ MainActor.assumeIsolated {
                 }
             }
             check(mismatches == 0, "scan line: 20 shows and closes in a row each add one window and take it away", "\(mismatches) off")
-            check(waitUntil { windows.allSatisfy { $0.object == nil } }, "scan line: none of those 20 windows is kept")
+            check(waitUntil { windows.allSatisfy { $0.object == nil } }, "scan line: none of those 20 windows is kept",
+                  "\(windows.filter { $0.object != nil }.count) of \(windows.count) kept")
 
             var lines: [WeakRef<ScanLine>] = []
             // A read still running at the threshold: the timer shows the line, and the end of the read takes it away.
@@ -357,13 +381,16 @@ MainActor.assumeIsolated {
                 lines.append(WeakRef(scan))
                 let reading = scanTimer(for: scan)
                 check(waitUntil { scan.isShowing } && visibleWindowIDs().count == baseline.count + 1,
-                      "scan line, end of read: a read still running at 300 ms shows the line")
+                      "scan line, end of read: a read still running at 300 ms shows the line",
+                      scanState(scan, baseline))
                 reading.cancel(); scan.close()
                 check(!scan.isShowing && visibleWindowIDs() == baseline,
-                      "scan line, end of read: a read ending after 300 ms takes the line away at once")
+                      "scan line, end of read: a read ending after 300 ms takes the line away at once",
+                      scanState(scan, baseline))
             }
             waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: nothing brings the line back afterwards")
+            check(visibleWindowIDs() == baseline, "scan line, end of read: nothing brings the line back afterwards",
+                  windowDelta(baseline))
 
             // A read over before the threshold: the timer finds it ended and shows nothing.
             autoreleasepool {
@@ -373,7 +400,8 @@ MainActor.assumeIsolated {
                 reading.cancel(); scan.close()
             }
             waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: a read ending before 300 ms never shows the line")
+            check(visibleWindowIDs() == baseline, "scan line, end of read: a read ending before 300 ms never shows the line",
+                  windowDelta(baseline))
 
             // The timer falls due as the read ends: both wait for the main thread, and the end of the read runs first.
             autoreleasepool {
@@ -387,8 +415,10 @@ MainActor.assumeIsolated {
                 reading.cancel(); scan.close()
             }
             waitPast(StatusFlash.workingDelay)
-            check(visibleWindowIDs() == baseline, "scan line, end of read: a timer due in the same turn as the end shows nothing")
-            check(waitUntil { lines.allSatisfy { $0.object == nil } }, "scan line: each line is released once its read has ended")
+            check(visibleWindowIDs() == baseline, "scan line, end of read: a timer due in the same turn as the end shows nothing",
+                  windowDelta(baseline))
+            check(waitUntil { lines.allSatisfy { $0.object == nil } }, "scan line: each line is released once its read has ended",
+                  "\(lines.filter { $0.object != nil }.count) of \(lines.count) kept")
         }
     }
 }
