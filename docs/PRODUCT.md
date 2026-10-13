@@ -86,7 +86,7 @@ check in [CONTRIBUTING.md](../CONTRIBUTING.md) that covers it.
 | FR-12 | Up to 15 recent captures can be kept, searched, copied, and cleared. History can be cleared on quit. | `History.swift`, `HistoryStore.swift` |
 | FR-13 | Captures are saved only while Save Captures is on. Turning it off asks before anything is deleted. | `HistoryDeletion.swift` |
 | FR-14 | An unreadable history file is never overwritten silently. Discard is offered only after detection, behind a confirmation whose default is Cancel. | `HistoryRecovery.swift`; manual check 6 |
-| FR-15 | After a copy or Esc, focus returns to the app the user came from, only while Nictate is still active. | `FocusReturn.swift`; manual checks 1, 3, 5 |
+| FR-15 | When a capture ends, whatever the outcome (copied, nothing found, unreadable, a refused copy, or Esc), focus returns to the app the user came from, only while Nictate is still active and that app still runs. A shortcut pressed straight after keeps that app. A link the user opens stays in front, and a capture started in Settings leaves Settings in front. | `FocusReturn.swift`; focus tests; manual checks 1, 2, 3, 4, 5, 7, 8 |
 | FR-16 | Reset Nictate returns settings to their defaults. Launch at Login is kept. Saved captures are deleted only if the box is ticked. | `ResetNictate.swift` |
 | FR-17 | Check for Updates makes one request, when the user clicks. Stable users are offered stable releases; beta users are also offered newer betas. | `Updates.swift`; channel tests |
 | FR-18 | The interface is in English and Spanish, with the same keys in both. | `make strings` (`scripts/check_strings.py`) |
