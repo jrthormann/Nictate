@@ -106,10 +106,12 @@ private final class ScanLineView: NSView {
         sweep.fromValue = 0.0
         sweep.toValue = -travel
         sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        sweep.duration = ScanLine.sweepSeconds
         let fade = CAKeyframeAnimation(keyPath: "opacity")
         fade.values = [0, peak, peak, 0].map { NSNumber(value: $0) }
         let ramp = ScanLine.rampShare
         fade.keyTimes = [0, ramp, 1 - ramp, 1].map { NSNumber(value: $0) }
+        fade.duration = ScanLine.sweepSeconds
         let group = CAAnimationGroup()
         group.animations = [sweep, fade]
         group.duration = ScanLine.sweepSeconds

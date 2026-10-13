@@ -332,6 +332,12 @@ MainActor.assumeIsolated {
                     check(panel.ignoresMouseEvents, "scan line: its window lets clicks through to the app underneath")
                     check(panel.level == .statusBar, "scan line: its window sits at the status bar level", "\(panel.level.rawValue)")
                     check(panel.frame == rect, "scan line: its window covers the selection and nothing more", "\(panel.frame)")
+                    // The sweep is one group, and each of its two animations must last the full sweep.
+                    let sweepGroup = panel.contentView?.layer?.sublayers?.first?.animation(forKey: "sweep") as? CAAnimationGroup
+                    let children = sweepGroup?.animations ?? []
+                    check(children.count == 2 && children.allSatisfy { $0.duration == ScanLine.sweepSeconds },
+                          "scan line: the sweep and the fade each last the full 1.2 s",
+                          "children \(children.map(\.duration)), group \(sweepGroup?.duration ?? 0)")
                 }
                 line.close()
                 check(shown.object?.isVisible == false && !line.isShowing && visibleWindowIDs() == baseline,
