@@ -541,6 +541,30 @@ MainActor.assumeIsolated {
         let cancelEnded = waitUntil { cancelling.done }
         check(cancelEnded && cancelling.region == nil && visibleWindowIDs() == baseline,
               "overlay: Esc cancels and closes every overlay window", "region \(cancelling.region != nil), \(windowDelta(baseline))")
+
+        // Another app or a system dialog taking the keyboard leaves Esc no way in, so the selection ends by itself: when the
+        // overlay window resigns key, and when the app resigns active. A process started from a terminal never has a key
+        // overlay window, so the notification is a real loss here; where the system does make it key, the rule's own checks
+        // in run_tests.swift cover the decision, and the overlay is closed with Esc.
+        @MainActor
+        func checkFocusLoss(_ name: String, _ leave: (NSView) -> Void) {
+            let leaving = OverlayProbe()
+            guard let overlay = openOverlay(leaving) else { return check(false, "overlay: opens for the focus-loss check (\(name))") }
+            if overlay.window?.isKeyWindow == true {
+                note("overlay: the window is key in this process, so \"\(name)\" is covered by the rule's checks only")
+                overlay.keyDown(with: key(overlay, kVK_Escape, "\u{1b}"))
+                waitUntil { leaving.done }
+                return
+            }
+            leave(overlay)
+            let ended = waitUntil { leaving.done }
+            check(ended && leaving.region == nil && visibleWindowIDs() == baseline,
+                  "overlay: focus leaving it cancels and closes every overlay window (\(name))",
+                  "ended \(ended), region \(leaving.region != nil), \(windowDelta(baseline))")
+            if !ended { overlay.keyDown(with: key(overlay, kVK_Escape, "\u{1b}")); waitUntil { leaving.done } }
+        }
+        checkFocusLoss("its window resigns key") { NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: $0.window) }
+        checkFocusLoss("the app resigns active") { _ in NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp) }
     }
 }
 

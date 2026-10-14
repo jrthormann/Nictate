@@ -14,7 +14,7 @@ struct SelectedRegion: Sendable {
 
 /// The region selection on frozen stills: one borderless window per display, above full-screen apps and on
 /// every Space. Drag to select (release to copy), or use the keyboard: Return starts a corner, arrows move the
-/// other one (Shift for 10 points), Return copies. Esc cancels.
+/// other one (Shift for 10 points), Return copies. Esc cancels, and so does focus leaving the overlay.
 @MainActor
 final class SelectionOverlay {
     /// Keeps the session alive while its windows are on screen.
@@ -22,6 +22,8 @@ final class SelectionOverlay {
 
     private var windows: [NSWindow] = []
     private var continuation: CheckedContinuation<SelectedRegion?, Never>?
+    /// Watches for focus leaving the overlay; removed when the selection ends.
+    private var focusObservers: [any NSObjectProtocol] = []
 
     /// Shows the overlay on the stills and waits. Returns the chosen region, or nil when cancelled.
     static func select(_ stills: [DisplayStill]) async -> SelectedRegion? {
@@ -42,6 +44,7 @@ final class SelectionOverlay {
                 window.orderFrontRegardless()
                 if still.frame.contains(mouse) { window.makeKeyAndOrderFront(nil) }
             }
+            watchFocus()
         }
     }
 
@@ -49,9 +52,40 @@ final class SelectionOverlay {
     fileprivate func finish(_ region: SelectedRegion?) {
         guard let continuation else { return }
         self.continuation = nil
+        for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
+        focusObservers.removeAll()
         for window in windows { window.close() }
         windows.removeAll()
         continuation.resume(returning: region)
+    }
+
+    // MARK: Focus leaving the overlay
+
+    /// Esc reaches the overlay only while one of its windows is key. When another app or a system dialog takes the keyboard
+    /// (a consent prompt, Cmd-Tab), the windows would stay over every display with no way out, so the selection ends.
+    private func watchFocus() {
+        let center = NotificationCenter.default
+        let focusMoved: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.cancelIfFocusLeft() }
+        }
+        focusObservers = windows.map { center.addObserver(forName: NSWindow.didResignKeyNotification, object: $0, queue: .main, using: focusMoved) }
+        focusObservers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main, using: focusMoved))
+    }
+
+    /// Runs a turn after the notification: the key passing from one overlay window to the next (the pointer entering another
+    /// display) is a resign followed by a become-key, and only the settled state tells it from a real loss.
+    private func cancelIfFocusLeft() {
+        guard Self.shouldCancelOnFocusLoss(overlayWindowIsKey: windows.contains { $0.isKeyWindow },
+                                           selectionEnded: continuation == nil) else { return }
+        // Focus is where the user, or a system dialog, put it: nothing takes it back, so no app is activated.
+        FocusReturn.shared.forget()
+        finish(nil)
+    }
+
+    /// The rule, apart from AppKit: after a window or the app resigned, the selection is cancelled unless an overlay window
+    /// is key again, or the selection has already ended (confirmed, cancelled, or closing its windows caused the resign).
+    static func shouldCancelOnFocusLoss(overlayWindowIsKey: Bool, selectionEnded: Bool) -> Bool {
+        !overlayWindowIsKey && !selectionEnded
     }
 }
 

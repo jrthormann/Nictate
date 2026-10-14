@@ -3232,6 +3232,17 @@ check(!FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: true, 
 check(!FocusReturn.keepsOrigin(anotherAppFrontmost: true, returnPending: true, originRunning: true),
       "focus: the app in front replaces the remembered one")
 
+// Selection overlay: when focus leaves it (another app, a system dialog) the selection is cancelled, since Esc can no longer
+// reach it. Not when an overlay window is key (the pointer moved to another display) or the selection is already over.
+check(SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: false, selectionEnded: false),
+      "overlay: focus lost with no overlay window key cancels the selection")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: true, selectionEnded: false),
+      "overlay: the key passing to another overlay window (another display) does not cancel")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: false, selectionEnded: true),
+      "overlay: a confirmed selection is not cancelled by the focus change its windows closing causes")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: true, selectionEnded: true),
+      "overlay: an ended selection is never cancelled again")
+
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),
       "recovery: an unreadable file keeps the History row, with saving off and nothing listed")
