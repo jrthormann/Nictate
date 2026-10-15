@@ -21,9 +21,9 @@ final class ClipboardWriter {
         self.replace = replace
     }
 
-    /// Writes `text` and reads back only that text before reporting success. The previous clipboard is never read,
-    /// so other apps' contents (including concealed or transient entries) are not touched or kept. A refused write
-    /// reports failure and is not remembered as Nictate's.
+    /// Writes `text` and reads back only that text before reporting success. The previous clipboard is never read or
+    /// kept, including concealed or transient entries: the write clears it first, so a refused write can leave the
+    /// clipboard empty. A refused write reports failure and is not remembered as Nictate's.
     func writeVerified(_ text: String, transient: Bool = Settings.shared.hideFromClipboardManagers) -> Bool {
         let changeCount = replace(pasteboard, text, transient)
         guard pasteboard.string(forType: .string) == text else { return false }

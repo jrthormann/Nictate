@@ -1,7 +1,7 @@
 # Nictate: a macOS menu bar app that copies text from anywhere on your screen.
 # Copyright (c) 2026 jrthormann. MIT License, see LICENSE.
 
-.PHONY: setup build test-app test ui-test strings sources test-release check coverage run install dmg
+.PHONY: setup build test-app test ui-test strings sources test-release check coverage render run install dmg
 
 build:      ## Build build/Nictate.app
 	./scripts/build-app.sh
@@ -34,6 +34,9 @@ coverage:   ## Print line coverage of the unit tests per source file (informatio
 	-OPT="-profile-generate -profile-coverage-mapping" LLVM_PROFILE_FILE="$(CURDIR)/build/coverage/run-%p.profraw" Tests/run_tests.sh
 	-xcrun llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage/run.profdata
 	-xcrun llvm-cov report build/run_tests -instr-profile=build/coverage/run.profdata Sources/Nictate/*.swift
+
+render:     ## Render the selection overlay to PNG files in $NICTATE_RENDER_DIR (outside the repository); not part of check
+	Tests/run_render.sh
 
 run: build  ## Build, quit any running copy, and launch the new one
 	-@pkill -x Nictate && sleep 1

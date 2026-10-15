@@ -3,15 +3,26 @@
 
 import AppKit
 
-/// The line beside a selection that says what the capture did: "Copied · 11 words", "No text found · try a
-/// larger area", or "Reading…" while a large selection is recognized. It fades after 1.5 s, stays while the
-/// pointer rests on it, and a click dismisses it.
+/// The line beside a selection that says what the capture did. CaptureCoordinator.resultStyle picks the outcome:
+/// - copied, only once the clipboard has read the text back: a green check, "Copied · 11 words" ("1 word" for one);
+/// - nothing found: an orange question mark, "No text found · try a larger area", or
+///   "No code found · try a larger area" for a QR or barcode capture;
+/// - the read failed, Vision could not read the area: an orange warning triangle, "Couldn't read this area. Try
+///   again.";
+/// - the copy failed, the clipboard refused the text or did not read it back: the same triangle, "Couldn't copy text.
+///   Try again.";
+/// - "Reading…" with a breathing accent dot (still under Reduce Motion), while a read runs past 0.3 s.
+/// A result fades after 1.5 s; "Reading…" sets no timer, and the result replaces it, unless a link question takes it down
+/// first (CaptureCoordinator.openLink). The pill stays while the pointer rests on it, and a click dismisses it.
 @MainActor
 final class ResultPill {
     enum Style: Equatable {
         case reading
         case success(String)
+        /// Nothing was found, so nothing was copied: a question mark.
         case miss(String)
+        /// The capture could not be read or copied: a warning triangle, so it is not taken for an empty area.
+        case failure(String)
     }
 
     static let shared = ResultPill()
@@ -36,8 +47,17 @@ final class ResultPill {
         let size = content.fittingSize
         panel.setFrame(CGRect(origin: SelectionGeometry.pillOrigin(size: size, below: rect, within: screen), size: size),
                        display: false)
-        panel.animator().alphaValue = 1
+        // A pill that is not on screen fades in from clear. One already up keeps its place and only changes its text.
+        if !panel.isVisible { panel.alphaValue = 0 }
         panel.orderFrontRegardless()
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            panel.alphaValue = 1
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = ResultPill.fadeSeconds
+                panel.animator().alphaValue = 1
+            }
+        }
         if style != .reading { scheduleFade() }
     }
 
@@ -130,7 +150,7 @@ private final class PillContent: NSVisualEffectView {
     private static func text(for style: ResultPill.Style) -> String {
         switch style {
         case .reading: tr("Reading…")
-        case .success(let text), .miss(let text): text
+        case .success(let text), .miss(let text), .failure(let text): text
         }
     }
 
@@ -162,6 +182,9 @@ private final class PillContent: NSVisualEffectView {
             tint = .systemGreen
         case .miss:
             symbol = "questionmark.circle.fill"
+            tint = .systemOrange
+        case .failure:
+            symbol = "exclamationmark.triangle.fill"
             tint = .systemOrange
         }
         let view = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage())

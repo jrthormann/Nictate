@@ -40,6 +40,7 @@ enum CapturePlan {
     /// `existing` is only consulted in Append mode, and the caller only reads the clipboard then.
     static func effects(mode: CaptureMode, result: RecognitionResult, text: String, detections: Detections,
                         choices: Choices, existing: ExistingClipboard?) -> [CaptureEffect] {
+        guard !result.failed else { return miss(tr("Couldn't read this area. Try again.")) }
         guard mode.accepts(result) else { return miss(tr("No code found")) }
         // Whitespace-only text is not a capture. The text itself is never trimmed: a valid capture keeps its spaces.
         guard !text.allSatisfy(\.isWhitespace) else { return miss(tr("No text found")) }

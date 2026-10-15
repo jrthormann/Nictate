@@ -1082,6 +1082,13 @@ do {
     check(plan("ABC", mode: .code) == miss(tr("No code found")), "plan: a code capture without a code is a miss")
     check(plan("") == miss(tr("No text found")), "plan: no text is a miss")
     check(plan("", mode: .code, barcode: true) == miss(tr("No text found")), "plan: an empty code is a miss")
+    // A read that Vision could not run is a failure, not an empty capture.
+    let failedRead = RecognitionResult(text: "", isBarcode: false, failed: true)
+    for mode in [CaptureMode.text, .code] {
+        let effects = CapturePlan.effects(mode: mode, result: failedRead, text: "", detections: Detections(), choices: plain, existing: nil)
+        check(effects == miss(tr("Couldn't read this area. Try again.")),
+              "plan: a failed read is reported as a failure in \(mode)")
+    }
     check(plan("hello", detections: found) == [.remember(found), .copy("hello"), .cue(.success), .announce(tr("Text copied")),
                                                .addToHistory("hello"), .notify(generic: tr("Text copied"), text: "hello")],
           "plan: a text capture remembers, copies, cues, announces, saves and notifies, in that order")
@@ -1592,6 +1599,303 @@ do {
     check(above == CGPoint(x: 350, y: 108), "pill: moves above the selection when there is no room below", "\(above)")
     let edge = SelectionGeometry.pillOrigin(size: CGSize(width: 100, height: 24), below: CGRect(x: 0, y: 300, width: 40, height: 40), within: bounds)
     check(edge.x == 8, "pill: is kept on screen at the left edge", "\(edge)")
+}
+
+// Selection outline: a light band just inside each edge, and a dark band just outside it that closes into a ring at the corners.
+do {
+    func linear(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+    func overlaps(_ a: CGRect, _ b: CGRect) -> Bool {
+        let shared = a.intersection(b)
+        return !shared.isNull && shared.width * shared.height > 0
+    }
+    let standard = SelectionOutline.style(.standard), increased = SelectionOutline.style(.increased)
+    check(standard == SelectionOutline.Style(innerWidth: 1, innerAlpha: 0.9, outerWidth: 1, outerAlpha: 0.6),
+          "outline: the standard edge is 1 pt white at 90 % inside and 1 pt black at 60 % outside")
+    check(increased == SelectionOutline.Style(innerWidth: 2, innerAlpha: 1, outerWidth: 1, outerAlpha: 0.8),
+          "outline: Increase Contrast is 2 pt white at 100 % inside and 1 pt black at 80 % outside")
+    check(SelectionOutline.dim(dark: false) == 0.28 && SelectionOutline.dim(dark: true) == 0.45,
+          "outline: the dim over the still is 28 % in Light and 45 % in Dark")
+
+    // Every edge of every band lands on a device pixel, at 1x and 2x, in both styles, on an ordinary selection, a 4 pt
+    // one and a large one.
+    for scale in [CGFloat(1), 2] {
+        let origin = SelectionGeometry.snapped(CGPoint(x: 10.3, y: 20.7), scale: scale)
+        let ends = [("ordinary", SelectionGeometry.snapped(CGPoint(x: 70.9, y: 61.2), scale: scale)),
+                    ("4 pt", CGPoint(x: origin.x + 4, y: origin.y + 4)),
+                    ("large", SelectionGeometry.snapped(CGPoint(x: 810.4, y: 620.9), scale: scale))]
+        for (size, far) in ends {
+            let selection = SelectionGeometry.rect(from: origin, to: far, within: CGRect(x: 0, y: 0, width: 900, height: 700))
+            for (name, style) in [("standard", standard), ("increased", increased)] {
+                var rects: [CGRect] = []
+                for outside in [false, true] {
+                    let width = outside ? style.outerWidth : style.innerWidth
+                    rects += SelectionGeometry.band(around: selection, width: width, outside: outside)
+                }
+                let aligned = rects.allSatisfy { r in
+                    [r.minX, r.maxX, r.minY, r.maxY].allSatisfy { v in abs(v * scale - (v * scale).rounded()) < 1e-6 }
+                }
+                check(aligned, "outline: every band has its edges on a device pixel (\(name), \(size), \(scale)x)")
+            }
+        }
+    }
+
+    // The light band lies inside the selection. The dark ring only touches it from outside, closes around the four corner
+    // squares and covers each one in full. The strips of each band never share area. Checked on a 120 x 80, a 12 x 12 and
+    // an 800 x 600 selection, in both styles.
+    let frames = [("120 x 80", CGRect(x: 40, y: 30, width: 120, height: 80)),
+                  ("12 x 12", CGRect(x: 40, y: 30, width: 12, height: 12)),
+                  ("800 x 600", CGRect(x: 40, y: 30, width: 800, height: 600))]
+    for (size, frame) in frames {
+        for (name, style) in [("standard", standard), ("increased", increased)] {
+            let inner = SelectionGeometry.band(around: frame, width: style.innerWidth, outside: false)
+            let ring = SelectionGeometry.band(around: frame, width: style.outerWidth, outside: true)
+            check(inner.allSatisfy { frame.contains($0) }, "outline: the light band lies inside the selection (\(name), \(size))")
+            check(ring.allSatisfy { r in
+                let shared = frame.intersection(r)
+                return shared.isNull || shared.width * shared.height == 0
+            }, "outline: the dark ring never enters the selection (\(name), \(size))")
+            for strips in [inner, ring] {
+                let pairs = strips.indices.flatMap { i in strips.indices.filter { $0 > i }.map { (i, $0) } }
+                check(!pairs.contains { overlaps(strips[$0.0], strips[$0.1]) },
+                      "outline: the strips of one band never share area (\(name), \(size))")
+            }
+            // The four corner squares, just beyond the selection's corners, each lie inside one strip of the ring.
+            let w = style.outerWidth
+            let squares = [CGRect(x: frame.minX - w, y: frame.maxY, width: w, height: w),
+                           CGRect(x: frame.maxX, y: frame.maxY, width: w, height: w),
+                           CGRect(x: frame.minX - w, y: frame.minY - w, width: w, height: w),
+                           CGRect(x: frame.maxX, y: frame.minY - w, width: w, height: w)]
+            check(squares.allSatisfy { square in ring.contains { $0.contains(square) } },
+                  "outline: the dark ring covers the four corner squares (\(name), \(size))")
+        }
+    }
+
+    // Contrast between the two bands on any content: the light band over black content is the least bright it gets,
+    // and the dark band over white content that the overlay dims is the brightest it gets. Each dimming level, in both
+    // styles, must keep them 3:1 apart (WCAG 1.4.11) or more.
+    for (dimming, dark) in [("Light", false), ("Dark", true)] {
+        let dim = SelectionOutline.dim(dark: dark)
+        for (name, style) in [("standard", standard), ("increased", increased)] {
+            let lightest = style.innerAlpha
+            let darkest = (1 - style.outerAlpha) * (1 - dim)
+            let ratio = (linear(lightest) + 0.05) / (linear(darkest) + 0.05)
+            check(ratio >= 3, "outline: the two bands are at least 3:1 apart on any content (\(dimming), \(name))",
+                  String(format: "%.2f:1", ratio))
+        }
+    }
+}
+
+// Corner brackets: a round white stroke with a black keyline on its outer side, bent around each selection corner just
+// outside the selection, where a side is long enough for one. Checked on the centre line and on the stroked outlines.
+do {
+    let standard = SelectionOutline.style(.standard), increased = SelectionOutline.style(.increased)
+    let stroke = SelectionBracket.stroke, offset = SelectionBracket.offset, radius = SelectionBracket.radius
+    // The keyline is the dark band's width: it runs on the stroke's path, a width farther out (SelectionDrawing).
+    let keyline = standard.outerWidth
+    func linear(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+    /// The white stroke and the keyline of one bracket set, stroked as SelectionDrawing strokes them. Nil where no bracket is drawn.
+    func strokes(_ frame: CGRect, scale: CGFloat) -> (white: CGPath, keyline: CGPath)? {
+        guard let reach = SelectionBracket.reach(for: frame, scale: scale) else { return nil }
+        let white = SelectionBracket.path(around: frame, reach: reach, offset: offset, radius: radius)
+        let dark = SelectionBracket.path(around: frame, reach: reach, offset: offset + keyline / 2, radius: radius + keyline / 2)
+        return (white.copy(strokingWithWidth: stroke, lineCap: .round, lineJoin: .round, miterLimit: 10),
+                dark.copy(strokingWithWidth: stroke + keyline, lineCap: .round, lineJoin: .round, miterLimit: 10))
+    }
+    func cornersOf(_ frame: CGRect) -> [CGPoint] {
+        [CGPoint(x: frame.minX, y: frame.minY), CGPoint(x: frame.maxX, y: frame.minY),
+         CGPoint(x: frame.minX, y: frame.maxY), CGPoint(x: frame.maxX, y: frame.maxY)]
+    }
+    /// Points on a 0.25 pt grid within `reach` points of a corner: the only places a bracket can be.
+    func nearPoints(_ corner: CGPoint, reach: CGFloat) -> [CGPoint] {
+        let steps = Int(reach * 4)
+        return (-steps...steps).flatMap { i in
+            (-steps...steps).map { j in CGPoint(x: corner.x + CGFloat(i) / 4, y: corner.y + CGFloat(j) / 4) }
+        }
+    }
+    /// How far a point can go from `start` along `step` before the stroke. Counted in quarter points and taken from the
+    /// sample before the first one inside the stroke, so it never overstates the clear run.
+    func clearRun(_ stroke: CGPath, from start: CGPoint, along step: CGVector) -> CGFloat {
+        for i in 1...400 {
+            let t = CGFloat(i) / 4
+            if stroke.contains(CGPoint(x: start.x + step.dx * t, y: start.y + step.dy * t)) { return t - 0.25 }
+        }
+        return 100
+    }
+
+    // Reach: a third of the shorter side, at most 8 pt, on whole device pixels; a side under 12 pt gets no bracket.
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 200, height: 100), scale: 2) == 8,
+          "bracket: reach is 8 pt on a large selection at 2x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 30, height: 20), scale: 2) == 6.5,
+          "bracket: reach is a third of the shorter side, on a whole pixel, at 2x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 30, height: 20), scale: 1) == 6,
+          "bracket: reach is whole points at 1x")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 12, height: 40), scale: 1) == 4,
+          "bracket: a 12 pt side is the least that gets a bracket, with reach 4")
+    check(SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 11, height: 40), scale: 1) == nil
+          && SelectionBracket.reach(for: CGRect(x: 0, y: 0, width: 4, height: 4), scale: 2) == nil,
+          "bracket: an 11 pt side and a 4 pt selection get no bracket")
+
+    let frames = [CGRect(x: 40, y: 30, width: 120, height: 80), CGRect(x: 40, y: 30, width: 12, height: 12),
+                  CGRect(x: 40, y: 30, width: 800, height: 600)]
+    // The stroke and keyline never enter the outer band, which is the selection grown by the dark band's width.
+    for frame in frames {
+        for scale in [CGFloat(1), 2] {
+            let size = "\(Int(frame.width)) x \(Int(frame.height)), \(Int(scale))x"
+            guard let shapes = strokes(frame, scale: scale) else {
+                check(false, "bracket: drawn on a \(size) selection")
+                continue
+            }
+            let outerBand = frame.insetBy(dx: -keyline, dy: -keyline)
+            let samples = cornersOf(frame).flatMap { nearPoints($0, reach: 10) }
+            check(samples.contains { shapes.white.contains($0) } && samples.contains { shapes.keyline.contains($0) },
+                  "bracket: the sample grid meets the stroke and the keyline (\(size))")
+            check(!samples.contains { outerBand.contains($0) && (shapes.white.contains($0) || shapes.keyline.contains($0)) },
+                  "bracket: the stroke and keyline never enter the outer band (\(size))")
+        }
+    }
+
+    // The four corners are mirror images: the top left corner's stroke and keyline reflect onto the other three exactly.
+    for frame in frames {
+        for scale in [CGFloat(1), 2] {
+            let size = "\(Int(frame.width)) x \(Int(frame.height)), \(Int(scale))x"
+            guard let shapes = strokes(frame, scale: scale) else { continue }
+            let sumX = frame.minX + frame.maxX, sumY = frame.minY + frame.maxY
+            let symmetric = nearPoints(CGPoint(x: frame.minX, y: frame.minY), reach: 10).allSatisfy { p in
+                let reflections = [CGPoint(x: sumX - p.x, y: p.y), CGPoint(x: p.x, y: sumY - p.y),
+                                   CGPoint(x: sumX - p.x, y: sumY - p.y)]
+                return reflections.allSatisfy { q in
+                    shapes.white.contains(q) == shapes.white.contains(p) && shapes.keyline.contains(q) == shapes.keyline.contains(p)
+                }
+            }
+            check(symmetric, "bracket: the four corners are mirror images (\(size))")
+        }
+    }
+
+    // Facing tips: on every side from 12 to 60 pt, and on the long and short sides alike, the two brackets at the ends of an
+    // edge leave at least 1 pt clear between their visible tips, round caps included. Measured along the stroke's centre line
+    // from the middle of each edge, at 1x and 2x.
+    var narrowest = CGFloat.infinity
+    for side in 12...60 {
+        for (width, height) in [(side, side), (60, side), (side, 60)] {
+            for scale in [CGFloat(1), 2] {
+                let frame = CGRect(x: 40, y: 30, width: CGFloat(width), height: CGFloat(height))
+                guard let shapes = strokes(frame, scale: scale) else {
+                    narrowest = 0
+                    continue
+                }
+                let top = CGPoint(x: frame.midX, y: frame.maxY + offset), left = CGPoint(x: frame.minX - offset, y: frame.midY)
+                let across = clearRun(shapes.white, from: top, along: CGVector(dx: 1, dy: 0))
+                    + clearRun(shapes.white, from: top, along: CGVector(dx: -1, dy: 0))
+                let down = clearRun(shapes.white, from: left, along: CGVector(dx: 0, dy: 1))
+                    + clearRun(shapes.white, from: left, along: CGVector(dx: 0, dy: -1))
+                narrowest = min(narrowest, across, down)
+            }
+        }
+    }
+    check(narrowest >= 1, "bracket: facing tips stay at least 1 pt apart on every side from 12 to 60 pt",
+          String(format: "narrowest %.2f pt", narrowest))
+
+    // The straight sides of the bands, the stroke and the keyline land on whole device pixels at 1x and 2x.
+    let whiteEdges = [offset - stroke / 2, offset + stroke / 2]
+    let keylineEdges = [offset + keyline / 2 - (stroke + keyline) / 2, offset + keyline / 2 + (stroke + keyline) / 2]
+    let edges = [CGFloat(0), standard.innerWidth, increased.innerWidth, standard.outerWidth, increased.outerWidth]
+        + whiteEdges + keylineEdges
+    check([CGFloat(1), 2].allSatisfy { scale in edges.allSatisfy { abs($0 * scale - ($0 * scale).rounded()) < 1e-9 } },
+          "bracket: the straight edges of the bands, stroke and keyline land on device pixels at 1x and 2x")
+
+    // Contrast: the bracket against any flat background under the dim, in Light and Dark, standard and Increase Contrast.
+    // The white stroke, at its own alpha, is painted over the keyline, which sits over the background, so its colour is
+    // the white composed over the keyline, as drawn. Contrast is sRGB and the worst grey level is kept.
+    // WCAG 1.4.11 asks for 3:1.
+    func ratio(_ a: Double, _ b: Double) -> Double {
+        let la = linear(a), lb = linear(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+    for (dimming, dark) in [("Light", false), ("Dark", true)] {
+        let dim = Double(SelectionOutline.dim(dark: dark))
+        for (name, style) in [("standard", standard), ("increased", increased)] {
+            let whiteAlpha = Double(SelectionBracket.strokeAlpha), keylineAlpha = Double(style.outerAlpha)
+            var worst = Double.infinity
+            for level in 0...255 {
+                let background = Double(level) / 255 * (1 - dim)
+                let keylineColour = (1 - keylineAlpha) * background
+                let whiteColour = whiteAlpha + (1 - whiteAlpha) * keylineColour
+                worst = min(worst, max(ratio(whiteColour, background), ratio(keylineColour, background)))
+            }
+            check(worst >= 3, "bracket: at least 3:1 against any flat background, \(dimming), \(name)",
+                  String(format: "%.2f:1", worst))
+        }
+    }
+
+    // The four drag directions give the same selection, and so the same brackets.
+    let drags = [(CGPoint(x: 40, y: 30), CGPoint(x: 160, y: 110)), (CGPoint(x: 160, y: 110), CGPoint(x: 40, y: 30)),
+                 (CGPoint(x: 40, y: 110), CGPoint(x: 160, y: 30)), (CGPoint(x: 160, y: 30), CGPoint(x: 40, y: 110))]
+    let dragged = drags.map { SelectionGeometry.rect(from: $0.0, to: $0.1, within: CGRect(x: 0, y: 0, width: 900, height: 700)) }
+    check(dragged.allSatisfy { $0 == dragged[0] }, "bracket: the four drag directions give the same selection")
+    let samples = cornersOf(dragged[0]).flatMap { nearPoints($0, reach: 10) }
+    let signatures = dragged.map { rect -> (CGRect, [Bool]) in
+        let path = SelectionBracket.path(around: rect, reach: SelectionBracket.reach(for: rect, scale: 2) ?? 0,
+                                         offset: offset, radius: radius)
+        return (path.boundingBox, samples.map { path.contains($0) })
+    }
+    check(signatures.allSatisfy { $0.0 == signatures[0].0 && $0.1 == signatures[0].1 },
+          "bracket: the four drag directions draw the same brackets")
+}
+
+// Result pill: each outcome has its own line, and "Copied" only when the clipboard took the text.
+do {
+    let copiedWords = CaptureCoordinator.resultStyle(copied: true, failed: false, mode: .text, text: "one two three")
+    check(copiedWords == .success(tr("Copied · %d words", 3)), "pill: a copy reports its word count")
+    check(CaptureCoordinator.resultStyle(copied: true, failed: false, mode: .text, text: "word") == .success(tr("Copied · 1 word")),
+          "pill: a copy of one word says 1 word")
+    let refused = CaptureCoordinator.resultStyle(copied: false, failed: false, mode: .text, text: "one")
+    check(refused == .failure(tr("Couldn't copy text. Try again.")), "pill: a refused copy is a failure, never Copied")
+    let unread = CaptureCoordinator.resultStyle(copied: nil, failed: true, mode: .text, text: "")
+    check(unread == .failure(tr("Couldn't read this area. Try again.")), "pill: a read Vision could not run is a failure")
+    let nothing = CaptureCoordinator.resultStyle(copied: nil, failed: false, mode: .text, text: "")
+    check(nothing == .miss(tr("No text found · try a larger area")), "pill: an empty area says no text was found")
+    let noCode = CaptureCoordinator.resultStyle(copied: nil, failed: false, mode: .code, text: "")
+    check(noCode == .miss(tr("No code found · try a larger area")), "pill: an empty code capture says no code was found")
+
+    let outcomes = [copiedWords, refused, unread, nothing]
+    check(outcomes.indices.allSatisfy { i in outcomes.indices.allSatisfy { j in i == j || outcomes[i] != outcomes[j] } },
+          "pill: the four outcomes give four different styles")
+    var reportsCopied = false
+    for copied in [nil, false] as [Bool?] {
+        for failed in [false, true] {
+            for mode in [CaptureMode.text, .code] {
+                if case .success = CaptureCoordinator.resultStyle(copied: copied, failed: failed, mode: mode, text: "some text") {
+                    reportsCopied = true
+                }
+            }
+        }
+    }
+    check(!reportsCopied, "pill: Copied appears only when the clipboard took the text")
+}
+
+// Scan line: shown only for a read slow enough to notice, on a selection at least one line tall, and never under Reduce Motion.
+do {
+    check(!ScanLine.isShown(height: 200, reduceMotion: true), "scan line: never shown under Reduce Motion")
+    check(!ScanLine.isShown(height: 15, reduceMotion: false), "scan line: not shown for a selection under one line of text (15 pt)")
+    check(ScanLine.isShown(height: 16, reduceMotion: false), "scan line: shown from 16 pt, one line of text")
+    check(StatusFlash.workingDelay == 0.3, "scan line: the line and the Reading pill wait the same 300 ms")
+
+    // The threshold timer reveals the line and the Reading pill only for a read still running at 300 ms, and never a closed line.
+    check(ScanLine.mayReveal(readRunning: true, lineClosed: false), "scan line: a read still running at 300 ms reveals the line and the pill")
+    check(!ScanLine.mayReveal(readRunning: false, lineClosed: false), "scan line: a read that ended before 300 ms reveals nothing")
+    check(!ScanLine.mayReveal(readRunning: true, lineClosed: true), "scan line: a line already closed is never revealed")
+    check(!ScanLine.mayReveal(readRunning: false, lineClosed: true), "scan line: a timer firing after the end is a no-op")
+
+    // Cleanup: a line closed before its timer fires, or closed twice, gets no window; neither does a line under one line of text.
+    let closedEarly = ScanLine(rect: CGRect(x: 0, y: 0, width: 200, height: 100))
+    check(!closedEarly.isShowing, "scan line: a new line has no window until it is shown")
+    closedEarly.close()
+    closedEarly.show()
+    closedEarly.close()
+    check(closedEarly.isClosed && !closedEarly.isShowing, "scan line: a show after close adds no window, and a second close is harmless")
+    let short = ScanLine(rect: CGRect(x: 0, y: 0, width: 200, height: 15))
+    short.show()
+    check(!short.isShowing, "scan line: a 15 pt selection gets no window")
 }
 
 // History file: a readable JSON file in the test folder. A changed or truncated file is rejected, and it is never
@@ -2910,6 +3214,80 @@ check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRu
       "focus: a terminated app is never activated")
 check(!FocusReturn.shouldReturn(nictateIsActive: true, hasTarget: true, targetRunning: true, targetIsNictate: true),
       "focus: never returns to Nictate itself")
+// A shortcut pressed during a capture, or while the panel is open, must not forget the app remembered before.
+check(FocusReturn.shouldRemember(captureInFlight: false, panelShown: false),
+      "focus: a shortcut from outside remembers the frontmost app")
+check(!FocusReturn.shouldRemember(captureInFlight: true, panelShown: false),
+      "focus: a shortcut during a capture keeps the app remembered")
+check(!FocusReturn.shouldRemember(captureInFlight: false, panelShown: true),
+      "focus: a shortcut while the panel is open keeps the app remembered")
+// A retry straight after a miss can find Nictate still in front while the return is under way: the app is kept then,
+// and only then. Settings opened on purpose, an app that has quit, or another app in front never keep it.
+check(FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: true, originRunning: true),
+      "focus: a shortcut pressed before the return lands keeps the app to return to")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: false, originRunning: true),
+      "focus: a shortcut pressed in Settings forgets an app from an earlier action")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: false, returnPending: true, originRunning: false),
+      "focus: an app that has quit is not kept")
+check(!FocusReturn.keepsOrigin(anotherAppFrontmost: true, returnPending: true, originRunning: true),
+      "focus: the app in front replaces the remembered one")
+
+// Selection overlay: when focus leaves it (another app, a system dialog) the selection is cancelled, since Esc can no longer
+// reach it. Not when an overlay window is key (the pointer moved to another display) or the selection is already over.
+check(SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: false, selectionEnded: false),
+      "overlay: focus lost with no overlay window key cancels the selection")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: true, selectionEnded: false),
+      "overlay: the key passing to another overlay window (another display) does not cancel")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: false, selectionEnded: true),
+      "overlay: a confirmed selection is not cancelled by the focus change its windows closing causes")
+check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: true, selectionEnded: true),
+      "overlay: an ended selection is never cancelled again")
+
+// Early Esc: a capture waits for its stills before the selection can open, and a hidden key panel holds the keyboard for that
+// wait. An Esc in it cancels the capture, so no selection opens and nothing is recognized, copied, saved or announced:
+// all of that comes after the selection, or after the failure message, and a cancelled capture gets neither.
+do {
+    let session = CaptureSession()
+    check(session.phase == .preparing && !session.isCancelled, "capture session: starts while the stills are taken, not cancelled")
+    check(session.escape(), "capture session: an Esc before the selection opens cancels the capture")
+    check(session.phase == .ended && session.isCancelled, "capture session: a cancelled capture is over", "\(session.phase)")
+    check(!session.escape(), "capture session: a second Esc cancels nothing again")
+    check(session.stillsReturned(available: true) == .stop,
+          "capture session: stills that arrive after the cancel open no selection, so nothing is recognized or copied")
+    check(session.stillsReturned(available: false) == .stop,
+          "capture session: stills that could not be taken after the cancel report no failure")
+}
+// The task that waits for the stills keeps its own session, so tearing the panel down after the Esc cannot clear the cancel.
+do {
+    let session = CaptureSession()
+    _ = session.escape()
+    session.end()   // the teardown after the Esc
+    session.end()   // and the one when the task unwinds: a second one changes nothing
+    check(session.isCancelled && session.stillsReturned(available: true) == .stop,
+          "capture session: ending a cancelled capture keeps the cancel, so late stills still open nothing")
+}
+do {
+    let session = CaptureSession()
+    check(session.stillsReturned(available: true) == .selectArea && session.phase == .selecting,
+          "capture session: stills back with no Esc open the selection")
+    check(session.stillsReturned(available: true) == .stop, "capture session: the stills are acted on once")
+    session.end()
+    check(session.phase == .ended && !session.escape() && !session.isCancelled, "capture session: an Esc after the capture ended cancels nothing")
+}
+// A panel still up while the selection opens reports its Esc as the selection's own Esc would: the capture is cancelled.
+do {
+    let session = CaptureSession()
+    _ = session.stillsReturned(available: true)
+    check(session.escape() && session.isCancelled && session.phase == .ended,
+          "capture session: an Esc from the panel while the selection opens cancels the capture")
+    check(!session.escape(), "capture session: and only once")
+}
+do {
+    let session = CaptureSession()
+    check(session.stillsReturned(available: false) == .reportFailure && session.phase == .ended && !session.isCancelled,
+          "capture session: unreadable stills with no Esc report the failure")
+    check(session.stillsReturned(available: false) == .stop, "capture session: the failure is reported once")
+}
 
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),

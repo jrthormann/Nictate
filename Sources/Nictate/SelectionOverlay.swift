@@ -14,7 +14,7 @@ struct SelectedRegion: Sendable {
 
 /// The region selection on frozen stills: one borderless window per display, above full-screen apps and on
 /// every Space. Drag to select (release to copy), or use the keyboard: Return starts a corner, arrows move the
-/// other one (Shift for 10 points), Return copies. Esc cancels.
+/// other one (Shift for 10 points), Return copies. Esc cancels, and so does focus leaving the overlay.
 @MainActor
 final class SelectionOverlay {
     /// Keeps the session alive while its windows are on screen.
@@ -22,16 +22,24 @@ final class SelectionOverlay {
 
     private var windows: [NSWindow] = []
     private var continuation: CheckedContinuation<SelectedRegion?, Never>?
+    /// Watches for focus leaving the overlay; removed when the selection ends.
+    private var focusObservers: [any NSObjectProtocol] = []
 
-    /// Shows the overlay on the stills and waits. Returns the chosen region, or nil when cancelled.
-    static func select(_ stills: [DisplayStill]) async -> SelectedRegion? {
+    /// Shows the overlay on the stills and waits. Returns the chosen region, or nil when cancelled. `whenOpen` runs once, in the same
+    /// turn that activates Nictate and keys the windows: the caller's own hold on the keyboard can end there and not before.
+    static func select(_ stills: [DisplayStill], whenOpen: @MainActor () -> Void = {}) async -> SelectedRegion? {
         let session = SelectionOverlay()
         active = session
         defer { active = nil }
-        return await session.run(stills)
+        return await session.run(stills, whenOpen: whenOpen)
     }
 
-    private func run(_ stills: [DisplayStill]) async -> SelectedRegion? {
+    /// Cancels the selection on screen, if any, as its own Esc does.
+    static func cancelActive() {
+        active?.finish(nil)
+    }
+
+    private func run(_ stills: [DisplayStill], whenOpen: @MainActor () -> Void) async -> SelectedRegion? {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             NSApp.activate(ignoringOtherApps: true)
@@ -42,6 +50,8 @@ final class SelectionOverlay {
                 window.orderFrontRegardless()
                 if still.frame.contains(mouse) { window.makeKeyAndOrderFront(nil) }
             }
+            watchFocus()
+            whenOpen()
         }
     }
 
@@ -49,9 +59,40 @@ final class SelectionOverlay {
     fileprivate func finish(_ region: SelectedRegion?) {
         guard let continuation else { return }
         self.continuation = nil
+        for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
+        focusObservers.removeAll()
         for window in windows { window.close() }
         windows.removeAll()
         continuation.resume(returning: region)
+    }
+
+    // MARK: Focus leaving the overlay
+
+    /// Esc reaches the overlay only while one of its windows is key. When another app or a system dialog takes the keyboard
+    /// (a consent prompt, Cmd-Tab), the windows would stay over every display with no way out, so the selection ends.
+    private func watchFocus() {
+        let center = NotificationCenter.default
+        let focusMoved: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.cancelIfFocusLeft() }
+        }
+        focusObservers = windows.map { center.addObserver(forName: NSWindow.didResignKeyNotification, object: $0, queue: .main, using: focusMoved) }
+        focusObservers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main, using: focusMoved))
+    }
+
+    /// Runs a turn after the notification: the key passing from one overlay window to the next (the pointer entering another
+    /// display) is a resign followed by a become-key, and only the settled state tells it from a real loss.
+    private func cancelIfFocusLeft() {
+        guard Self.shouldCancelOnFocusLoss(overlayWindowIsKey: windows.contains { $0.isKeyWindow },
+                                           selectionEnded: continuation == nil) else { return }
+        // Focus is where the user, or a system dialog, put it: nothing takes it back, so no app is activated.
+        FocusReturn.shared.forget()
+        finish(nil)
+    }
+
+    /// The rule, apart from AppKit: after a window or the app resigned, the selection is cancelled unless an overlay window
+    /// is key again, or the selection has already ended (confirmed, cancelled, or closing its windows caused the resign).
+    static func shouldCancelOnFocusLoss(overlayWindowIsKey: Bool, selectionEnded: Bool) -> Bool {
+        !overlayWindowIsKey && !selectionEnded
     }
 }
 
@@ -73,11 +114,13 @@ private final class SelectionWindow: NSWindow {
     override var canBecomeMain: Bool { false }
 }
 
-/// Draws the still, the dimming, the selection with a plain outline, and turns mouse and key input into a selection.
+/// Draws the still, the dimming, the selection with its edge and four corner brackets, and turns mouse and key input into a selection.
 @MainActor
 private final class SelectionView: NSView {
     private let still: DisplayStill
     private unowned let session: SelectionOverlay
+    /// The edge's bands and thickness for this appearance. Read once: the overlay lives for one selection.
+    private let outline: SelectionOutline.Style
     /// Where the selection started: the mouse-down point, or the corner Return set.
     private var anchor: CGPoint?
     /// The moving corner: the pointer, or the keyboard position.
@@ -90,9 +133,12 @@ private final class SelectionView: NSView {
     init(still: DisplayStill, session: SelectionOverlay) {
         self.still = still
         self.session = session
+        outline = SelectionOutline.style(NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard)
         super.init(frame: CGRect(origin: .zero, size: still.frame.size))
         setAccessibilityElement(true)
+        setAccessibilityRole(.layoutArea)   // A canvas the user draws a selection on, not an unknown element.
         setAccessibilityLabel(tr("Select the text to copy"))
+        setAccessibilityHelp(tr("Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel."))
     }
 
     required init?(coder: NSCoder) { nil }
@@ -200,21 +246,8 @@ private final class SelectionView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let rect = selection
         let selected = anchor != nil && SelectionGeometry.isRegion(rect)
-
-        context.draw(still.image, in: bounds)
-        // The spec dims the screen 28 % in Light and 45 % in Dark.
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        context.setFillColor(NSColor.black.withAlphaComponent(dark ? 0.45 : 0.28).cgColor)
-        context.fill(bounds)
-        if selected {
-            context.saveGState()
-            context.clip(to: rect)
-            context.draw(still.image, in: bounds)
-            context.restoreGState()
-            // A plain one-point outline, as the system screenshot tool draws it.
-            context.setStrokeColor(NSColor.white.cgColor)
-            context.setLineWidth(1)
-            context.stroke(rect.insetBy(dx: 0.5, dy: 0.5))
-        }
+        SelectionDrawing.draw(still: still.image, in: bounds, selection: selected ? rect : nil, dark: dark,
+                              style: outline, scale: still.scale, context: context)
     }
 }

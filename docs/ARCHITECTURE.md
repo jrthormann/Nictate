@@ -7,8 +7,10 @@ Nictate is a single-process AppKit app with SwiftUI views. It depends only on sy
 ```
 global shortcut (HotKeyManager, Carbon)
   -> CaptureCoordinator.capture
+       another app in front? -> EscapeKeyPanel: hidden, non-activating, key until the selection opens
        permission missing? -> WelcomeView
   -> ScreenStill.captureAll        ScreenCaptureKit stills of every display, in memory
+       Esc in this wait? -> CaptureSession is cancelled; the stills open nothing
   -> SelectionOverlay.select       frozen stills, dimming, drag or keyboard selection
   -> Recognizer.recognize          Vision text + barcode requests, small images upscaled
   -> TextLayout.compose            reading order, columns, gaps, indentation
@@ -29,6 +31,8 @@ global shortcut (HotKeyManager, Carbon)
 | `StatusPanel.swift` / `StatusPanelView.swift` | The menu bar panel and its History screen: the model (keyboard selection, copying, search) and the SwiftUI view, styled as a compact native menu. |
 | `CaptureCoordinator.swift` | One capture from selection to output: recognition off the main thread, then clipboard, history and feedback. Also rotates the history and holds the latest capture's detections. |
 | `CapturePlan.swift` | What a finished capture does (copy, history, cue, notice). `CaptureCoordinator` carries the steps out in order. |
+| `CaptureSession.swift` | One capture before its selection, as a pure value: an Esc from the key panel cancels it while the stills are taken (or while the selection opens), and stills that arrive after a cancel open no selection and report no failure. Unit tested. |
+| `EscapeKeyPanel.swift` | A hidden, non-activating panel made at launch and reused. It is key from the shortcut until the selection opens, so an Esc in that gap cancels the capture instead of reaching the app the user is in; Nictate does not become the active app. It swallows every other key, including Command keys. |
 | `Log.swift` | `os.Logger` loggers per area (subsystem `com.jrthormann.nictate`); captured text is never logged. |
 | `Recognizer.swift` | Region selection and Vision requests. Returns `RecognitionResult`. |
 | `RecognitionWarmUp.swift` | Warms up Vision at launch on a utility queue, so the first capture is not slow. Returns at once and never delays the main thread. |
@@ -72,9 +76,12 @@ global shortcut (HotKeyManager, Carbon)
 | `TextPipeline.swift` / `LinkPolicy.swift` | Pure rules extracted from the capture code: what a recognized capture becomes before it is copied, and which QR/barcode links may be offered to open (unit tested). |
 | `ScreenStill.swift` | ScreenCaptureKit stills per display; the first complete frame of a short stream. Nothing is written to disk. |
 | `SelectionOverlay.swift` | The selection windows and their view: dimming, outline, keyboard and mouse. |
+| `SelectionDrawing.swift` | What the overlay paints over its still: the still, the dim, and the selection with its edge. Drawn on a bare `CGContext`, so `make render` (`Tests/render_capture.swift`) draws the same pixels into PNG files. |
 | `ContentClassifier.swift` | Pure rules that decide whether a capture is code, a table, a list or prose from its text and layout. Only confident prose loses its line breaks. Tested on a 40-text corpus (`Tests/corpus/captures.tsv`) and a held-out set. |
 | `ResultPill.swift` | The line beside the selection: "Reading…" when slow, then "Copied · N words" or the reason nothing was copied. Fades after 1.5 s, stays while hovered, a click dismisses it. |
-| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels and pill placement (unit tested). |
+| `SelectionGeometry.swift` | Pure selection arithmetic: drag rectangle, step, points to pixels, pill placement, the outline bands (a closed ring outside the selection), and the four corner brackets (`SelectionBracket`, unit tested). |
+| `ScanLine.swift` | The scan line over the selection while a slow read runs: a borderless, click-through window with no image, shown after the 300 ms working delay and closed before the result. |
+| `ReadingPresentation.swift` | One capture's slow-read presentation: the scan line and the "Reading…" pill start together after the 300 ms working delay, and `end` cancels the timer and closes the line before the result. Holds rectangles, never pixels. |
 | `Notifier.swift` / `WindowCoordinator.swift` | Capture banner delivery, and the settings and welcome windows, split out of the app delegate. The Dock icon shows only while one of these windows is open. Deleting saved captures withdraws every banner; the system's notification center sits behind the `NoticeCenter` seam, so tests answer it by hand. |
 
 ## Scripts
@@ -94,6 +101,7 @@ global shortcut (HotKeyManager, Carbon)
 ## Design decisions
 
 - **Native selector:** the system tool gives the familiar crosshair, multi-display support and `Esc` handling for free, so the app draws no overlay.
+- **Esc before the selection opens:** the stills take a fraction of a second, and until the selection opens the keys go to the app the user is in. `EscapeKeyPanel` is key for that wait without activating Nictate, and the panel is taken down only after the selection has activated Nictate and keyed its windows, so the keyboard is never without a window of Nictate. A probe that took the panel down first lost an Esc to the app the user was in in 2 of 33 trials (both at the hand-off); with the order used, none of 33 did. Nothing reads `NSApp.isActive` while the panel is key (it reads true although Nictate never became the active app), and an Esc that cancels forgets the app the user came from instead of activating it. No event tap, no Accessibility or Input Monitoring permission, and no global Esc key: the panel is local to Nictate.
 - **Layout from geometry:** Vision returns one box per line. Indentation and column gaps are derived from box positions and the median character width, which is why faithful mode needs no font assumptions.
 - **Pure logic, tested without Xcode:** everything that decides text output lives in `TextProcessing.swift`; `Tests/run_tests.sh` compiles it with a tiny runner and also runs Vision on rendered code.
 - **English keys:** English is the development language, so the English text is the localization key and `en.lproj` maps each key to itself; `es.lproj` holds the Spanish translation. `scripts/check_strings.py` keeps both languages complete, with the same keys and the same `%@` and `%d` placeholders.
@@ -105,6 +113,7 @@ global shortcut (HotKeyManager, Carbon)
 
 ## Known limits
 
+- An Esc that reaches the window server before the key panel is key still goes to the app the user is in. In a probe with a panel made on the shortcut, an Esc 0 ms after the shortcut reached that app 10 of 10 times, 5 ms after 7 of 10, and 10 ms or later 0 of 10. The shipped panel is made at launch, so it is key sooner; the shipped build was not measured at these delays. A keystroke after the shortcut takes far longer than that.
 - Vision can misread isolated symbols in very large or dark-theme text.
 - Trailing whitespace on a line is not detectable.
 - Side-by-side blocks of long lines are treated as columns; a table of long cells could be split.

@@ -88,6 +88,7 @@
 "Delete Captures" = "Borrar capturas";
 "No captures yet" = "Todavía no hay capturas";
 "Select the text to copy" = "Selecciona el texto que quieres copiar";
+"Press Return to start a corner, move the other with the arrow keys, then press Return to copy or Esc to cancel." = "Pulsa Return para empezar una esquina, mueve la otra con las flechas y pulsa Return para copiar o Esc para cancelar.";
 "The screen could not be read" = "No se pudo leer la pantalla";
 "Reading…" = "Leyendo…";
 "Copied · 1 word" = "Copiado · 1 palabra";
@@ -118,6 +119,7 @@
 "Language" = "Idioma";
 "Loading history…" = "Cargando historial…";
 "Couldn't copy text. Try again." = "No se pudo copiar el texto. Inténtalo otra vez.";
+"Couldn't read this area. Try again." = "No se pudo leer esta área. Inténtalo otra vez.";
 "History is unavailable right now. New captures are still copied but won't be saved." = "El historial no está disponible ahora. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán.";
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Añade las nuevas capturas al texto que ya está copiado.";

@@ -76,6 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Nictate is no longer the active app: a focus return has landed, or the user moved on (see FocusReturn).
+    func applicationDidResignActive(_ notification: Notification) {
+        FocusReturn.shared.nictateResignedActive()
+    }
+
     private func registerShortcuts() {
         var refused: [String] = []
         for slot in ShortcutSlot.allCases {
@@ -93,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// What a shortcut does.
     private func perform(_ slot: ShortcutSlot) {
-        FocusReturn.shared.remember()
+        let busy = running?.capture.isCapturing ?? false
+        let panelShown = running?.panel.isShown ?? false
+        if FocusReturn.shouldRemember(captureInFlight: busy, panelShown: panelShown) { FocusReturn.shared.remember() }
         guard let capture = running?.capture else { return }
         switch slot {
         case .capture: capture.capture(mode: .text)
