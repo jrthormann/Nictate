@@ -3326,6 +3326,38 @@ check(!RecentCapturesPicker.closesOnResignKey(appModalShown: true),
       "picker: an alert of the app's own, shown over it, leaves it open")
 check(RecentCapturesPicker.closesOnResignKey(appModalShown: false),
       "picker: losing key status with no alert up, as an outside click does, closes it")
+// F-D: the picker has a model of its own, so Find asks the screen of whichever panel is up. With the picker shown and the popover's model
+// still on its main screen Find is on; where neither screen is History it is off, and a popover that is closed gives no answer.
+do {
+    let picker = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: .history)
+    let popover = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .history, pickerScreen: nil)
+    let neither = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: .main)
+    let nothing = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: nil)
+    let closed = RecentCapturesPicker.findEnabled(panelShown: false, popoverScreen: .history, pickerScreen: nil)
+    check(picker && popover && !neither && !nothing && !closed,
+          "picker: Find is on in the Recent Captures panel while the popover's model is on main, and off when neither screen is History",
+          "picker \(picker), popover history \(popover), neither \(neither), nothing up \(nothing), closed \(closed)")
+}
+// F-E: the icon pressed while the popover is still closing for the picker takes over. The close that follows must not open the picker
+// over the popover that came back, and must not leave the slot taken, or the next shortcut would find a close pending and do nothing.
+do {
+    var pending = PendingClose()
+    var pickerOpened = 0
+    let queued = pending.queue { pickerOpened += 1 }
+    let refused = !pending.queue { pickerOpened += 100 }
+    pending.takeOver()
+    // The popover came back, so its first close may never be reported: the slot is free at once, not only after that close.
+    let nextShortcut = RecentCapturesPicker.opening(popoverShown: false, closePending: pending.isPending, pickerShown: false)
+    pending.take()?()
+    // A close nobody took over still runs what waits for it, once.
+    var ran = 0
+    _ = pending.queue { ran += 1 }
+    pending.take()?()
+    pending.take()?()
+    check(queued && refused && pickerOpened == 0 && !pending.isPending && nextShortcut == .openNow && ran == 1,
+          "picker: a status icon press that takes over a closing popover cancels the queued picker, and the close that follows opens nothing",
+          "queued \(queued), second refused \(refused), picker opened \(pickerOpened), next shortcut \(nextShortcut), later close ran \(ran)")
+}
 // F-B: the panel hangs below the icon, and stays inside the visible part of its screen: left, right and top edges, a display
 // whose origin is not zero, a panel wider than the screen, and when its content grows.
 do {

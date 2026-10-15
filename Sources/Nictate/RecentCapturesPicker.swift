@@ -58,6 +58,12 @@ enum RecentCapturesPicker {
         pickerShown && slot != .rotateHistory
     }
 
+    /// Whether Find has a search field to go to. The popover and the Recent Captures panel each have a model of their own, so each is
+    /// asked about its own screen: the popover's History screen, or the picker, which `pickerScreen` reports (nil when it is not up).
+    static func findEnabled(panelShown: Bool, popoverScreen: StatusPanelModel.Screen, pickerScreen: StatusPanelModel.Screen?) -> Bool {
+        (panelShown && popoverScreen == .history) || pickerScreen == .history
+    }
+
     /// Whether the icon's popover remembers the app to return to. Not when it replaces the picker: that already did.
     static func remembersOrigin(replacingPicker: Bool) -> Bool {
         !replacingPicker
@@ -112,5 +118,30 @@ enum RecentCapturesPicker {
         }
         guard let visible = screen?.visibleFrame else { return (.zero, nil) }
         return (topLeft(for: size, below: icon, within: visible), visible)
+    }
+}
+
+/// The one action that waits for the menu bar popover to finish closing, such as opening the picker or starting a capture.
+struct PendingClose {
+    private var action: (() -> Void)?
+
+    /// Whether an action waits.
+    var isPending: Bool { action != nil }
+
+    /// Queues `action`. False when another one waits already: one choice at a time.
+    mutating func queue(_ action: @escaping () -> Void) -> Bool {
+        guard self.action == nil else { return false }
+        self.action = action
+        return true
+    }
+
+    /// The icon opens the popover again before the old one has finished closing. The close that is still coming must run nothing,
+    /// or the picker would open over the popover, and the slot would stay taken.
+    mutating func takeOver() { action = nil }
+
+    /// The close is reported: the action that waited, handed over once.
+    mutating func take() -> (() -> Void)? {
+        defer { action = nil }
+        return action
     }
 }

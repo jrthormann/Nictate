@@ -220,7 +220,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     /// What waits for the popover to finish closing. Its fade-out takes about half a second, and the window server draws it
     /// until then, though the window already reports itself as not visible.
-    private var afterClose: (() -> Void)?
+    private var afterClose = PendingClose()
 
     init(model: StatusPanelModel, animates: Bool = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
         self.model = model
@@ -241,6 +241,9 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     }
 
     var isShown: Bool { popover.isShown || isPickerShown }
+    /// Whether Find has a search field to go to: the popover's History screen, or the Recent Captures panel, which has a model of its own.
+    var canFind: Bool { RecentCapturesPicker.findEnabled(panelShown: isShown, popoverScreen: model.screen,
+                                                         pickerScreen: isPickerShown ? floatingHost?.rootView.model.screen : nil) }
     /// Whether the Recent Captures panel is on screen.
     var isPickerShown: Bool { floating?.isVisible ?? false }
     /// Whether the picker is on screen or the popover is closing for it. A capture started now would take its picture with it, or the
@@ -266,6 +269,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
             let replacingPicker = floating != nil || (pickerLeftForIcon && NSApp.isActive)
             pickerLeftForIcon = false
             pickerOpening = false // The icon's popover takes the place of the picker the shortcut asked for.
+            afterClose.takeOver() // So the close still under way must not open that picker, or run any other waiting action.
             dismissFloating()
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
@@ -300,9 +304,8 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     /// Closes the popover and runs `action` once it has closed, or at once when it is not shown. One action waits at a time.
     func close(then action: @escaping () -> Void) {
         guard popover.isShown else { return action() }
-        guard afterClose == nil else { return } // Already closing for another choice: this one finds the panel gone.
         // Stored before the close: without animation the popover can report its close from inside `performClose`.
-        afterClose = action
+        guard afterClose.queue(action) else { return } // Already closing for another choice: this one finds the panel gone.
         popover.performClose(nil)
     }
 
@@ -311,15 +314,13 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     }
 
     private func runAfterClose() {
-        guard let action = afterClose else { return }
-        afterClose = nil
-        action()
+        afterClose.take()?()
     }
 
     /// The shortcut's action: the Recent Captures list in a panel that also shows over full-screen apps. Nothing is copied
     /// on open. The app the user is in is remembered first, so focus can return to it after a copy or Escape.
     func showRecentCaptures(relativeTo button: NSView) {
-        switch RecentCapturesPicker.opening(popoverShown: popover.isShown, closePending: afterClose != nil, pickerShown: isPickerShown) {
+        switch RecentCapturesPicker.opening(popoverShown: popover.isShown, closePending: afterClose.isPending, pickerShown: isPickerShown) {
         case .ignore: return
         case .openNow:
             FocusReturn.shared.remember()

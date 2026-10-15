@@ -29,12 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
 
-        // Command-F works while the panel shows its History screen, and nowhere else.
+        // Command-F works while a History list shows, in the popover or in the Recent Captures panel, and nowhere else.
         let mainMenu = MainMenu(showSettings: { [weak self] in self?.windows.showPreferences() },
-                                canFind: { [weak self] in
-                                    guard let panel = self?.running?.panel else { return false }
-                                    return panel.isShown && panel.model.screen == .history
-                                })
+                                canFind: { [weak self] in self?.running?.panel.canFind ?? false })
         mainMenu.install()
         let status = StatusItemController()
         let capture = CaptureCoordinator(status: status, windows: windows)
