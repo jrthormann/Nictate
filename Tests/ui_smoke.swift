@@ -1017,6 +1017,14 @@ do {
     model.reset()
     check(!model.isPicker && model.screen == .main && model.selection == nil,
           "picker: opening the panel again starts from the main screen, not as a picker")
+    // The shortcut's panel has a model of its own, so the popover never shares its screen, search or highlight.
+    let picker = model.makePickerModel()
+    check(picker !== model && picker.isPicker && picker.screen == .history && picker.selection == 0,
+          "picker: the shortcut's panel gets its own model, already showing the list")
+    picker.moveSelection(by: 1)
+    picker.searchChanged("sec")
+    check(!model.isPicker && model.screen == .main && model.selection == nil && model.query.isEmpty,
+          "picker: moving through the shortcut's list leaves the popover's screen, search and highlight alone")
 }
 
 // Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a

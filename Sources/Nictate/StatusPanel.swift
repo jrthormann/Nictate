@@ -114,6 +114,16 @@ final class StatusPanelModel: ObservableObject {
         isPicker = true
         screen = .history
     }
+
+    /// A model of its own for the Recent Captures panel, already showing the list. The popover and the picker share the same
+    /// history and settings but never a screen, a search or a highlight: with one model for both, the picker's keys stopped
+    /// reaching its list after the popover had been used, and Escape in the popover's History closed it instead of going back.
+    func makePickerModel() -> StatusPanelModel {
+        let picker = StatusPanelModel(capture: capture, windows: windows, history: history, settings: settings)
+        picker.reset()
+        picker.openPicker()
+        return picker
+    }
     /// Escape closes the panel and gives focus back to the app the user came from.
     func closeReturningFocus() { dismiss(); FocusReturn.shared.returnIfStillActive() }
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
@@ -253,7 +263,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
-            floating?.orderOut(nil)
+            dismissFloating()
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
             FocusReturn.shared.remember()
@@ -266,7 +276,21 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
 
     func close() {
         popover.performClose(nil)
-        floating?.orderOut(nil)
+        dismissFloating()
+    }
+
+    /// Takes the Recent Captures panel off the screen and lets it go, so no hidden panel stays behind with its own copy of the
+    /// list. It is released after the current event, because an Escape or a click inside it is what usually closes it.
+    private func dismissFloating() {
+        guard let panel = floating else { return }
+        let host = floatingHost
+        floating = nil
+        floatingHost = nil
+        panel.orderOut(nil)
+        DispatchQueue.main.async {
+            panel.contentView = nil
+            _ = host
+        }
     }
 
     /// Closes the popover and runs `action` once it has closed, or at once when it is not shown. One action waits at a time.
@@ -293,12 +317,12 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     func showRecentCaptures(relativeTo button: NSView) {
         guard !isShown else { return }
         FocusReturn.shared.remember()
-        model.reset()
-        model.openPicker()
-        presentFloating(below: button)
+        let picker = model.makePickerModel()
+        picker.dismiss = { [weak self] in self?.dismissFloating() }
+        presentFloating(model: picker, below: button)
     }
 
-    private func presentFloating(below button: NSView) {
+    private func presentFloating(model: StatusPanelModel, below button: NSView) {
         let host = NSHostingController(rootView: StatusPanelView(model: model))
         host.view.layoutSubtreeIfNeeded()
         let size = host.view.fittingSize
@@ -323,6 +347,10 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.setFrameTopLeftPoint(origin(for: size, below: button))
+        panel.onResignKey = { [weak self, weak panel] in
+            guard let self, let panel, self.floating === panel else { return }
+            self.dismissFloating()
+        }
         floatingHost = host
         floating = panel
         NSApp.activate(ignoringOtherApps: true)
@@ -343,11 +371,15 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
 /// The Recent Captures panel. It takes keyboard focus, so the arrow keys and Escape reach the list, and it closes when the
 /// user clicks elsewhere, as the popover does.
 final class FloatingPanel: NSPanel {
+    /// Called when the panel stops being key, after it has left the screen.
+    var onResignKey: (() -> Void)?
+
     override var canBecomeKey: Bool { true }
 
     override func resignKey() {
         super.resignKey()
         orderOut(nil)
+        onResignKey?()
     }
 }
 
