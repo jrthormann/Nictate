@@ -15,7 +15,26 @@ sources=(${sources:#*/main.swift})
 swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature ImmutableWeakCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature ExistentialAny -target "$(uname -m)-apple-macos14.0" \
     "${sources[@]}" build/ui/main.swift -o build/run_ui_tests
 # perl's alarm ends a hung run with SIGALRM (status 142); say so instead of leaving a silent failure.
-ui_status=0
-perl -e 'alarm 120; exec @ARGV' ./build/run_ui_tests || ui_status=$?
-if (( ui_status == 142 )); then echo "error: UI tests timed out after 120 s (they need a window server, and nothing may wait on a permission prompt)" >&2; fi
-exit $ui_status
+run_ui() {
+    local run_status=0
+    perl -e 'alarm 120; exec @ARGV' ./build/run_ui_tests || run_status=$?
+    if (( run_status == 142 )); then echo "error: UI tests timed out after 120 s (they need a window server, and nothing may wait on a permission prompt)" >&2; fi
+    return $run_status
+}
+
+if [[ "${CI:-}" == true ]]; then
+    # The runner's Reduce Motion setting is not ours to assume, so CI pins each mode in turn and tests both on every run.
+    # The runner is ephemeral, so the setting is not restored. Locally the setting is never changed: the suite runs as the Mac is set.
+    ui_status=0
+    for mode in off on; do
+        flag=false
+        [[ $mode == on ]] && flag=true
+        defaults write com.apple.universalaccess reduceMotion -bool $flag
+        defaults write com.apple.Accessibility ReduceMotionEnabled -bool $flag
+        echo "== UI tests, Reduce Motion pinned $mode"
+        export NICTATE_UI_REDUCE_MOTION=$mode
+        run_ui || ui_status=$?
+    done
+    exit $ui_status
+fi
+run_ui

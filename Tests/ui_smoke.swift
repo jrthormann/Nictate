@@ -125,6 +125,12 @@ final class WeakRef<Object: AnyObject> {
 
 MainActor.assumeIsolated {
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    // CI pins the setting for each run (Tests/run_ui_tests.sh), so both modes are tested on every run. A mismatch
+    // means the pin did not take effect, and the run fails instead of testing the wrong mode.
+    if let pinned = ProcessInfo.processInfo.environment["NICTATE_UI_REDUCE_MOTION"] {
+        check(reduceMotion == (pinned == "on"), "system Reduce Motion matches the pinned mode \(pinned)",
+              "system reads \(reduceMotion)")
+    }
 
     // MARK: Menu bar pulse while a capture is read
     do {
@@ -333,8 +339,8 @@ MainActor.assumeIsolated {
             line.show()
             check(!line.isShowing && visibleWindowIDs() == baseline,
                   "scan line: under Reduce Motion it makes no window", scanState(line, baseline))
+            // No window was made, so there is nothing to tear down: the teardown checks run in the normal-motion pass.
             line.close()
-            skip("scan line: window teardown checks (Reduce Motion is on: the line makes no window)")
         } else {
             let shown = WeakRef<NSWindow>(nil), first = WeakRef<ScanLine>(nil)
             autoreleasepool {
