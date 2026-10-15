@@ -1017,9 +1017,9 @@ do {
 // change count after that write. Anything copied since (by any app) changes the count, so the write is no longer known.
 do {
     let write = ClipboardWrite(changeCount: 41, text: "c")
-    check(HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write) == "c", "clipboard ownership: our own write is known")
-    check(HistoryRotation.ownClipboard(changeCount: 42, lastWrite: write) == nil, "clipboard ownership: a later copy is unknown")
-    check(HistoryRotation.ownClipboard(changeCount: 0, lastWrite: nil) == nil, "clipboard ownership: nothing written yet")
+    check(ClipboardWrite.ownText(changeCount: 41, lastWrite: write) == "c", "clipboard ownership: our own write is known")
+    check(ClipboardWrite.ownText(changeCount: 42, lastWrite: write) == nil, "clipboard ownership: a later copy is unknown")
+    check(ClipboardWrite.ownText(changeCount: 0, lastWrite: nil) == nil, "clipboard ownership: nothing written yet")
 }
 
 // Opening a link: the sink itself only lets web and mail addresses through, whatever handed it the URL.
@@ -1189,7 +1189,7 @@ do {
           "clipboard writer: a History window copy with the private setting stays appendable")
     board.clearContents()
     board.setString("elsewhere", forType: .string)
-    check(HistoryRotation.ownClipboard(changeCount: board.changeCount, lastWrite: writer.lastWrite) == nil,
+    check(ClipboardWrite.ownText(changeCount: board.changeCount, lastWrite: writer.lastWrite) == nil,
           "clipboard writer: a copy by another app is not ours")
     board.releaseGlobally()
 
