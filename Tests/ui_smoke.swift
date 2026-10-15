@@ -890,7 +890,7 @@ do {
 /// Opens a real status panel on a stand-in for the menu bar button, with a capture that records what it saw when its stills were
 /// requested, then hands it to `act`. The panel is closed and everything released afterwards.
 @MainActor
-func withOpenPanel(animates: Bool, closeTimeout: TimeInterval? = nil, shown: Bool = true,
+func withOpenPanel(animates: Bool, shown: Bool = true,
                    _ act: (StatusPanelModel, StatusPanel, PanelAtStills, CaptureCoordinator) -> Void) {
     let probe = PanelAtStills()
     var source = CaptureSource()
@@ -909,7 +909,6 @@ func withOpenPanel(animates: Bool, closeTimeout: TimeInterval? = nil, shown: Boo
                                          clipboard: ClipboardWriter(pasteboard: board), source: source)
     let model = StatusPanelModel(capture: coordinator, windows: WindowCoordinator(), history: history)
     let panel = StatusPanel(model: model, animates: animates)
-    if let closeTimeout { panel.closeTimeout = closeTimeout }
     probe.panel = panel
     let screen = NSScreen.main ?? NSScreen.screens[0]
     let anchor = NSWindow(contentRect: NSRect(x: screen.frame.midX, y: screen.frame.maxY - 60, width: 40, height: 40),
@@ -955,14 +954,6 @@ for animates in [true, false] {
               "panel capture (animates \(animates)): the panel has closed for Capture Code too",
               "window drawn \(probe.drawn), popover shown \(probe.popoverShown), stills asked \(probe.count) time(s)")
     }
-}
-// A close that never reports: the choice is not lost. The capture starts anyway, once, and the late close does not start another.
-withOpenPanel(animates: true, closeTimeout: 0.05) { model, panel, probe, _ in
-    model.captureText()
-    check(waitUntil(6) { probe.requested }, "panel capture, no close reported: the capture starts anyway")
-    waitUntil { !panel.isShown }
-    waitPast(0.2)
-    check(probe.count == 1, "panel capture, no close reported: the close that comes later starts nothing more", "stills asked \(probe.count) time(s)")
 }
 // With no panel open there is nothing to wait for: the capture starts at once.
 withOpenPanel(animates: true, shown: false) { model, panel, probe, _ in

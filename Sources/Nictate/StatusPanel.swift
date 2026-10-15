@@ -192,10 +192,6 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     /// What waits for the popover to finish closing. Its fade-out takes about half a second, and the window server draws it
     /// until then, though the window already reports itself as not visible.
     private var afterClose: (() -> Void)?
-    /// Runs `afterClose` if the popover never reports that it closed, so a choice made in the panel is never lost.
-    private var closeDeadline: DispatchWorkItem?
-    /// How long to wait for the close before capturing anyway, about twice the fade-out.
-    var closeTimeout: TimeInterval = 1.0
 
     init(model: StatusPanelModel, animates: Bool = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
         self.model = model
@@ -244,10 +240,6 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         // Stored before the close: without animation the popover can report its close from inside `performClose`.
         afterClose = action
         popover.performClose(nil)
-        guard afterClose != nil else { return }
-        let deadline = DispatchWorkItem { [weak self] in self?.runAfterClose() }
-        closeDeadline = deadline
-        DispatchQueue.main.asyncAfter(deadline: .now() + closeTimeout, execute: deadline)
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -255,8 +247,6 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     }
 
     private func runAfterClose() {
-        closeDeadline?.cancel()
-        closeDeadline = nil
         guard let action = afterClose else { return }
         afterClose = nil
         action()
