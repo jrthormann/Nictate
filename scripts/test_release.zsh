@@ -534,13 +534,13 @@ packaging_refusals() {
     (
         cd "$clone"
         export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=21 OUT_DIR="$TMP/dmg-21"
-        expect "make dmg refuses BUILD_NUMBER=21, the build beta.1 already published" refused "approved for build 22" zsh scripts/build-dmg.sh
+        expect "make dmg refuses BUILD_NUMBER=21, the build beta.1 already published" refused "approved for build 23" zsh scripts/build-dmg.sh
     )
     if [[ -e "$TMP/dmg-21" ]]; then failure "no output folder for BUILD_NUMBER=21" "$TMP/dmg-21 exists"; else pass "no output folder for BUILD_NUMBER=21"; fi
     (
         cd "$clone"
         export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=1 OUT_DIR="$TMP/dmg-1"
-        expect "make dmg refuses BUILD_NUMBER=1" refused "approved for build 22" zsh scripts/build-dmg.sh
+        expect "make dmg refuses BUILD_NUMBER=1" refused "approved for build 23" zsh scripts/build-dmg.sh
     )
     if [[ -e "$TMP/dmg-1" ]]; then failure "no output folder for BUILD_NUMBER=1" "$TMP/dmg-1 exists"; else pass "no output folder for BUILD_NUMBER=1"; fi
     (
@@ -553,8 +553,8 @@ packaging_refusals() {
     (
         cd "$clone"
         print -r -- "an uncommitted change" >> CHANGELOG.md
-        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=22 OUT_DIR="$TMP/dmg-dirty"
-        expect "make dmg refuses a working tree with changes, even with the approved build 22" \
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=23 OUT_DIR="$TMP/dmg-dirty"
+        expect "make dmg refuses a working tree with changes, even with the approved build 23" \
             refused "the working tree has changes" zsh scripts/build-dmg.sh
     )
     if [[ -e "$TMP/dmg-dirty" ]]; then failure "no output folder for a dirty working tree" "$TMP/dmg-dirty exists"; else pass "no output folder for a dirty working tree"; fi
