@@ -35,8 +35,8 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 - [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
       untested in the release notes.
 - [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
-- [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and beta.1 users
-      must install beta.2 by hand.
+- [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and users of
+      beta.1 must install the current release by hand.
 - [ ] `codesign --verify --strict` passes, the app is signed with the certificate pinned in `scripts/release-signing.txt`,
       and `spctl` reports the app as rejected, which is expected for this distribution.
 - [ ] The Install steps in `docs/INSTALL.md` and `docs/i18n/INSTALL.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
