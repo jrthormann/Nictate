@@ -87,7 +87,7 @@ you prefer.
 | Shortcut | What it does |
 |:--|:--|
 | <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Select an area and copy its text. |
-| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Cycle through your recent captures. |
+| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Open Recent Captures: arrow keys choose, <kbd>Return</kbd> copies, <kbd>Esc</kbd> closes. |
 | Arrow keys, or <kbd>⇧</kbd> with an arrow | Move the selection corner one pixel, or ten. |
 | <kbd>Return</kbd> | Start a corner from the keyboard, then press it again to copy. |
 | <kbd>Esc</kbd> | Cancel the selection. |

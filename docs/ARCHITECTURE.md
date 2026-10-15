@@ -28,8 +28,9 @@ global shortcut (HotKeyManager, Carbon)
 | `AppDelegate.swift` | Launch sequence (background history load, and the Clear on Quit steps), global shortcuts, quit handling, and the alert for a shortcut the system refuses. |
 | `AppRestart.swift` | Restarts Nictate: a new instance starts, then this one quits. Used after a permission is granted and after a reset. |
 | `StatusItemController.swift` | The menu bar item: icon, tooltip and VoiceOver label (in step with Append mode), the capture cue and the VoiceOver announcement. |
-| `StatusPanel.swift` / `StatusPanelView.swift` | The menu bar panel and its History screen: the model (keyboard selection, copying, search) and the SwiftUI view, styled as a compact native menu. |
-| `CaptureCoordinator.swift` | One capture from selection to output: recognition off the main thread, then clipboard, history and feedback. Also rotates the history and holds the latest capture's detections. |
+| `StatusPanel.swift` / `StatusPanelView.swift` | The menu bar panel and its History screen: the model (keyboard selection, copying, search) and the SwiftUI view, styled as a compact native menu. The Recent Captures shortcut opens the same list as a picker in a floating panel that also shows over full-screen apps: arrow keys choose, Return copies, Escape closes. |
+| `RecentCapturesNotes.swift` / `RecentCapturesMotion.swift` | What the Recent Captures list says when it is empty or unavailable, and its brief opacity-only motion (none under Reduce Motion). |
+| `CaptureCoordinator.swift` | One capture from selection to output: recognition off the main thread, then clipboard, history and feedback. Also holds the latest capture's detections. |
 | `CapturePlan.swift` | What a finished capture does (copy, history, cue, notice). `CaptureCoordinator` carries the steps out in order. |
 | `CaptureSession.swift` | One capture before its selection, as a pure value: an Esc from the key panel cancels it while the stills are taken (or while the selection opens), and stills that arrive after a cancel open no selection and report no failure. Unit tested. |
 | `EscapeKeyPanel.swift` | A hidden, non-activating panel made at launch and reused. It is key from the shortcut until the selection opens, so an Esc in that gap cancels the capture instead of reaching the app the user is in; Nictate does not become the active app. It swallows every other key, including Command keys. |
@@ -48,7 +49,7 @@ global shortcut (HotKeyManager, Carbon)
 | `History.swift` | Capture history (texts and capture times, kept aligned), at most `HistoryPolicy.maximumHistoryEntries` (15). A change is shown only after the store has saved it; Clear on Quit waits for the store's answer. Unit tested. |
 | `HistoryStore.swift` | The history as `history.json` in Application Support, written atomically and read back before a write counts as saved. No Keychain and no encryption of its own. Unit tested. |
 | `HistoryDeletion.swift` | When saved captures are deleted, and which question is asked first: the switch-off and clear alerts, and `HistoryClearing.setSaveCaptures`, the one Save Captures command. |
-| `HistoryRotation.swift` | Pure logic: which capture comes next when cycling the clipboard. |
+| `HistoryRotation.swift` | Pure logic: what the clipboard holds from Nictate's own last write, for Append mode. |
 | `ClipboardWriter.swift` | The one place Nictate writes the clipboard. A copy counts only after its text reads back. Only Append mode reads the current clipboard, and it skips text other apps mark as concealed or transient. |
 | `Pasteboard.swift` | `NSPasteboard.replaceContents`: replaces the clipboard with a string, marked transient when the setting asks, and returns the change count. Used by `ClipboardWriter`. |
 | `LegacyHistoryMigration.swift` / `ImportPreviousHistory.swift` | The one explicit import of an earlier encrypted `history.sealed`, the only code that reads the old Keychain key. Merged with current captures; the old file is never changed. Unit tested with fixtures. |

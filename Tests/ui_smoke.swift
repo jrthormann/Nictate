@@ -997,6 +997,28 @@ do {
     check(model.selection == nil, "keyboard: leaving History clears the highlight")
 }
 
+// Recent Captures: the shortcut opens the saved captures as a picker with the newest highlighted, and the next time the panel
+// opens it starts again from the main screen, not as a picker.
+do {
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-picker-")), isEnabled: { true })
+    history.add("first")
+    history.add("second")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    check(!model.isPicker, "picker: the panel opened from the icon is not a picker")
+    model.openPicker()
+    check(model.isPicker && model.screen == .history && model.selection == 0,
+          "picker: the shortcut's list is the history with the newest capture highlighted", "\(model.screen) \(String(describing: model.selection))")
+    model.moveSelection(by: 1)
+    check(model.selection == 1, "picker: an arrow key moves the highlight to the next capture")
+    model.reset()
+    check(!model.isPicker && model.screen == .main && model.selection == nil,
+          "picker: opening the panel again starts from the main screen, not as a picker")
+}
+
 // Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a
 // highlighted first match, so Return has a target.
 do {

@@ -336,7 +336,6 @@ check(TextCleaner.clipboardText(new: "second", existing: "", appendMode: true, d
 check(TextCleaner.clipboardText(new: "second", existing: "first", appendMode: false, delimiter: "|") == "second",
       "append off ignores the delimiter")
 
-// History rotation
 // Append separator: three choices; any other stored value reads as a new line.
 do {
     let prefs = Settings(defaults: freshSuite("separator").defaults)
@@ -450,7 +449,7 @@ do {
     check(changes == 1, "settings: saving the capture shortcut is one change", "\(changes)")
     changes = 0
     prefs.setShortcut(Shortcut(code: 3, mods: optionKey | cmdKey), label: "⌥⌘F", for: .rotateHistory)
-    check(changes == 1, "settings: saving the Cycle History shortcut is one change", "\(changes)")
+    check(changes == 1, "settings: saving the Recent Captures shortcut is one change", "\(changes)")
     changes = 0
     prefs.setShortcut(Shortcut(code: 8, mods: cmdKey | controlKey), label: "⌃⌘C", for: .captureCode)
     prefs.setShortcut(nil, for: .captureCode)
@@ -1177,7 +1176,7 @@ do {
           "phone budget: the default budget reads the number")
 }
 
-// ClipboardWriter: every clipboard write Nictate makes (captures, Cycle History, the History window, the
+// ClipboardWriter: every clipboard write Nictate makes (captures, Recent Captures, the History window, the
 // menu) goes through one writer, which records the change count the write itself produced.
 do {
     let board = NSPasteboard(name: NSPasteboard.Name("nictate-test-\(UUID().uuidString)"))
