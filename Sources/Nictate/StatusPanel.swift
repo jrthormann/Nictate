@@ -241,8 +241,13 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     }
 
     var isShown: Bool { popover.isShown || isPickerShown }
-    /// Whether the Recent Captures panel is on screen. A capture started now would take its picture with it.
+    /// Whether the Recent Captures panel is on screen.
     var isPickerShown: Bool { floating?.isVisible ?? false }
+    /// Whether the picker is on screen or the popover is closing for it. A capture started now would take its picture with it, or the
+    /// popover's fade-out.
+    var isPickerShownOrOpening: Bool { RecentCapturesPicker.isShown(panelVisible: isPickerShown, opening: pickerOpening) }
+    /// The popover is closing, and the picker opens once it has. Until then the popover still draws, though it reports itself closed.
+    private var pickerOpening = false
     /// The Recent Captures panel, used by the shortcut. It can show over full-screen apps, where the menu bar is hidden.
     private(set) var floating: FloatingPanel?
     private var floatingHost: NSHostingController<StatusPanelView>?
@@ -260,6 +265,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
             // The icon pressed over the picker replaces it. Nictate is in front then, and the app saved when the picker opened stays.
             let replacingPicker = floating != nil || (pickerLeftForIcon && NSApp.isActive)
             pickerLeftForIcon = false
+            pickerOpening = false // The icon's popover takes the place of the picker the shortcut asked for.
             dismissFloating()
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
@@ -320,11 +326,13 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
             presentPicker(below: button)
         case .closePopoverFirst:
             // Nothing is captured, so only the popover's own fade-out is waited for. The app saved when it opened stays.
+            pickerOpening = true // Before the close: without animation the picker can open from inside it.
             close { [weak self] in self?.presentPicker(below: button) }
         }
     }
 
     private func presentPicker(below button: NSView) {
+        pickerOpening = false
         let picker = model.makePickerModel()
         picker.dismiss = { [weak self] in self?.dismissFloating() }
         presentFloating(model: picker, below: button)
@@ -356,7 +364,9 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.setFrameTopLeftPoint(origin(for: size, below: button))
+        let placed = RecentCapturesPicker.placement(for: size, below: button)
+        panel.visibleScreenFrame = placed.visible
+        panel.setFrameTopLeftPoint(placed.topLeft)
         panel.onResignKey = { [weak self, weak panel, weak button] in
             guard let self, let panel, self.floating === panel else { return }
             // A press on the menu bar icon ends the picker's key status first, and the icon's action then opens the popover.
@@ -372,16 +382,6 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
             .sink { [weak self, weak panel] size in if self?.floating === panel { panel?.fit(to: size) } }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-    }
-
-    /// Just below the menu bar icon when it can be seen. Otherwise at the top middle of the main screen, below the menu bar.
-    private func origin(for size: NSSize, below button: NSView) -> NSPoint {
-        if let window = button.window, window.isVisible {
-            let icon = window.convertToScreen(button.convert(button.bounds, to: nil))
-            return NSPoint(x: icon.midX - size.width / 2, y: icon.minY)
-        }
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return .zero }
-        return NSPoint(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.maxY)
     }
 }
 

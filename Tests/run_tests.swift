@@ -3320,6 +3320,61 @@ do {
           "picker: an empty size, from a view that has not been laid out, never collapses the panel")
 }
 
+// Review of PR 30, F-A: Clear History and Discard Unreadable History ask in an alert of the app's own, which takes key status from
+// the picker. That must not close it; losing key status with no alert up, as an outside click does, still does.
+check(!RecentCapturesPicker.closesOnResignKey(appModalShown: true),
+      "picker: an alert of the app's own, shown over it, leaves it open")
+check(RecentCapturesPicker.closesOnResignKey(appModalShown: false),
+      "picker: losing key status with no alert up, as an outside click does, closes it")
+// F-B: the panel hangs below the icon, and stays inside the visible part of its screen: left, right and top edges, a display
+// whose origin is not zero, a panel wider than the screen, and when its content grows.
+do {
+    let size = NSSize(width: 260, height: 300)
+    func inside(_ point: NSPoint, of visible: NSRect) -> Bool {
+        point.x >= visible.minX && point.x + size.width <= visible.maxX && point.y <= visible.maxY && point.y - size.height >= visible.minY
+    }
+    func icon(x: CGFloat, y: CGFloat) -> NSRect { NSRect(x: x, y: y, width: 22, height: 24) }
+    let visible = NSRect(x: 0, y: 40, width: 1440, height: 836)  // below the menu bar, above the Dock
+    let middle = RecentCapturesPicker.topLeft(for: size, below: icon(x: 700, y: 876), within: visible)
+    check(middle == NSPoint(x: 581, y: 876), "picker position: an icon in the middle centres the panel below it", "\(middle)")
+    for (edge, spot) in [("left", icon(x: 0, y: 876)), ("right", icon(x: 1418, y: 876)), ("top", icon(x: 700, y: 900))] {
+        let origin = RecentCapturesPicker.topLeft(for: size, below: spot, within: visible)
+        check(inside(origin, of: visible), "picker position: an icon at the \(edge) edge keeps the whole panel on screen", "\(origin)")
+    }
+    let below = RecentCapturesPicker.topLeft(for: size, below: icon(x: 700, y: 200), within: visible)
+    check(inside(below, of: visible), "picker position: an icon so low that the panel would reach the Dock keeps the panel above it", "\(below)")
+    let left = NSRect(x: -1920, y: 0, width: 1920, height: 1055)  // a display to the left of the main one
+    let onLeft = RecentCapturesPicker.topLeft(for: size, below: icon(x: -1925, y: 1031), within: left)
+    let onRight = RecentCapturesPicker.topLeft(for: size, below: icon(x: -15, y: 1031), within: left)
+    check(inside(onLeft, of: left) && inside(onRight, of: left),
+          "picker position: on a display whose origin is not zero the panel stays on that display", "\(onLeft) \(onRight)")
+    let narrow = NSRect(x: 0, y: 40, width: 200, height: 836)
+    let wide = RecentCapturesPicker.topLeft(for: size, below: icon(x: 90, y: 876), within: narrow)
+    check(wide == NSPoint(x: 0, y: 876), "picker position: a panel wider than the screen keeps its left edge and its top", "\(wide)")
+    let tall = RecentCapturesPicker.topLeft(for: NSSize(width: 260, height: 900), below: icon(x: 700, y: 876), within: visible)
+    check(tall.y == 876, "picker position: a panel taller than the screen keeps its top", "\(tall)")
+    let nowhere = RecentCapturesPicker.topLeft(for: size, below: nil, within: visible)
+    check(nowhere == NSPoint(x: 590, y: 876), "picker position: without an icon the panel hangs at the top middle of the screen", "\(nowhere)")
+    // When the content grows the panel keeps its left and top edges, then is pulled back inside.
+    let placed = NSRect(x: 1180, y: 576, width: 260, height: 300)
+    let grown = RecentCapturesPicker.resizedFrame(placed, to: NSSize(width: 400, height: 500)).map { RecentCapturesPicker.clamped($0, within: visible) }
+    check(grown == NSRect(x: 1040, y: 376, width: 400, height: 500), "picker position: a panel that grows at the right edge moves back inside", "\(String(describing: grown))")
+    let sunk = RecentCapturesPicker.clamped(NSRect(x: 100, y: 10, width: 260, height: 300), within: visible)
+    check(sunk == NSRect(x: 100, y: 40, width: 260, height: 300), "picker position: a panel reaching below the screen moves up", "\(sunk)")
+    let fine = NSRect(x: 100, y: 400, width: 260, height: 300)
+    check(RecentCapturesPicker.clamped(fine, within: visible) == fine, "picker position: a panel already inside is left where it is")
+}
+// F-C: the popover closing for the picker is not yet the picker, but a capture started now would still have the popover's
+// fade-out in its stills. The picker counts as shown from the moment the shortcut asks for it.
+check(RecentCapturesPicker.isShown(panelVisible: false, opening: true), "picker: it counts as shown while the popover closes for it")
+check(RecentCapturesPicker.isShown(panelVisible: true, opening: false) && !RecentCapturesPicker.isShown(panelVisible: false, opening: false),
+      "picker: it counts as shown while its panel is on screen, and not otherwise")
+check(RecentCapturesPicker.ignores(.capture, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: true))
+          && RecentCapturesPicker.ignores(.captureCode, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: true)),
+      "picker: a capture shortcut is ignored while the popover closes for the picker")
+check(!RecentCapturesPicker.ignores(.capture, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: false)),
+      "picker: a capture shortcut works again once the picker has come and gone")
+
 // The picker's rules are used where they matter, since a rule that nothing calls proves nothing. Checked in the source: the unit
 // runner cannot build the panel or the app delegate.
 do {
@@ -3333,12 +3388,23 @@ do {
         let capturing = delegate.range(of: ".capture(mode:")
         check(ignoring != nil && capturing != nil && ignoring!.lowerBound < capturing!.lowerBound,
               "picker: the capture shortcuts are ignored before any capture starts")
+        check(delegate.contains("RecentCapturesPicker.ignores(slot, pickerShown: running.panel.isPickerShownOrOpening)"),
+              "picker: the capture shortcuts are ignored while the popover closes for the picker, not only once it is on screen")
         let panel = code("StatusPanel.swift")
         for (fragment, name) in [("RecentCapturesPicker.opening(", "the shortcut asks what to do with the popover open"),
                                  ("RecentCapturesPicker.remembersOrigin(", "the icon over the picker keeps the saved app"),
-                                 (".fit(to: size)", "the picker follows its list")] {
+                                 (".fit(to: size)", "the picker follows its list"),
+                                 ("RecentCapturesPicker.placement(", "the picker is placed inside the screen of the icon"),
+                                 ("RecentCapturesPicker.isShown(", "the picker counts as shown while the popover closes for it")] {
             check(panel.contains(fragment), "picker: \(name)")
         }
+        let picker = code("RecentCapturesPicker.swift")
+        check(picker.contains("closesOnResignKey(appModalShown: NSApp.modalWindow != nil)"),
+              "picker: the panel asks whether an alert of the app's own is up before it closes on losing key status")
+        check(picker.contains("RecentCapturesPicker.clamped("),
+              "picker: the panel moves back inside its screen when its content changes size")
+        check(code("HistoryDeletion.swift").contains("makeKey()"),
+              "picker: the window that asked gets key status back once the alert is answered")
     } else {
         check(false, "picker: its rules are used by the panel and the app delegate", "repository root not found")
     }

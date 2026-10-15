@@ -152,9 +152,12 @@ enum HistoryClearing {
         if !on { Task { await historyTurnedOff(history, settings: settings) } }
     }
 
-    /// A menu bar app is not active when its menu is used, so it comes forward for the alert to be seen.
+    /// A menu bar app is not active when its menu is used, so it comes forward for the alert to be seen. The alert takes key status
+    /// from the window that asked, such as the Recent Captures panel, and gives it back once answered.
     private static func run(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        let asker = NSApp.keyWindow
         NSApp.activate(ignoringOtherApps: true)
+        defer { if let asker, asker.isVisible, !asker.isKeyWindow { asker.makeKey() } }
         return alert.runModal()
     }
 }
