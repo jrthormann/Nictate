@@ -44,6 +44,25 @@ final class Marker: @unchecked Sendable { var fired = false }
 final class QuestionProbe: @unchecked Sendable { var asked = false; var pillUp = true }
 /// Receives what a selection on a test still returns: the chosen region, or nil when it was cancelled, and whether it has ended.
 final class OverlayProbe: @unchecked Sendable { var done = false; var region: SelectedRegion? }
+/// What a selection's `whenOpen` hook saw: how many times it ran, and how many windows of the selection were on screen then.
+final class HookProbe: @unchecked Sendable { var calls = 0; var windows = 0 }
+/// Counts the times the app became active while a test watched.
+final class ActivationCount: @unchecked Sendable { var count = 0 }
+/// Holds a capture's stills back until the test lets them go, so the test decides what happens while the key panel is up.
+@MainActor
+final class StillsGate {
+    private var waiting: CheckedContinuation<[DisplayStill]?, Never>?
+    private var released: [DisplayStill]??
+    func wait() async -> [DisplayStill]? {
+        if let released { return released }
+        return await withCheckedContinuation { waiting = $0 }
+    }
+    func release(_ stills: [DisplayStill]?) {
+        released = .some(stills)
+        waiting?.resume(returning: stills)
+        waiting = nil
+    }
+}
 /// Waits until a block queued on the main queue for `seconds` from now has run. Anything the code under test
 /// queued there for an earlier moment has then run too, however busy the machine: the way to show that
 /// something does NOT happen without guessing a margin.
@@ -534,6 +553,25 @@ MainActor.assumeIsolated {
               "overlay: the keyboard alone selects an area and confirms it", "region \(String(describing: region?.rect))")
         check(waitUntil { visibleWindowIDs() == baseline }, "overlay: confirming closes every overlay window", windowDelta(baseline))
 
+        // The hook a capture uses to end its hold on the keyboard (the key panel): it runs once, with the windows already up,
+        // so the keyboard is never without a window of Nictate.
+        let hooked = OverlayProbe(), hook = HookProbe()
+        Task { @MainActor in
+            hooked.region = await SelectionOverlay.select([still], whenOpen: {
+                hook.calls += 1
+                hook.windows = visibleWindowIDs().subtracting(baseline).count
+            })
+            hooked.done = true
+        }
+        waitUntil { NSApp.windows.contains { $0.isVisible && $0.level == .screenSaver } }
+        check(hook.calls == 1 && hook.windows >= 1, "overlay: whenOpen runs once, after the selection windows are on screen",
+              "calls \(hook.calls), windows \(hook.windows)")
+        if let opened = NSApp.windows.first(where: { $0.isVisible && $0.level == .screenSaver })?.contentView {
+            opened.keyDown(with: key(opened, kVK_Escape, "\u{1b}"))
+        }
+        waitUntil { hooked.done }
+        check(hook.calls == 1 && visibleWindowIDs() == baseline, "overlay: whenOpen is not run again when the selection ends", "calls \(hook.calls), \(windowDelta(baseline))")
+
         let cancelling = OverlayProbe()
         if let cancelled = openOverlay(cancelling) {
             cancelled.keyDown(with: key(cancelled, kVK_Escape, "\u{1b}"))
@@ -565,6 +603,214 @@ MainActor.assumeIsolated {
         }
         checkFocusLoss("its window resigns key") { NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: $0.window) }
         checkFocusLoss("the app resigns active") { _ in NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp) }
+    }
+
+    // MARK: Key panel: from the shortcut until the selection opens, an Esc is Nictate's and cancels the capture
+    // The stills take a fraction of a second, and until the selection opens the keys go to the app the user is in. A hidden,
+    // non-activating panel takes the keyboard for that wait without activating Nictate.
+    do {
+        @MainActor
+        func escapeEvent(_ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                             characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: UInt16(kVK_Escape))!
+        }
+        @MainActor
+        func keyEvent(_ code: Int, _ characters: String, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                             characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: UInt16(code))!
+        }
+        /// The key panel a coordinator has on screen, if any.
+        @MainActor
+        func shownKeyPanel() -> EscapeKeyPanel? { NSApp.windows.compactMap { $0 as? EscapeKeyPanel }.first { $0.isVisible } }
+        /// The selection's windows: on screen, above everything, and not the key panel.
+        @MainActor
+        func selectionWindows() -> [NSWindow] { NSApp.windows.filter { $0.isVisible && $0.level == .screenSaver && !($0 is EscapeKeyPanel) } }
+
+        // The panel on its own. An activation an earlier check asked for may still be on its way: let it land before counting.
+        waitPast(0.3)
+        let baseline = visibleWindowIDs()
+        let activations = ActivationCount()
+        let observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: nil) { _ in
+            activations.count += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        let frontBefore = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let panel = EscapeKeyPanel()
+        check(!panel.isVisible && visibleWindowIDs() == baseline, "key panel: made hidden, it is not on screen", windowDelta(baseline))
+        check(panel.styleMask.contains(.nonactivatingPanel) && panel.canBecomeKey && !panel.canBecomeMain,
+              "key panel: it can take the keyboard without making Nictate the active app")
+        check(panel.level == .screenSaver && panel.ignoresMouseEvents && !panel.hidesOnDeactivate,
+              "key panel: above everything, transparent to the mouse, and not hidden while the app is inactive",
+              "level \(panel.level.rawValue), ignores mouse \(panel.ignoresMouseEvents), hides \(panel.hidesOnDeactivate)")
+        check(panel.collectionBehavior.isSuperset(of: [.canJoinAllSpaces, .fullScreenAuxiliary]),
+              "key panel: it can show over a full-screen app and on every Space")
+        panel.present(near: CGPoint(x: 400, y: 300))
+        check(panel.isVisible && panel.frame == CGRect(x: 380, y: 280, width: 40, height: 40),
+              "key panel: shown as a small square under the pointer", "\(panel.frame)")
+        waitPast(0.2)
+        check(activations.count == 0 && NSWorkspace.shared.frontmostApplication?.processIdentifier == frontBefore,
+              "key panel: showing it activates nothing and changes no frontmost app",
+              "activations \(activations.count), front \(String(describing: NSWorkspace.shared.frontmostApplication?.processIdentifier)) was \(String(describing: frontBefore))")
+        var escapes = 0
+        panel.onEscape = { escapes += 1 }
+        for (code, characters) in [(kVK_Return, "\r"), (kVK_Space, " "), (kVK_LeftArrow, "\u{F702}"), (kVK_ANSI_A, "a"), (kVK_Delete, "\u{7f}")] {
+            panel.keyDown(with: keyEvent(code, characters))
+        }
+        check(escapes == 0, "key panel: other keys are swallowed and cancel nothing", "\(escapes)")
+        panel.keyDown(with: escapeEvent())
+        check(escapes == 1, "key panel: Esc is reported", "\(escapes)")
+        panel.keyDown(with: escapeEvent([.shift, .command]))
+        check(escapes == 2, "key panel: Esc counts with the shortcut's own modifiers still held", "\(escapes)")
+        // AppKit offers a key to performKeyEquivalent before keyDown, and an Esc with the shortcut's Command still held arrives there.
+        check(panel.performKeyEquivalent(with: escapeEvent([.shift, .command])) && escapes == 3,
+              "key panel: Esc cancels as a key equivalent too, with the shortcut's Command held", "\(escapes)")
+        check(panel.performKeyEquivalent(with: keyEvent(kVK_ANSI_Q, "q", .command)) && panel.performKeyEquivalent(with: keyEvent(kVK_ANSI_Comma, ",", .command)) && escapes == 3,
+              "key panel: other Command keys are consumed without cancelling, so Quit and Settings cannot fire from an invisible window", "\(escapes)")
+        check(!panel.performKeyEquivalent(with: keyEvent(kVK_ANSI_A, "a")) && escapes == 3, "key panel: a plain key is not a key equivalent", "\(escapes)")
+        check(panel.dismiss(), "key panel: taking it down says it did")
+        check(!panel.isVisible && !panel.isKeyWindow, "key panel: once down it is neither on screen nor key")
+        check(!panel.dismiss(), "key panel: taking it down again does nothing")
+        check(visibleWindowIDs() == baseline, "key panel: nothing is left on screen", windowDelta(baseline))
+
+        // The capture task: stills held back by the test, a private clipboard, and the answers the system would give.
+        let context = CGContext(data: nil, width: 240, height: 120, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 0.5, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 240, height: 120))
+        let still = DisplayStill(frame: CGRect(x: 120, y: 120, width: 240, height: 120), scale: 1, image: context.makeImage()!)
+        let sentinel = "EARLY-ESC-SENTINEL"
+        @MainActor
+        func makeCapture(otherAppInFront: Bool) -> (coordinator: CaptureCoordinator, gate: StillsGate, board: NSPasteboard) {
+            let board = NSPasteboard(name: NSPasteboard.Name("nictate-ui-early-esc-\(UUID().uuidString)"))
+            board.clearContents()
+            board.setString(sentinel, forType: .string)
+            let gate = StillsGate()
+            var source = CaptureSource()
+            source.permitted = { true }
+            source.otherAppInFront = { otherAppInFront }
+            source.stills = { await gate.wait() }
+            let coordinator = CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator(),
+                                                 clipboard: ClipboardWriter(pasteboard: board), source: source)
+            return (coordinator, gate, board)
+        }
+        let before = visibleWindowIDs()
+
+        // Esc before the stills are back: no selection opens, whenever the stills come, and the clipboard is untouched.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            let up = shownKeyPanel()
+            check(coordinator.isCapturing && up != nil, "early Esc: the key panel is up as soon as the shortcut is handled, before the stills are back")
+            up?.keyDown(with: escapeEvent())
+            check(shownKeyPanel() == nil, "early Esc: the Esc takes the panel down at once")
+            check(!coordinator.isCapturing, "early Esc: the capture is over for the coordinator at once, so a new shortcut can start another")
+            gate.release([still])
+            waitPast(0.2) // The cancelled capture's task has run by now, whatever it did with the stills.
+            check(selectionWindows().isEmpty && visibleWindowIDs() == before, "early Esc: no selection opens, however late the stills come", windowDelta(before))
+            check(board.string(forType: .string) == sentinel, "early Esc: nothing is copied")
+            board.releaseGlobally()
+        }
+        // Esc, then stills that could not be taken: a capture the user cancelled reports no failure and shows nothing.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            shownKeyPanel()?.keyDown(with: escapeEvent())
+            gate.release(nil)
+            waitPast(0.2)
+            check(!coordinator.isCapturing && shownKeyPanel() == nil && selectionWindows().isEmpty && visibleWindowIDs() == before,
+                  "early Esc: unreadable stills after the Esc change nothing", windowDelta(before))
+            board.releaseGlobally()
+        }
+        // After an Esc a new shortcut starts a capture at once, though the cancelled one still waits for its stills. When those
+        // come they open nothing and leave the new capture's panel alone.
+        do {
+            let board = NSPasteboard(name: NSPasteboard.Name("nictate-ui-early-esc-\(UUID().uuidString)"))
+            board.clearContents()
+            board.setString(sentinel, forType: .string)
+            let first = StillsGate(), second = StillsGate()
+            var gates = [first, second]
+            var source = CaptureSource()
+            source.permitted = { true }
+            source.otherAppInFront = { true }
+            source.stills = { await gates.removeFirst().wait() }
+            let coordinator = CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator(),
+                                                 clipboard: ClipboardWriter(pasteboard: board), source: source)
+            coordinator.capture(mode: .text)
+            shownKeyPanel()?.keyDown(with: escapeEvent())
+            coordinator.capture(mode: .text)
+            check(coordinator.isCapturing && shownKeyPanel() != nil, "retry after an Esc: the new shortcut starts a capture with its own key panel")
+            first.release([still])
+            waitPast(0.2)
+            check(shownKeyPanel() != nil && selectionWindows().isEmpty,
+                  "retry after an Esc: the cancelled capture's stills open nothing and leave the new capture's panel up", windowDelta(before))
+            shownKeyPanel()?.keyDown(with: escapeEvent())
+            second.release([still])
+            waitPast(0.2)
+            check(!coordinator.isCapturing && shownKeyPanel() == nil && selectionWindows().isEmpty && visibleWindowIDs() == before,
+                  "retry after an Esc: the new capture cancels the same way", windowDelta(before))
+            board.releaseGlobally()
+        }
+        // No Esc: the panel is gone when the selection opens, and the selection's own Esc ends the capture as before.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            check(shownKeyPanel() != nil, "no Esc: the key panel is up while the stills are taken")
+            gate.release([still])
+            check(waitUntil { !selectionWindows().isEmpty }, "no Esc: the selection opens when the stills are back")
+            check(shownKeyPanel() == nil, "no Esc: the key panel is down once the selection is up")
+            selectionWindows().first?.contentView?.keyDown(with: escapeEvent())
+            check(waitUntil { !coordinator.isCapturing } && visibleWindowIDs() == before,
+                  "no Esc: the selection's own Esc cancels as before and leaves nothing on screen", windowDelta(before))
+            check(board.string(forType: .string) == sentinel, "no Esc: a cancelled selection copies nothing")
+            board.releaseGlobally()
+        }
+        // A panel still up once the selection has opened (it comes down in the turn that opens it, so this is a guard): its Esc
+        // cancels the selection as the selection's own Esc does.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            let lingering = shownKeyPanel()
+            gate.release([still])
+            check(waitUntil { !selectionWindows().isEmpty }, "panel Esc in the selection: the selection opens")
+            lingering?.present(near: CGPoint(x: 400, y: 300))
+            lingering?.keyDown(with: escapeEvent())
+            check(waitUntil { !coordinator.isCapturing } && selectionWindows().isEmpty && shownKeyPanel() == nil && visibleWindowIDs() == before,
+                  "panel Esc in the selection: it cancels the selection and leaves nothing on screen", windowDelta(before))
+            check(board.string(forType: .string) == sentinel, "panel Esc in the selection: nothing is copied")
+            board.releaseGlobally()
+        }
+        // Unreadable stills with no Esc: the panel comes down before the failure is reported.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            gate.release(nil)
+            check(waitUntil { !coordinator.isCapturing } && shownKeyPanel() == nil && selectionWindows().isEmpty,
+                  "failure: unreadable stills end the capture with no panel and no selection left on screen", windowDelta(before))
+            board.releaseGlobally()
+        }
+        // A capture started inside Nictate (its menu bar panel, or Settings in front) has no key panel: Nictate is already the
+        // active app, so no other app can receive the Esc.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: false)
+            coordinator.capture(mode: .text)
+            check(coordinator.isCapturing && shownKeyPanel() == nil, "started inside Nictate: no key panel is shown")
+            gate.release([still])
+            check(waitUntil { !selectionWindows().isEmpty }, "started inside Nictate: the selection opens as before")
+            selectionWindows().first?.contentView?.keyDown(with: escapeEvent())
+            check(waitUntil { !coordinator.isCapturing } && visibleWindowIDs() == before, "started inside Nictate: Esc ends it as before", windowDelta(before))
+            board.releaseGlobally()
+        }
+        // A shortcut while a capture is under way starts nothing: the first capture's panel is the only one.
+        do {
+            let (coordinator, gate, board) = makeCapture(otherAppInFront: true)
+            coordinator.capture(mode: .text)
+            coordinator.capture(mode: .text)
+            check(NSApp.windows.compactMap { $0 as? EscapeKeyPanel }.filter(\.isVisible).count == 1, "second shortcut: still one key panel")
+            shownKeyPanel()?.keyDown(with: escapeEvent())
+            gate.release([still])
+            check(waitUntil { !coordinator.isCapturing } && visibleWindowIDs() == before, "second shortcut: the first capture still cancels and leaves nothing", windowDelta(before))
+            board.releaseGlobally()
+        }
     }
 }
 

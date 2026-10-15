@@ -3243,6 +3243,52 @@ check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: false, selec
 check(!SelectionOverlay.shouldCancelOnFocusLoss(overlayWindowIsKey: true, selectionEnded: true),
       "overlay: an ended selection is never cancelled again")
 
+// Early Esc: a capture waits for its stills before the selection can open, and a hidden key panel holds the keyboard for that
+// wait. An Esc in it cancels the capture, so no selection opens and nothing is recognized, copied, saved or announced:
+// all of that comes after the selection, or after the failure message, and a cancelled capture gets neither.
+do {
+    let session = CaptureSession()
+    check(session.phase == .preparing && !session.isCancelled, "capture session: starts while the stills are taken, not cancelled")
+    check(session.escape(), "capture session: an Esc before the selection opens cancels the capture")
+    check(session.phase == .ended && session.isCancelled, "capture session: a cancelled capture is over", "\(session.phase)")
+    check(!session.escape(), "capture session: a second Esc cancels nothing again")
+    check(session.stillsReturned(available: true) == .stop,
+          "capture session: stills that arrive after the cancel open no selection, so nothing is recognized or copied")
+    check(session.stillsReturned(available: false) == .stop,
+          "capture session: stills that could not be taken after the cancel report no failure")
+}
+// The task that waits for the stills keeps its own session, so tearing the panel down after the Esc cannot clear the cancel.
+do {
+    let session = CaptureSession()
+    _ = session.escape()
+    session.end()   // the teardown after the Esc
+    session.end()   // and the one when the task unwinds: a second one changes nothing
+    check(session.isCancelled && session.stillsReturned(available: true) == .stop,
+          "capture session: ending a cancelled capture keeps the cancel, so late stills still open nothing")
+}
+do {
+    let session = CaptureSession()
+    check(session.stillsReturned(available: true) == .selectArea && session.phase == .selecting,
+          "capture session: stills back with no Esc open the selection")
+    check(session.stillsReturned(available: true) == .stop, "capture session: the stills are acted on once")
+    session.end()
+    check(session.phase == .ended && !session.escape() && !session.isCancelled, "capture session: an Esc after the capture ended cancels nothing")
+}
+// A panel still up while the selection opens reports its Esc as the selection's own Esc would: the capture is cancelled.
+do {
+    let session = CaptureSession()
+    _ = session.stillsReturned(available: true)
+    check(session.escape() && session.isCancelled && session.phase == .ended,
+          "capture session: an Esc from the panel while the selection opens cancels the capture")
+    check(!session.escape(), "capture session: and only once")
+}
+do {
+    let session = CaptureSession()
+    check(session.stillsReturned(available: false) == .reportFailure && session.phase == .ended && !session.isCancelled,
+          "capture session: unreadable stills with no Esc report the failure")
+    check(session.stillsReturned(available: false) == .stop, "capture session: the failure is reported once")
+}
+
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),
       "recovery: an unreadable file keeps the History row, with saving off and nothing listed")

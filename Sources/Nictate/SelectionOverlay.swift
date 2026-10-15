@@ -25,15 +25,21 @@ final class SelectionOverlay {
     /// Watches for focus leaving the overlay; removed when the selection ends.
     private var focusObservers: [any NSObjectProtocol] = []
 
-    /// Shows the overlay on the stills and waits. Returns the chosen region, or nil when cancelled.
-    static func select(_ stills: [DisplayStill]) async -> SelectedRegion? {
+    /// Shows the overlay on the stills and waits. Returns the chosen region, or nil when cancelled. `whenOpen` runs once, in the same
+    /// turn that activates Nictate and keys the windows: the caller's own hold on the keyboard can end there and not before.
+    static func select(_ stills: [DisplayStill], whenOpen: @MainActor () -> Void = {}) async -> SelectedRegion? {
         let session = SelectionOverlay()
         active = session
         defer { active = nil }
-        return await session.run(stills)
+        return await session.run(stills, whenOpen: whenOpen)
     }
 
-    private func run(_ stills: [DisplayStill]) async -> SelectedRegion? {
+    /// Cancels the selection on screen, if any, as its own Esc does.
+    static func cancelActive() {
+        active?.finish(nil)
+    }
+
+    private func run(_ stills: [DisplayStill], whenOpen: @MainActor () -> Void) async -> SelectedRegion? {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             NSApp.activate(ignoringOtherApps: true)
@@ -45,6 +51,7 @@ final class SelectionOverlay {
                 if still.frame.contains(mouse) { window.makeKeyAndOrderFront(nil) }
             }
             watchFocus()
+            whenOpen()
         }
     }
 

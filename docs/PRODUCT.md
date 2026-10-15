@@ -72,7 +72,7 @@ check in [CONTRIBUTING.md](../CONTRIBUTING.md) that covers it.
 
 | ID | Requirement | Evidence |
 |:--|:--|:--|
-| FR-1 | A global shortcut (default ⇧⌘2) selects an area on any display and copies its text. Esc cancels. | `SelectionOverlay.swift`, `HotKeyManager.swift`; manual check 2 |
+| FR-1 | A global shortcut (default ⇧⌘2) selects an area on any display and copies its text. Esc cancels, including an Esc pressed before the selection has opened: Nictate takes it, so it does not reach the app the user is in. An Esc within a few milliseconds of the shortcut can still reach that app. | `SelectionOverlay.swift`, `EscapeKeyPanel.swift`, `CaptureSession.swift`, `HotKeyManager.swift`; manual checks 2, 7 |
 | FR-2 | Text is recognized on the Mac with Apple's Vision framework, in the languages Vision supports. | `Recognizer.swift`; OCR tests in `Tests/run_tests.swift` |
 | FR-3 | The output follows the layout of the screen: reading order, columns, and indentation. | `TextProcessing.swift`; layout tests |
 | FR-4 | With the tables option on, cells in a table are separated by tabs. | `TextProcessing.swift`, `tablesAsTabs` |

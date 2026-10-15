@@ -10,6 +10,19 @@ private struct Capture: Sendable {
     let detections: Detections
 }
 
+/// What a capture takes from the system. Tests replace it to stand in for the screen and the permission.
+struct CaptureSource {
+    /// Whether Screen Recording is granted.
+    var permitted: @MainActor () -> Bool = { Permissions.isGranted }
+    /// Whether another app is in front. Until the selection opens the keys go to the front app, so only then is the key panel needed:
+    /// started from Nictate's own panel or windows, Nictate is already the active app.
+    var otherAppInFront: @MainActor () -> Bool = {
+        NSWorkspace.shared.frontmostApplication.map { $0.processIdentifier != getpid() } ?? false
+    }
+    /// The stills of every display, or nil when none can be read.
+    var stills: @MainActor () async -> [DisplayStill]? = { await ScreenStill.captureAll() }
+}
+
 /// Runs a capture from selection to output: recognition off the main thread, then the clipboard,
 /// history and feedback on it. Also owns what the latest capture detected.
 @MainActor
@@ -18,26 +31,40 @@ final class CaptureCoordinator {
     private let status: StatusItemController
     private let windows: WindowCoordinator
     private let notifier = Notifier()
-    private(set) var isCapturing = false
+    private let source: CaptureSource
+    /// Holds the keyboard from the shortcut until the selection opens, so an Esc in that gap cancels the capture instead of
+    /// reaching the app the user is in. Made once at launch, hidden until a capture needs it.
+    private let keyPanel = EscapeKeyPanel()
+    /// The capture under way, from the shortcut until it ends or an Esc cancels it. Nil between captures.
+    private var session: CaptureSession?
+    var isCapturing: Bool { session != nil }
     /// Colors, links and emails found in the latest capture, offered in the menu.
     private(set) var lastDetections = Detections()
     /// Shared with the History screen, so Cycle History and Append mode know about its copies too.
     private let clipboard: ClipboardWriter
 
-    init(status: StatusItemController, windows: WindowCoordinator, clipboard: ClipboardWriter = .shared) {
+    init(status: StatusItemController, windows: WindowCoordinator, clipboard: ClipboardWriter = .shared,
+         source: CaptureSource = CaptureSource()) {
         self.status = status
         self.windows = windows
         self.clipboard = clipboard
+        self.source = source
+        keyPanel.onEscape = { [weak self] in self?.escapePressed() }
     }
 
     func capture(mode: CaptureMode) {
-        guard !isCapturing else { return }
-        guard Permissions.isGranted else {
+        guard session == nil else { return }
+        let session = CaptureSession()
+        self.session = session
+        // First of all, before even the permission check (about 13 ms while it is granted): until the key panel is key, an Esc
+        // still reaches the app the user is in.
+        if source.otherAppInFront() { keyPanel.present(near: NSEvent.mouseLocation) }
+        guard source.permitted() else {
+            end(session)
             Permissions.request()
             windows.showWelcome()
             return
         }
-        isCapturing = true
         // Faithful mode fixes the layout rules: every line break, columns read in order, no correction.
         let faithful = settings.codeMode
         let options = RecognitionOptions(
@@ -51,21 +78,18 @@ final class CaptureCoordinator {
         let codeClean = settings.codeClean, cleanText = settings.cleanText, detect = settings.detectContent
 
         Task { @MainActor in
-            defer { isCapturing = false }
-            guard let stills = await ScreenStill.captureAll() else {
-                // Without the stills there is nothing to select: a revoked permission, or a screen that cannot be read.
-                if Permissions.isGranted {
-                    status.cue(.failure)
-                    status.announce(tr("The screen could not be read"))
-                    FocusReturn.shared.returnIfStillActive() // Started from the panel, Nictate is active.
-                } else {
-                    Permissions.request()
-                    windows.showWelcome()
-                }
-                return
+            defer { end(session) }
+            let stills = await source.stills()
+            switch session.stillsReturned(available: stills != nil) {
+            case .stop: return // An Esc cancelled it while the stills were taken: no selection, no cue, nothing copied.
+            case .reportFailure: return reportUnreadableScreen()
+            case .selectArea: break
             }
-            // Esc or a click without a drag: nothing to copy.
-            guard let region = await SelectionOverlay.select(stills) else {
+            guard let stills else { return }
+            // The key panel stays up until the selection has activated Nictate and keyed its windows, so the keyboard is never
+            // without a Nictate window (an Esc in that gap would reach the app the user is in). Esc or a click without a drag:
+            // nothing to copy.
+            guard let region = await SelectionOverlay.select(stills, whenOpen: { [keyPanel] in keyPanel.dismiss() }) else {
                 FocusReturn.shared.returnIfStillActive()
                 return
             }
@@ -86,6 +110,47 @@ final class CaptureCoordinator {
             status.endWorking()
             finish(outcome, mode: mode, region: region)
         }
+    }
+
+    /// An Esc taken by the key panel cancels the capture. The panel comes down first: while it is key, NSApp.isActive reads true
+    /// although Nictate never became the active app, and the focus code reads that.
+    private func escapePressed() {
+        guard let session else { return }
+        let selectionOpen = session.phase == .selecting
+        guard session.escape() else { return }
+        keyPanel.dismiss()
+        if selectionOpen {
+            // The selection is on screen and Nictate is the active app: cancelled as its own Esc does, which returns focus.
+            SelectionOverlay.cancelActive()
+            return
+        }
+        // The app the user is in never lost the front, so it is forgotten, not returned to: activating it would only churn focus.
+        end(session)
+        FocusReturn.shared.forget()
+        Log.capture.notice("Capture cancelled before the selection opened")
+    }
+
+    /// Without the stills there is nothing to select: a revoked permission, or a screen that cannot be read.
+    private func reportUnreadableScreen() {
+        keyPanel.dismiss() // Before NSApp.isActive is read below, as in `escapePressed`.
+        if source.permitted() {
+            status.cue(.failure)
+            status.announce(tr("The screen could not be read"))
+            FocusReturn.shared.returnIfStillActive() // Started from the panel, Nictate is active.
+        } else {
+            Permissions.request()
+            windows.showWelcome()
+        }
+    }
+
+    /// The one teardown, for every way a capture ends: cancelled, unreadable, finished. It takes the key panel down and clears the
+    /// session, and a second call finds nothing to do. Only the current capture touches the panel: after a cancel a new shortcut
+    /// can start another capture while the cancelled one still waits for its stills.
+    private func end(_ finished: CaptureSession) {
+        finished.end()
+        guard session === finished else { return }
+        keyPanel.dismiss()
+        session = nil
     }
 
     /// Recognition and text work, off the main thread: detection is pure and can take tens of milliseconds

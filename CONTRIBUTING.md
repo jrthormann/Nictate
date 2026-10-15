@@ -57,7 +57,7 @@ on a Mac. Use the QA build (`make test-app`), so your own captures and history a
 4. **Settings:** open Settings from the panel. Its window should stay in front, also after you press the capture shortcut there and copy some text.
 5. **Switch away:** start a capture, switch to another app before it finishes, and check that focus is not taken back.
 6. **Unreadable history:** put junk in `history.json` in the QA build's history folder while Save Captures is off. The History row should still appear, with Discard Unreadable History.
-7. **Nothing found, then retry:** press the capture shortcut in another app and select an empty area. "No text found" should show, and that app should be frontmost again. Press the shortcut again at once and copy some text: ⌘V should paste in that app. Then press Esc once before dragging and once during a drag: each time that app should be frontmost, and ⌘V should paste what it pasted before.
+7. **Nothing found, then retry:** press the capture shortcut in another app and select an empty area. "No text found" should show, and that app should be frontmost again. Press the shortcut again at once and copy some text: ⌘V should paste in that app. Then press Esc once straight after the shortcut, before the selection appears (no selection should appear, and a dialog open in that app should stay open), once before dragging and once during a drag: each time that app should be frontmost, and ⌘V should paste what it pasted before.
 8. **Link question:** set QR & Barcode Results to Ask Before Opening, and capture a QR code that holds a web link. The question should keep focus while it is open. Cancel or Esc should bring back the app you came from. Open should leave the browser in front.
 
 ## Translations
