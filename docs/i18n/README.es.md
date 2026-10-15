@@ -89,7 +89,7 @@ como prefieras.
 | Atajo | Qué hace |
 |:--|:--|
 | <kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Selecciona un área y copia su texto. |
-| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Recorre tus capturas recientes. |
+| <kbd>⌥</kbd>&thinsp;<kbd>⇧</kbd>&thinsp;<kbd>⌘</kbd>&thinsp;<kbd>2</kbd> | Abre Capturas recientes: las flechas eligen, <kbd>Intro</kbd> copia y <kbd>Esc</kbd> cierra. |
 | Flechas, o <kbd>⇧</kbd> con una flecha | Mueve la esquina de la selección un píxel, o diez. |
 | <kbd>Return</kbd> | Empieza una esquina desde el teclado; pulsa otra vez para copiar. |
 | <kbd>Esc</kbd> | Cancela la selección. |

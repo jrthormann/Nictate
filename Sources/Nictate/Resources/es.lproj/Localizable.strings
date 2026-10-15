@@ -8,7 +8,6 @@
 "Automatic" = "Automático";
 "Bring All to Front" = "Traer todo al frente";
 "Cancel" = "Cancelar";
-"Capture %d of %d" = "Captura %d de %d";
 "Capture QR Code or Barcode" = "Capturar código QR o de barras";
 "Capture Text" = "Capturar texto";
 "Clear History" = "Borrar historial";
@@ -21,7 +20,10 @@
 "Copy text from anywhere on your screen. Everything is recognized on your Mac, offline." = "Copia el texto de cualquier parte de la pantalla. Todo se reconoce en tu Mac, sin conexión.";
 "Could not activate the shortcut" = "No se pudo activar el atajo";
 "Cut" = "Cortar";
-"Cycle History" = "Recorrer historial";
+"Recent Captures" = "Capturas recientes";
+"Save Captures is off. New captures aren't saved." = "Guardar capturas está desactivado. Las nuevas capturas no se guardan.";
+"Save Captures is off, so new captures aren't kept. Turn it on in the menu to keep them." = "Guardar capturas está desactivado, así que las nuevas capturas no se conservan. Actívalo en el menú para conservarlas.";
+"Arrow keys choose, Return copies, Escape closes" = "Las flechas eligen, Intro copia y Esc cierra";
 "Delete" = "Eliminar";
 "Delete all %d saved captures?" = "¿Eliminar las %d capturas guardadas?";
 "Delete the %d saved captures too?" = "¿Eliminar también las %d capturas guardadas?";
@@ -37,7 +39,6 @@
 "Hide Nictate" = "Ocultar Nictate";
 "Hide Others" = "Ocultar otros";
 "History" = "Historial";
-"History is empty" = "El historial está vacío";
 "Include ⌘ or ⌃: ⌥ with a letter types a character in every app." = "Incluye ⌘ o ⌃: ⌥ con una letra escribe un carácter en todas las apps.";
 "Keep Line Breaks" = "Mantener saltos de línea";
 "Languages" = "Idiomas";

@@ -34,6 +34,12 @@ final class StatusItemController {
         panel.toggle(relativeTo: button)
     }
 
+    /// The Recent Captures shortcut: opens the list from the icon. The panel decides whether it can show.
+    func showRecentCaptures() {
+        guard let button = statusItem.button, let panel else { return }
+        panel.showRecentCaptures(relativeTo: button)
+    }
+
     /// Keeps the menu bar icon, its tooltip and its VoiceOver label in step with Append mode, so the
     /// mode that joins captures is never invisible.
     func refresh() {

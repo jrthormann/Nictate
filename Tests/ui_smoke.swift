@@ -997,6 +997,36 @@ do {
     check(model.selection == nil, "keyboard: leaving History clears the highlight")
 }
 
+// Recent Captures: the shortcut opens the saved captures as a picker with the newest highlighted, and the next time the panel
+// opens it starts again from the main screen, not as a picker.
+do {
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-picker-")), isEnabled: { true })
+    history.add("first")
+    history.add("second")
+    History.flushWrites()
+    let status = StatusItemController()
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: status, windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    model.reset()
+    check(!model.isPicker, "picker: the panel opened from the icon is not a picker")
+    model.openPicker()
+    check(model.isPicker && model.screen == .history && model.selection == 0,
+          "picker: the shortcut's list is the history with the newest capture highlighted", "\(model.screen) \(String(describing: model.selection))")
+    model.moveSelection(by: 1)
+    check(model.selection == 1, "picker: an arrow key moves the highlight to the next capture")
+    model.reset()
+    check(!model.isPicker && model.screen == .main && model.selection == nil,
+          "picker: opening the panel again starts from the main screen, not as a picker")
+    // The shortcut's panel has a model of its own, so the popover never shares its screen, search or highlight.
+    let picker = model.makePickerModel()
+    check(picker !== model && picker.isPicker && picker.screen == .history && picker.selection == 0,
+          "picker: the shortcut's panel gets its own model, already showing the list")
+    picker.moveSelection(by: 1)
+    picker.searchChanged("sec")
+    check(!model.isPicker && model.screen == .main && model.selection == nil && model.query.isEmpty,
+          "picker: moving through the shortcut's list leaves the popover's screen, search and highlight alone")
+}
+
 // Regression: History's entries are read asynchronously. Captures that arrive after History opened still get a
 // highlighted first match, so Return has a target.
 do {
@@ -1076,6 +1106,187 @@ do {
     defaults.removePersistentDomain(forName: folder.path)
     // A suite named by a path is stored at that path with .plist added; it goes with the history files at the end.
     historyFiles.append(folder.appendingPathExtension("plist"))
+}
+
+// MARK: Recent Captures picker: it follows its list, the capture shortcuts leave it alone, and its shortcut works with the popover open
+/// A stand-in for the menu bar icon: a button in a borderless window just under the top edge of the main screen, or at `x` and
+/// `fromTop` points below the top edge.
+@MainActor
+func makeIconStandIn(x: CGFloat? = nil, fromTop: CGFloat = 60) -> (anchor: NSWindow, button: NSButton) {
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    let anchor = NSWindow(contentRect: NSRect(x: x ?? screen.frame.midX, y: screen.frame.maxY - fromTop, width: 40, height: 40),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+    let button = NSButton(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+    anchor.contentView?.addSubview(button)
+    anchor.orderFrontRegardless()
+    return (anchor, button)
+}
+@MainActor
+func pickerPanel(animates: Bool = false, saved: [String] = ["one"], loadsNow: Bool = true) -> StatusPanel {
+    let file = scratchHistoryFile("nictate-ui-picker-panel-")
+    let seed = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
+    for text in saved.reversed() { seed.add(text) }
+    History.flushWrites()
+    let history = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true }, loadsNow: loadsNow)
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    return StatusPanel(model: model, animates: animates)
+}
+/// Finding 2: the list is read after the panel has opened, and the panel then holds all of it.
+do {
+    let panel = pickerPanel(saved: (1...6).map { "capture number \($0)" }, loadsNow: false)
+    let (anchor, button) = makeIconStandIn()
+    panel.showRecentCaptures(relativeTo: button)
+    let opened = panel.floating?.frame ?? .zero
+    let grew = waitUntil(6) { (panel.floating?.frame.height ?? 0) > opened.height + 100 }
+    let now = panel.floating?.frame ?? .zero
+    check(opened.height > 0 && grew, "picker size: the panel grows when the saved captures arrive after it opened",
+          "opened \(opened.height) pt, now \(now.height) pt")
+    check(abs(now.maxY - opened.maxY) < 1 && abs(now.minX - opened.minX) < 1,
+          "picker size: it grows downward, its top and left edges where they were", "opened \(opened), now \(now)")
+    waitPast(0.3)
+    check(panel.floating?.frame == now, "picker size: it then stays at that size", "was \(now), now \(String(describing: panel.floating?.frame))")
+    panel.close()
+    anchor.orderOut(nil)
+}
+/// Finding 3: while the picker is on screen the panel says so, which is what makes the capture shortcuts wait.
+do {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn()
+    check(!panel.isPickerShown, "picker shown: not before the shortcut")
+    panel.showRecentCaptures(relativeTo: button)
+    check(panel.isPickerShown && panel.isShown, "picker shown: the shortcut puts the picker on screen")
+    panel.close()
+    check(!panel.isPickerShown, "picker shown: closing it takes it off the screen")
+    anchor.orderOut(nil)
+}
+/// Finding 4: the icon pressed over the picker opens the popover in its place, and the picker is gone.
+do {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn()
+    panel.showRecentCaptures(relativeTo: button)
+    panel.toggle(relativeTo: button)
+    check(waitUntil(6) { panel.window?.isVisible == true } && !panel.isPickerShown,
+          "picker to popover: the icon opens the popover and the picker is gone")
+    panel.close()
+    waitUntil { !panel.isShown }
+    anchor.orderOut(nil)
+}
+/// Finding 5: the shortcut with the popover open closes the popover and then shows the picker. With and without the close animation.
+for animates in [true, false] {
+    let panel = pickerPanel(animates: animates)
+    let (anchor, button) = makeIconStandIn()
+    panel.toggle(relativeTo: button)
+    check(waitUntil(6) { panel.window?.isVisible == true }, "popover then shortcut (animates \(animates)): the popover is open")
+    let popoverWindow = panel.window
+    panel.showRecentCaptures(relativeTo: button)
+    panel.showRecentCaptures(relativeTo: button) // A second press while the popover closes must not open a second picker.
+    var popoverDrawnAtShow = true
+    let shown = waitUntil(6) {
+        guard panel.isPickerShown else { return false }
+        popoverDrawnAtShow = isDrawn(popoverWindow)
+        return true
+    }
+    check(shown, "popover then shortcut (animates \(animates)): the picker opens")
+    check(popoverWindow?.isVisible != true && !(animates && popoverDrawnAtShow),
+          "popover then shortcut (animates \(animates)): the popover has closed by the time the picker shows",
+          "visible \(popoverWindow?.isVisible == true), drawn \(popoverDrawnAtShow)")
+    waitPast(0.2)
+    let pickers = NSApp.windows.filter { $0 is FloatingPanel && $0.isVisible }.count
+    check(pickers == 1, "popover then shortcut (animates \(animates)): one picker, however many presses", "\(pickers) pickers")
+    panel.close()
+    waitUntil { !panel.isShown }
+    anchor.orderOut(nil)
+}
+/// What a check saw from inside a modal session: whether the app's own alert was up, and whether the picker was still on screen.
+final class ModalPickerProbe: @unchecked Sendable { var alertUp = false; var pickerShown = false }
+/// Review of PR 30, F-A: an alert of the app's own over the open picker (Clear History and Discard Unreadable History ask in one)
+/// takes key status from it, and AppKit tells the picker it resigned key. That must not close it, whereas losing key status with no
+/// alert up, as an outside click does, still does. A process started from a terminal cannot become key, so the call AppKit makes is
+/// made here, from inside a real modal session.
+do {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn()
+    panel.showRecentCaptures(relativeTo: button)
+    let alertWindow = NSPanel(contentRect: NSRect(x: 200, y: 200, width: 120, height: 60), styleMask: [.titled], backing: .buffered, defer: false)
+    let probe = ModalPickerProbe()
+    let inModal = Timer(timeInterval: 0.2, repeats: false) { _ in
+        MainActor.assumeIsolated {
+            probe.alertUp = NSApp.modalWindow === alertWindow
+            panel.floating?.resignKey()
+            probe.pickerShown = panel.isPickerShown
+            NSApp.abortModal()
+        }
+    }
+    RunLoop.main.add(inModal, forMode: .modalPanel)
+    NSApp.runModal(for: alertWindow)
+    inModal.invalidate()
+    alertWindow.orderOut(nil)
+    check(probe.alertUp, "picker alert: the alert was the app's modal window while the picker lost key status")
+    check(probe.pickerShown && panel.isPickerShown, "picker alert: the picker stays open through an alert of the app's own",
+          "shown during \(probe.pickerShown), after \(panel.isPickerShown)")
+    panel.floating?.resignKey()
+    check(!panel.isPickerShown, "picker alert: losing key status with no alert up still closes the picker")
+    anchor.orderOut(nil)
+}
+/// Review of PR 30, F-B: the picker stays inside the visible part of the screen that holds the icon, wherever the icon is.
+@MainActor
+func isInsideVisibleScreen(_ frame: NSRect, of anchor: NSWindow) -> Bool {
+    let visible = (anchor.screen ?? NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+    return frame.width > 0 && frame.minX >= visible.minX - 0.5 && frame.maxX <= visible.maxX + 0.5
+        && frame.minY >= visible.minY - 0.5 && frame.maxY <= visible.maxY + 0.5
+}
+for (edge, x, fromTop) in [("left", NSScreen.main.map { $0.frame.minX } ?? 0, CGFloat(60)),
+                           ("right", NSScreen.main.map { $0.frame.maxX - 40 } ?? 0, CGFloat(60)),
+                           ("top", NSScreen.main.map { $0.frame.midX } ?? 0, CGFloat(12))] {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn(x: x, fromTop: fromTop)
+    panel.showRecentCaptures(relativeTo: button)
+    let opened = panel.floating?.frame ?? .zero
+    check(isInsideVisibleScreen(opened, of: anchor), "picker on screen: an icon at the \(edge) edge leaves the whole panel inside the visible screen",
+          "panel \(opened), screen \(String(describing: anchor.screen?.visibleFrame))")
+    panel.close()
+    anchor.orderOut(nil)
+}
+/// And again when its list arrives and the panel grows: an icon near the bottom of the screen would leave a long list below it.
+do {
+    let panel = pickerPanel(saved: (1...6).map { "capture number \($0)" }, loadsNow: false)
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    let (anchor, button) = makeIconStandIn(x: screen.frame.midX, fromTop: screen.frame.maxY - screen.visibleFrame.minY - 130)
+    panel.showRecentCaptures(relativeTo: button)
+    let opened = panel.floating?.frame ?? .zero
+    let grew = waitUntil(6) { (panel.floating?.frame.height ?? 0) > opened.height + 100 }
+    let now = panel.floating?.frame ?? .zero
+    check(opened.height > 0 && grew, "picker on screen: the panel grows when the saved captures arrive, near the bottom of the screen",
+          "opened \(opened.height) pt, now \(now.height) pt")
+    check(isInsideVisibleScreen(now, of: anchor), "picker on screen: the panel that has grown is moved back inside the visible screen",
+          "panel \(now), screen \(String(describing: anchor.screen?.visibleFrame))")
+    waitPast(0.3)
+    check(isInsideVisibleScreen(panel.floating?.frame ?? .zero, of: anchor), "picker on screen: it then stays inside",
+          "panel \(String(describing: panel.floating?.frame))")
+    panel.close()
+    anchor.orderOut(nil)
+}
+/// Review of PR 30, F-C: the shortcut with the popover open closes the popover first, and its fade-out is still drawn when the
+/// popover already reports itself closed. A capture shortcut in that interval is ignored, as with the picker open.
+for animates in [true, false] {
+    let panel = pickerPanel(animates: animates)
+    let (anchor, button) = makeIconStandIn()
+    panel.toggle(relativeTo: button)
+    check(waitUntil(6) { panel.window?.isVisible == true }, "popover closing for the picker (animates \(animates)): the popover is open")
+    panel.showRecentCaptures(relativeTo: button)
+    // What the app delegate asks before it starts a capture.
+    let pending = panel.isPickerShownOrOpening
+    check(pending && RecentCapturesPicker.ignores(.capture, pickerShown: panel.isPickerShownOrOpening)
+              && RecentCapturesPicker.ignores(.captureCode, pickerShown: panel.isPickerShownOrOpening),
+          "popover closing for the picker (animates \(animates)): the capture shortcuts are ignored from the press on",
+          "picker counted as shown \(pending)")
+    check(waitUntil(6) { panel.floating?.isVisible == true }, "popover closing for the picker (animates \(animates)): the picker then opens")
+    panel.close()
+    waitUntil { !panel.isShown }
+    check(!panel.isPickerShown && !RecentCapturesPicker.ignores(.capture, pickerShown: panel.isPickerShownOrOpening),
+          "popover closing for the picker (animates \(animates)): once the picker is closed the capture shortcuts work again")
+    anchor.orderOut(nil)
 }
 
 // Flush pending writes first, so a write cannot recreate a file after it is removed.

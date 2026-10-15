@@ -336,16 +336,6 @@ check(TextCleaner.clipboardText(new: "second", existing: "", appendMode: true, d
 check(TextCleaner.clipboardText(new: "second", existing: "first", appendMode: false, delimiter: "|") == "second",
       "append off ignores the delimiter")
 
-// History rotation
-let trio = ["c", "b", "a"]   // newest first
-check(HistoryRotation.nextIndex(items: [], clipboard: "x") == nil, "rotation: empty history")
-check(HistoryRotation.nextIndex(items: trio, clipboard: nil) == 0, "rotation: empty clipboard gets the newest")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "overwritten") == 0, "rotation: overwritten clipboard gets the newest")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "c") == 1, "rotation: newest -> second")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "b") == 2, "rotation: second -> third")
-check(HistoryRotation.nextIndex(items: trio, clipboard: "a") == 0, "rotation: wraps after the oldest")
-check(HistoryRotation.nextIndex(items: ["only"], clipboard: "only") == 0, "rotation: single item")
-
 // Append separator: three choices; any other stored value reads as a new line.
 do {
     let prefs = Settings(defaults: freshSuite("separator").defaults)
@@ -459,7 +449,7 @@ do {
     check(changes == 1, "settings: saving the capture shortcut is one change", "\(changes)")
     changes = 0
     prefs.setShortcut(Shortcut(code: 3, mods: optionKey | cmdKey), label: "⌥⌘F", for: .rotateHistory)
-    check(changes == 1, "settings: saving the Cycle History shortcut is one change", "\(changes)")
+    check(changes == 1, "settings: saving the Recent Captures shortcut is one change", "\(changes)")
     changes = 0
     prefs.setShortcut(Shortcut(code: 8, mods: cmdKey | controlKey), label: "⌃⌘C", for: .captureCode)
     prefs.setShortcut(nil, for: .captureCode)
@@ -696,9 +686,6 @@ do {
         let bundle = Bundle(path: resources + "/\(probe.lang).lproj")
         let quit = bundle?.localizedString(forKey: "Quit Nictate", value: nil, table: nil)
         check(quit == probe.quit, "languages: \(probe.lang) translates the quit item", quit ?? "no bundle")
-        let position = bundle?.localizedString(forKey: "Capture %d of %d", value: nil, table: nil) ?? ""
-        let formatted = String(format: position, 2, 5)
-        check(formatted.contains("2") && formatted.contains("5") && !formatted.contains("%"), "languages: \(probe.lang) keeps both placeholders working", formatted)
     }
     for lang in ["fr", "de", "it"] {
         check(!FileManager.default.fileExists(atPath: resources + "/\(lang).lproj"), "languages: only en and es ship, not \(lang)")
@@ -1026,29 +1013,13 @@ do {
     check(!ShortcutRule.isAcceptableForRecording(mods: 0), "shortcut rule: no modifier is rejected")
 }
 
-// Rotation depth: the clamp lives in HistoryRotation, so a stored depth below zero or history being off
-// leaves nothing to cycle, and a depth past the history just takes all of it.
-do {
-    let five = ["e", "d", "c", "b", "a"]
-    check(HistoryRotation.items(five, depth: -1, historyEnabled: true).isEmpty, "rotation depth: -1 cycles nothing")
-    check(HistoryRotation.items(five, depth: 0, historyEnabled: true).isEmpty, "rotation depth: 0 cycles nothing")
-    check(HistoryRotation.items(five, depth: 1, historyEnabled: true) == ["e"], "rotation depth: 1 keeps the newest")
-    check(HistoryRotation.items(five, depth: 1000, historyEnabled: true) == five, "rotation depth: 1000 takes the whole history")
-    check(HistoryRotation.items(five, depth: 10, historyEnabled: false).isEmpty, "rotation depth: history off cycles nothing")
-}
-
-// Cycle History never reads the clipboard: it remembers what Nictate last wrote and the pasteboard's change
-// count after that write. Anything copied since (by any app) changes the count, so rotation restarts.
+// Append mode never reads the clipboard it did not write: it remembers what Nictate last wrote and the pasteboard's
+// change count after that write. Anything copied since (by any app) changes the count, so the write is no longer known.
 do {
     let write = ClipboardWrite(changeCount: 41, text: "c")
-    check(HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write) == "c", "rotation clipboard: our own write is known")
-    check(HistoryRotation.ownClipboard(changeCount: 42, lastWrite: write) == nil, "rotation clipboard: a later copy is unknown")
-    check(HistoryRotation.ownClipboard(changeCount: 0, lastWrite: nil) == nil, "rotation clipboard: nothing written yet")
-    let trio = ["c", "b", "a"]
-    check(HistoryRotation.nextIndex(items: trio, clipboard: HistoryRotation.ownClipboard(changeCount: 41, lastWrite: write)) == 1,
-          "rotation clipboard: after our write of the newest, the second")
-    check(HistoryRotation.nextIndex(items: trio, clipboard: HistoryRotation.ownClipboard(changeCount: 50, lastWrite: write)) == 0,
-          "rotation clipboard: after someone else's copy, the newest")
+    check(ClipboardWrite.ownText(changeCount: 41, lastWrite: write) == "c", "clipboard ownership: our own write is known")
+    check(ClipboardWrite.ownText(changeCount: 42, lastWrite: write) == nil, "clipboard ownership: a later copy is unknown")
+    check(ClipboardWrite.ownText(changeCount: 0, lastWrite: nil) == nil, "clipboard ownership: nothing written yet")
 }
 
 // Opening a link: the sink itself only lets web and mail addresses through, whatever handed it the URL.
@@ -1205,24 +1176,21 @@ do {
           "phone budget: the default budget reads the number")
 }
 
-// ClipboardWriter: every clipboard write Nictate makes (captures, Cycle History, the History window, the
+// ClipboardWriter: every clipboard write Nictate makes (captures, Recent Captures, the History window, the
 // menu) goes through one writer, which records the change count the write itself produced.
 do {
     let board = NSPasteboard(name: NSPasteboard.Name("nictate-test-\(UUID().uuidString)"))
     let writer = ClipboardWriter(pasteboard: board)
-    check(writer.lastWrite == nil && writer.ownText == nil, "clipboard writer: nothing written yet")
+    check(writer.lastWrite == nil, "clipboard writer: nothing written yet")
     check(writer.writeVerified("b", transient: false) && writer.lastWrite == ClipboardWrite(changeCount: board.changeCount, text: "b"),
           "clipboard writer: the recorded count is the one the write produced")
-    let trio = ["c", "b", "a"]
-    check(HistoryRotation.nextIndex(items: trio, clipboard: writer.ownText) == 2,
-          "clipboard writer: after a History window copy of the second, rotation moves on to the third")
     _ = writer.writeVerified("b", transient: true)
     check(writer.existingForAppend() == ExistingClipboard(text: "b", isPrivate: false),
           "clipboard writer: a History window copy with the private setting stays appendable")
     board.clearContents()
     board.setString("elsewhere", forType: .string)
-    check(writer.ownText == nil && HistoryRotation.nextIndex(items: trio, clipboard: writer.ownText) == 0,
-          "clipboard writer: a copy by another app restarts rotation")
+    check(ClipboardWrite.ownText(changeCount: board.changeCount, lastWrite: writer.lastWrite) == nil,
+          "clipboard writer: a copy by another app is not ours")
     board.releaseGlobally()
 
     // Only ClipboardWriter writes the clipboard: no other source calls replaceContents directly.
@@ -3288,6 +3256,199 @@ do {
           "capture session: unreadable stills with no Esc report the failure")
     check(session.stillsReturned(available: false) == .stop, "capture session: the failure is reported once")
 }
+
+// Recent Captures: the list says why it is empty or unavailable, and Escape closes the picker without a copy.
+check(RecentCapturesNotice.of(state: .available, count: 0, historyEnabled: false) == .savingOff,
+      "recent captures: saving off with nothing saved says so")
+check(RecentCapturesNotice.of(state: .available, count: 2, historyEnabled: false) == .savingOffWithCaptures,
+      "recent captures: saving off still lists what was saved, with a note")
+check(RecentCapturesNotice.of(state: .available, count: 0, historyEnabled: true) == .noCaptures,
+      "recent captures: an empty history with saving on says no captures yet")
+check(RecentCapturesNotice.of(state: .available, count: 2, historyEnabled: true) == .nothing,
+      "recent captures: a list with captures needs no notice")
+check(RecentCapturesNotice.of(state: .loading, count: 0, historyEnabled: true) == .loading,
+      "recent captures: a history still loading is not called empty")
+check(RecentCapturesNotice.of(state: .unavailable, count: 0, historyEnabled: true) == .unavailable,
+      "recent captures: an unreadable history is not called empty")
+check(StatusPanelModel.escape(screen: .history, query: "", isPicker: true) == .close,
+      "recent captures: Escape closes the picker")
+check(StatusPanelModel.escape(screen: .history, query: "abc", isPicker: true) == .clearSearch,
+      "recent captures: Escape clears the search before it closes")
+check(StatusPanelModel.escape(screen: .history, query: "", isPicker: false) == .back,
+      "history: Escape goes back from a list opened from the menu")
+check(StatusPanelModel.escape(screen: .main, query: "", isPicker: false) == .close,
+      "panel: Escape closes the main screen")
+
+// Recent Captures picker, finding 3: a capture's stills would include the picker, so while it is on screen the capture
+// shortcuts do nothing. The shortcut that opens the picker is not one of them, and with no picker nothing is ignored.
+check(RecentCapturesPicker.ignores(.capture, pickerShown: true),
+      "picker: the Capture Text shortcut does nothing while the picker is on screen")
+check(RecentCapturesPicker.ignores(.captureCode, pickerShown: true),
+      "picker: the Capture Code shortcut does nothing while the picker is on screen")
+check(!RecentCapturesPicker.ignores(.rotateHistory, pickerShown: true),
+      "picker: the Recent Captures shortcut is not a capture, so it is not ignored")
+check(!RecentCapturesPicker.ignores(.capture, pickerShown: false) && !RecentCapturesPicker.ignores(.captureCode, pickerShown: false),
+      "picker: with no picker on screen the capture shortcuts work")
+// Finding 5: the shortcut with the popover open closes the popover and then opens the picker, instead of doing nothing.
+check(RecentCapturesPicker.opening(popoverShown: true, closePending: false, pickerShown: false) == .closePopoverFirst,
+      "picker: with the popover open the shortcut closes it first, then opens the picker")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: false, pickerShown: false) == .openNow,
+      "picker: with nothing open the shortcut opens the picker at once")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: false, pickerShown: true) == .ignore,
+      "picker: the shortcut does nothing more while the picker is already open")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: true, pickerShown: false) == .ignore
+          && RecentCapturesPicker.opening(popoverShown: true, closePending: true, pickerShown: false) == .ignore,
+      "picker: a popover already closing for another choice is not closed again, nor does a second picker open")
+// Finding 4: the icon's popover replacing the picker keeps the app remembered when the picker opened.
+check(!RecentCapturesPicker.remembersOrigin(replacingPicker: true),
+      "picker: the popover that replaces the picker keeps the app to return to")
+check(RecentCapturesPicker.remembersOrigin(replacingPicker: false),
+      "picker: the popover opened from another app remembers that app")
+// Finding 2: the picker follows its content when the saved captures arrive, with its top edge where it was.
+do {
+    let loading = NSRect(x: 100, y: 500, width: 260, height: 80)
+    let grown = RecentCapturesPicker.resizedFrame(loading, to: NSSize(width: 260, height: 300))
+    check(grown == NSRect(x: 100, y: 280, width: 260, height: 300) && grown?.maxY == loading.maxY,
+          "picker: a taller list grows the panel downward, its top edge unchanged", "\(String(describing: grown))")
+    let shrunk = RecentCapturesPicker.resizedFrame(NSRect(x: 100, y: 280, width: 260, height: 300), to: NSSize(width: 260, height: 120))
+    check(shrunk == NSRect(x: 100, y: 460, width: 260, height: 120),
+          "picker: a shorter list shrinks the panel, its top edge unchanged", "\(String(describing: shrunk))")
+    check(RecentCapturesPicker.resizedFrame(loading, to: loading.size) == nil,
+          "picker: a size that has not changed leaves the panel alone")
+    check(RecentCapturesPicker.resizedFrame(loading, to: .zero) == nil
+              && RecentCapturesPicker.resizedFrame(loading, to: NSSize(width: 260, height: 0)) == nil,
+          "picker: an empty size, from a view that has not been laid out, never collapses the panel")
+}
+
+// Review of PR 30, F-A: Clear History and Discard Unreadable History ask in an alert of the app's own, which takes key status from
+// the picker. That must not close it; losing key status with no alert up, as an outside click does, still does.
+check(!RecentCapturesPicker.closesOnResignKey(appModalShown: true),
+      "picker: an alert of the app's own, shown over it, leaves it open")
+check(RecentCapturesPicker.closesOnResignKey(appModalShown: false),
+      "picker: losing key status with no alert up, as an outside click does, closes it")
+// F-D: the picker has a model of its own, so Find asks the screen of whichever panel is up. With the picker shown and the popover's model
+// still on its main screen Find is on; where neither screen is History it is off, and a popover that is closed gives no answer.
+do {
+    let picker = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: .history)
+    let popover = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .history, pickerScreen: nil)
+    let neither = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: .main)
+    let nothing = RecentCapturesPicker.findEnabled(panelShown: true, popoverScreen: .main, pickerScreen: nil)
+    let closed = RecentCapturesPicker.findEnabled(panelShown: false, popoverScreen: .history, pickerScreen: nil)
+    check(picker && popover && !neither && !nothing && !closed,
+          "picker: Find is on in the Recent Captures panel while the popover's model is on main, and off when neither screen is History",
+          "picker \(picker), popover history \(popover), neither \(neither), nothing up \(nothing), closed \(closed)")
+}
+// F-E: the icon pressed while the popover is still closing for the picker takes over. The close that follows must not open the picker
+// over the popover that came back, and must not leave the slot taken, or the next shortcut would find a close pending and do nothing.
+do {
+    var pending = PendingClose()
+    var pickerOpened = 0
+    let queued = pending.queue { pickerOpened += 1 }
+    let refused = !pending.queue { pickerOpened += 100 }
+    pending.takeOver()
+    // The popover came back, so its first close may never be reported: the slot is free at once, not only after that close.
+    let nextShortcut = RecentCapturesPicker.opening(popoverShown: false, closePending: pending.isPending, pickerShown: false)
+    pending.take()?()
+    // A close nobody took over still runs what waits for it, once.
+    var ran = 0
+    _ = pending.queue { ran += 1 }
+    pending.take()?()
+    pending.take()?()
+    check(queued && refused && pickerOpened == 0 && !pending.isPending && nextShortcut == .openNow && ran == 1,
+          "picker: a status icon press that takes over a closing popover cancels the queued picker, and the close that follows opens nothing",
+          "queued \(queued), second refused \(refused), picker opened \(pickerOpened), next shortcut \(nextShortcut), later close ran \(ran)")
+}
+// F-B: the panel hangs below the icon, and stays inside the visible part of its screen: left, right and top edges, a display
+// whose origin is not zero, a panel wider than the screen, and when its content grows.
+do {
+    let size = NSSize(width: 260, height: 300)
+    func inside(_ point: NSPoint, of visible: NSRect) -> Bool {
+        point.x >= visible.minX && point.x + size.width <= visible.maxX && point.y <= visible.maxY && point.y - size.height >= visible.minY
+    }
+    func icon(x: CGFloat, y: CGFloat) -> NSRect { NSRect(x: x, y: y, width: 22, height: 24) }
+    let visible = NSRect(x: 0, y: 40, width: 1440, height: 836)  // below the menu bar, above the Dock
+    let middle = RecentCapturesPicker.topLeft(for: size, below: icon(x: 700, y: 876), within: visible)
+    check(middle == NSPoint(x: 581, y: 876), "picker position: an icon in the middle centres the panel below it", "\(middle)")
+    for (edge, spot) in [("left", icon(x: 0, y: 876)), ("right", icon(x: 1418, y: 876)), ("top", icon(x: 700, y: 900))] {
+        let origin = RecentCapturesPicker.topLeft(for: size, below: spot, within: visible)
+        check(inside(origin, of: visible), "picker position: an icon at the \(edge) edge keeps the whole panel on screen", "\(origin)")
+    }
+    let below = RecentCapturesPicker.topLeft(for: size, below: icon(x: 700, y: 200), within: visible)
+    check(inside(below, of: visible), "picker position: an icon so low that the panel would reach the Dock keeps the panel above it", "\(below)")
+    let left = NSRect(x: -1920, y: 0, width: 1920, height: 1055)  // a display to the left of the main one
+    let onLeft = RecentCapturesPicker.topLeft(for: size, below: icon(x: -1925, y: 1031), within: left)
+    let onRight = RecentCapturesPicker.topLeft(for: size, below: icon(x: -15, y: 1031), within: left)
+    check(inside(onLeft, of: left) && inside(onRight, of: left),
+          "picker position: on a display whose origin is not zero the panel stays on that display", "\(onLeft) \(onRight)")
+    let narrow = NSRect(x: 0, y: 40, width: 200, height: 836)
+    let wide = RecentCapturesPicker.topLeft(for: size, below: icon(x: 90, y: 876), within: narrow)
+    check(wide == NSPoint(x: 0, y: 876), "picker position: a panel wider than the screen keeps its left edge and its top", "\(wide)")
+    let tall = RecentCapturesPicker.topLeft(for: NSSize(width: 260, height: 900), below: icon(x: 700, y: 876), within: visible)
+    check(tall.y == 876, "picker position: a panel taller than the screen keeps its top", "\(tall)")
+    let nowhere = RecentCapturesPicker.topLeft(for: size, below: nil, within: visible)
+    check(nowhere == NSPoint(x: 590, y: 876), "picker position: without an icon the panel hangs at the top middle of the screen", "\(nowhere)")
+    // When the content grows the panel keeps its left and top edges, then is pulled back inside.
+    let placed = NSRect(x: 1180, y: 576, width: 260, height: 300)
+    let grown = RecentCapturesPicker.resizedFrame(placed, to: NSSize(width: 400, height: 500)).map { RecentCapturesPicker.clamped($0, within: visible) }
+    check(grown == NSRect(x: 1040, y: 376, width: 400, height: 500), "picker position: a panel that grows at the right edge moves back inside", "\(String(describing: grown))")
+    let sunk = RecentCapturesPicker.clamped(NSRect(x: 100, y: 10, width: 260, height: 300), within: visible)
+    check(sunk == NSRect(x: 100, y: 40, width: 260, height: 300), "picker position: a panel reaching below the screen moves up", "\(sunk)")
+    let fine = NSRect(x: 100, y: 400, width: 260, height: 300)
+    check(RecentCapturesPicker.clamped(fine, within: visible) == fine, "picker position: a panel already inside is left where it is")
+}
+// F-C: the popover closing for the picker is not yet the picker, but a capture started now would still have the popover's
+// fade-out in its stills. The picker counts as shown from the moment the shortcut asks for it.
+check(RecentCapturesPicker.isShown(panelVisible: false, opening: true), "picker: it counts as shown while the popover closes for it")
+check(RecentCapturesPicker.isShown(panelVisible: true, opening: false) && !RecentCapturesPicker.isShown(panelVisible: false, opening: false),
+      "picker: it counts as shown while its panel is on screen, and not otherwise")
+check(RecentCapturesPicker.ignores(.capture, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: true))
+          && RecentCapturesPicker.ignores(.captureCode, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: true)),
+      "picker: a capture shortcut is ignored while the popover closes for the picker")
+check(!RecentCapturesPicker.ignores(.capture, pickerShown: RecentCapturesPicker.isShown(panelVisible: false, opening: false)),
+      "picker: a capture shortcut works again once the picker has come and gone")
+
+// The picker's rules are used where they matter, since a rule that nothing calls proves nothing. Checked in the source: the unit
+// runner cannot build the panel or the app delegate.
+do {
+    if let root = repoRoot {
+        func code(_ name: String) -> String {
+            let text = (try? String(contentsOf: root.appendingPathComponent("Sources/Nictate/\(name)"), encoding: .utf8)) ?? ""
+            return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        }
+        let delegate = code("AppDelegate.swift")
+        let ignoring = delegate.range(of: "RecentCapturesPicker.ignores(slot")
+        let capturing = delegate.range(of: ".capture(mode:")
+        check(ignoring != nil && capturing != nil && ignoring!.lowerBound < capturing!.lowerBound,
+              "picker: the capture shortcuts are ignored before any capture starts")
+        check(delegate.contains("RecentCapturesPicker.ignores(slot, pickerShown: running.panel.isPickerShownOrOpening)"),
+              "picker: the capture shortcuts are ignored while the popover closes for the picker, not only once it is on screen")
+        let panel = code("StatusPanel.swift")
+        for (fragment, name) in [("RecentCapturesPicker.opening(", "the shortcut asks what to do with the popover open"),
+                                 ("RecentCapturesPicker.remembersOrigin(", "the icon over the picker keeps the saved app"),
+                                 (".fit(to: size)", "the picker follows its list"),
+                                 ("RecentCapturesPicker.placement(", "the picker is placed inside the screen of the icon"),
+                                 ("RecentCapturesPicker.isShown(", "the picker counts as shown while the popover closes for it")] {
+            check(panel.contains(fragment), "picker: \(name)")
+        }
+        let picker = code("RecentCapturesPicker.swift")
+        check(picker.contains("closesOnResignKey(appModalShown: NSApp.modalWindow != nil)"),
+              "picker: the panel asks whether an alert of the app's own is up before it closes on losing key status")
+        check(picker.contains("RecentCapturesPicker.clamped("),
+              "picker: the panel moves back inside its screen when its content changes size")
+        check(code("HistoryDeletion.swift").contains("makeKey()"),
+              "picker: the window that asked gets key status back once the alert is answered")
+    } else {
+        check(false, "picker: its rules are used by the panel and the app delegate", "repository root not found")
+    }
+}
+
+// Motion: the list's changes are brief and vanish under Reduce Motion, so no motion ever holds up an action.
+check(RecentCapturesMotion.duration(.selection, reduceMotion: false) <= 0.2,
+      "motion: the selection moves in 0.2 s or less")
+check(RecentCapturesMotion.duration(.press, reduceMotion: false) <= 0.2,
+      "motion: a press answers in 0.2 s or less")
+check(RecentCapturesMotion.duration(.selection, reduceMotion: true) == 0 && RecentCapturesMotion.duration(.press, reduceMotion: true) == 0,
+      "motion: Reduce Motion removes the motion")
 
 // Recovery: the History row stays when the file needs recovery, and is not shown when there is nothing to recover.
 check(HistoryDeletion.showsHistoryRow(historyEnabled: false, savedCount: 0, unreadable: true),

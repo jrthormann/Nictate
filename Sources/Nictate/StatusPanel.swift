@@ -9,6 +9,20 @@ import SwiftUI
 @MainActor
 final class StatusPanelModel: ObservableObject {
     enum Screen { case main, history }
+    enum EscapeAction: Equatable { case clearSearch, back, close }
+
+    /// What Escape does on each screen. A list opened with the shortcut is a picker: Escape closes it.
+    static func escape(screen: Screen, query: String, isPicker: Bool) -> EscapeAction {
+        switch screen {
+        case .history where !query.isEmpty: return .clearSearch
+        case .history where isPicker: return .close
+        case .history: return .back
+        case .main: return .close
+        }
+    }
+
+    /// True when the list was opened with the shortcut. A picker has no Back row, and Escape closes it.
+    @Published private(set) var isPicker = false
 
     @Published var screen: Screen = .main {
         // Opening History highlights its first match, so Return always has a target.
@@ -56,6 +70,7 @@ final class StatusPanelModel: ObservableObject {
     /// Called each time the panel opens: the main screen, with a fresh search.
     func reset() {
         screen = .main
+        isPicker = false
         query = ""
         // A highlight or an error from an earlier visit must not survive: the list may have changed since.
         selection = nil
@@ -82,7 +97,21 @@ final class StatusPanelModel: ObservableObject {
     /// A capture takes its stills straight away, so it starts only once the panel is gone: its fade-out would be in the picture.
     func captureText() { dismissThen { [capture] in capture.capture(mode: .text) } }
     func captureCode() { dismissThen { [capture] in capture.capture(mode: .code) } }
-    func cycleHistory() { dismiss(); capture.rotateHistory(); FocusReturn.shared.returnIfStillActive() }
+    /// The shortcut's list: the saved captures, opened as a picker. Nothing is copied until a row is chosen.
+    func openPicker() {
+        isPicker = true
+        screen = .history
+    }
+
+    /// A model of its own for the Recent Captures panel, already showing the list. The popover and the picker share the same
+    /// history and settings but never a screen, a search or a highlight: with one model for both, the picker's keys stopped
+    /// reaching its list after the popover had been used, and Escape in the popover's History closed it instead of going back.
+    func makePickerModel() -> StatusPanelModel {
+        let picker = StatusPanelModel(capture: capture, windows: windows, history: history, settings: settings)
+        picker.reset()
+        picker.openPicker()
+        return picker
+    }
     /// Escape closes the panel and gives focus back to the app the user came from.
     func closeReturningFocus() { dismiss(); FocusReturn.shared.returnIfStillActive() }
     func setFaithful(_ faithful: Bool) { settings.codeMode = faithful }
@@ -191,7 +220,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     /// What waits for the popover to finish closing. Its fade-out takes about half a second, and the window server draws it
     /// until then, though the window already reports itself as not visible.
-    private var afterClose: (() -> Void)?
+    private var afterClose = PendingClose()
 
     init(model: StatusPanelModel, animates: Bool = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
         self.model = model
@@ -211,7 +240,24 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         popover.contentViewController = host
     }
 
-    var isShown: Bool { popover.isShown }
+    var isShown: Bool { popover.isShown || isPickerShown }
+    /// Whether Find has a search field to go to: the popover's History screen, or the Recent Captures panel, which has a model of its own.
+    var canFind: Bool { RecentCapturesPicker.findEnabled(panelShown: isShown, popoverScreen: model.screen,
+                                                         pickerScreen: isPickerShown ? floatingHost?.rootView.model.screen : nil) }
+    /// Whether the Recent Captures panel is on screen.
+    var isPickerShown: Bool { floating?.isVisible ?? false }
+    /// Whether the picker is on screen or the popover is closing for it. A capture started now would take its picture with it, or the
+    /// popover's fade-out.
+    var isPickerShownOrOpening: Bool { RecentCapturesPicker.isShown(panelVisible: isPickerShown, opening: pickerOpening) }
+    /// The popover is closing, and the picker opens once it has. Until then the popover still draws, though it reports itself closed.
+    private var pickerOpening = false
+    /// The Recent Captures panel, used by the shortcut. It can show over full-screen apps, where the menu bar is hidden.
+    private(set) var floating: FloatingPanel?
+    private var floatingHost: NSHostingController<StatusPanelView>?
+    /// Keeps the panel as tall as its list: the saved captures can arrive after it has opened.
+    private var floatingSize: AnyCancellable?
+    /// A press on the menu bar icon took key status from the picker, and the icon's action follows.
+    private var pickerLeftForIcon = false
     /// The window that draws the panel, once it is shown.
     var window: NSWindow? { popover.contentViewController?.view.window }
 
@@ -219,9 +265,15 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
+            // The icon pressed over the picker replaces it. Nictate is in front then, and the app saved when the picker opened stays.
+            let replacingPicker = floating != nil || (pickerLeftForIcon && NSApp.isActive)
+            pickerLeftForIcon = false
+            pickerOpening = false // The icon's popover takes the place of the picker the shortcut asked for.
+            afterClose.takeOver() // So the close still under way must not open that picker, or run any other waiting action.
+            dismissFloating()
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
-            FocusReturn.shared.remember()
+            if RecentCapturesPicker.remembersOrigin(replacingPicker: replacingPicker) { FocusReturn.shared.remember() }
             // Activating first makes the first click land in the panel, so History opens on one click.
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -231,14 +283,29 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
 
     func close() {
         popover.performClose(nil)
+        dismissFloating()
+    }
+
+    /// Takes the Recent Captures panel off the screen and lets it go, so no hidden panel stays behind with its own copy of the
+    /// list. It is released after the current event, because an Escape or a click inside it is what usually closes it.
+    private func dismissFloating() {
+        guard let panel = floating else { return }
+        let host = floatingHost
+        floating = nil
+        floatingHost = nil
+        floatingSize = nil
+        panel.orderOut(nil)
+        DispatchQueue.main.async {
+            panel.contentView = nil
+            _ = host
+        }
     }
 
     /// Closes the popover and runs `action` once it has closed, or at once when it is not shown. One action waits at a time.
     func close(then action: @escaping () -> Void) {
         guard popover.isShown else { return action() }
-        guard afterClose == nil else { return } // Already closing for another choice: this one finds the panel gone.
         // Stored before the close: without animation the popover can report its close from inside `performClose`.
-        afterClose = action
+        guard afterClose.queue(action) else { return } // Already closing for another choice: this one finds the panel gone.
         popover.performClose(nil)
     }
 
@@ -247,9 +314,75 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     }
 
     private func runAfterClose() {
-        guard let action = afterClose else { return }
-        afterClose = nil
-        action()
+        afterClose.take()?()
+    }
+
+    /// The shortcut's action: the Recent Captures list in a panel that also shows over full-screen apps. Nothing is copied
+    /// on open. The app the user is in is remembered first, so focus can return to it after a copy or Escape.
+    func showRecentCaptures(relativeTo button: NSView) {
+        switch RecentCapturesPicker.opening(popoverShown: popover.isShown, closePending: afterClose.isPending, pickerShown: isPickerShown) {
+        case .ignore: return
+        case .openNow:
+            FocusReturn.shared.remember()
+            presentPicker(below: button)
+        case .closePopoverFirst:
+            // Nothing is captured, so only the popover's own fade-out is waited for. The app saved when it opened stays.
+            pickerOpening = true // Before the close: without animation the picker can open from inside it.
+            close { [weak self] in self?.presentPicker(below: button) }
+        }
+    }
+
+    private func presentPicker(below button: NSView) {
+        pickerOpening = false
+        let picker = model.makePickerModel()
+        picker.dismiss = { [weak self] in self?.dismissFloating() }
+        presentFloating(model: picker, below: button)
+    }
+
+    private func presentFloating(model: StatusPanelModel, below button: NSView) {
+        let host = NSHostingController(rootView: StatusPanelView(model: model))
+        // As in the popover, the content reports the size it wants, and the panel follows it below.
+        host.sizingOptions = [.preferredContentSize]
+        host.view.layoutSubtreeIfNeeded()
+        let size = host.view.fittingSize
+        let backdrop = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+        backdrop.material = .popover
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.wantsLayer = true
+        backdrop.layer?.cornerRadius = 10
+        backdrop.layer?.masksToBounds = true
+        host.view.frame = backdrop.bounds
+        host.view.autoresizingMask = [.width, .height]
+        backdrop.addSubview(host.view)
+        let panel = FloatingPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .fullSizeContentView],
+                                  backing: .buffered, defer: false)
+        panel.contentView = backdrop
+        panel.isFloatingPanel = true
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        panel.hidesOnDeactivate = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        let placed = RecentCapturesPicker.placement(for: size, below: button)
+        panel.visibleScreenFrame = placed.visible
+        panel.setFrameTopLeftPoint(placed.topLeft)
+        panel.onResignKey = { [weak self, weak panel, weak button] in
+            guard let self, let panel, self.floating === panel else { return }
+            // A press on the menu bar icon ends the picker's key status first, and the icon's action then opens the popover.
+            self.pickerLeftForIcon = button?.window != nil && NSApp.currentEvent?.window === button?.window
+            self.dismissFloating()
+        }
+        floatingHost = host
+        floating = panel
+        pickerLeftForIcon = false
+        // One turn later: the size changes while SwiftUI lays the view out.
+        floatingSize = (host as NSViewController).publisher(for: \.preferredContentSize)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak panel] size in if self?.floating === panel { panel?.fit(to: size) } }
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
     }
 }
 

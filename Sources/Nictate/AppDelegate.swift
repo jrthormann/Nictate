@@ -29,12 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RecognitionWarmUp.start()  // the first capture after an install would otherwise wait for Vision's models
 
-        // Command-F works while the panel shows its History screen, and nowhere else.
+        // Command-F works while a History list shows, in the popover or in the Recent Captures panel, and nowhere else.
         let mainMenu = MainMenu(showSettings: { [weak self] in self?.windows.showPreferences() },
-                                canFind: { [weak self] in
-                                    guard let panel = self?.running?.panel else { return false }
-                                    return panel.isShown && panel.model.screen == .history
-                                })
+                                canFind: { [weak self] in self?.running?.panel.canFind ?? false })
         mainMenu.install()
         let status = StatusItemController()
         let capture = CaptureCoordinator(status: status, windows: windows)
@@ -98,14 +95,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// What a shortcut does.
     private func perform(_ slot: ShortcutSlot) {
-        let busy = running?.capture.isCapturing ?? false
-        let panelShown = running?.panel.isShown ?? false
-        if FocusReturn.shouldRemember(captureInFlight: busy, panelShown: panelShown) { FocusReturn.shared.remember() }
-        guard let capture = running?.capture else { return }
+        guard let running else { return }
+        // Recent Captures remembers the app to return to itself, and only when it opens. It stays closed during a capture,
+        // so a copy from it cannot race the capture's own copy.
+        if slot == .rotateHistory {
+            if !running.capture.isCapturing { running.status.showRecentCaptures() }
+            return
+        }
+        // A capture takes its stills at once, and with the picker on screen, or the popover still fading out for it, they would show it.
+        if RecentCapturesPicker.ignores(slot, pickerShown: running.panel.isPickerShownOrOpening) { return }
+        if FocusReturn.shouldRemember(captureInFlight: running.capture.isCapturing, panelShown: running.panel.isShown) {
+            FocusReturn.shared.remember()
+        }
         switch slot {
-        case .capture: capture.capture(mode: .text)
-        case .rotateHistory: capture.rotateHistory()
-        case .captureCode: capture.capture(mode: .code)
+        case .capture: running.capture.capture(mode: .text)
+        case .captureCode: running.capture.capture(mode: .code)
+        case .rotateHistory: break
         }
     }
 

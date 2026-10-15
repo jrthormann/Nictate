@@ -40,7 +40,7 @@ final class CaptureCoordinator {
     var isCapturing: Bool { session != nil }
     /// Colors, links and emails found in the latest capture, offered in the menu.
     private(set) var lastDetections = Detections()
-    /// Shared with the History screen, so Cycle History and Append mode know about its copies too.
+    /// Shared with the History screen and Append mode, so both know about its copies too.
     private let clipboard: ClipboardWriter
 
     init(status: StatusItemController, windows: WindowCoordinator, clipboard: ClipboardWriter = .shared,
@@ -239,31 +239,15 @@ final class CaptureCoordinator {
         if NSWorkspace.shared.open(url) { FocusReturn.shared.forget() }
     }
 
-    /// Puts the next older capture on the clipboard, wrapping around after the oldest in the rotation.
-    func rotateHistory() {
-        // Cycle History walks through every saved capture: the history itself is the limit.
-        let items = HistoryRotation.items(History.shared.items, depth: HistoryPolicy.maximumHistoryEntries, historyEnabled: settings.historyEnabled)
-        guard let index = HistoryRotation.nextIndex(items: items, clipboard: clipboard.ownText) else {
-            status.cue(.failure)
-            status.announce(tr("History is empty"))
-            return
-        }
-        guard clipboard.writeVerified(items[index]) else { refuseCopy(); return }
-        status.cue(.success)
-        let position = tr("Capture %d of %d", index + 1, items.count)
-        status.announce(position)
-        notifier.notify(generic: position, text: "\(position): \(items[index].prefix(80))")
-    }
-
-    /// Copies a capture chosen from the history, with the same cue and announcement as a fresh capture.
+    /// Copies a capture chosen from Recent Captures. The menu bar icon blinks to confirm it, and VoiceOver hears the result.
     /// Returns false, with a spoken message, when the clipboard did not take the text.
     @discardableResult
     func copyCapture(_ text: String) -> Bool {
         guard clipboard.writeVerified(text) else {
-            status.announce(tr("Couldn't copy text. Try again."))
+            refuseCopy()
             return false
         }
-        // Silent for sighted users: the panel closes and nothing else appears. VoiceOver still hears the result.
+        status.cue(.success)
         status.announce(tr("Text copied"))
         return true
     }

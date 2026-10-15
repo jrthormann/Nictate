@@ -3,9 +3,23 @@
 
 import AppKit
 
-/// The one place Nictate writes the clipboard: captures, Cycle History, the History screen and the menu all
-/// go through it. Each write is read back once, and only a write that reads back is remembered, so Cycle History and
-/// Append mode know what the clipboard holds while nothing else has been copied.
+/// Something Nictate put on the clipboard, and the pasteboard's change count right after the write.
+/// While the count is unchanged the clipboard still holds `text`, so it never has to be read back.
+struct ClipboardWrite: Equatable, Sendable {
+    let changeCount: Int
+    let text: String
+
+    /// What the clipboard holds, as far as Nictate knows without reading it: the text of its own last write
+    /// while the change count is still the one after that write, otherwise nil (something else was copied).
+    static func ownText(changeCount: Int, lastWrite: ClipboardWrite?) -> String? {
+        guard let lastWrite, lastWrite.changeCount == changeCount else { return nil }
+        return lastWrite.text
+    }
+}
+
+/// The one place Nictate writes the clipboard: captures, Recent Captures, the History screen and the menu all
+/// go through it. Each write is read back once, and only a write that reads back is remembered, so Append mode
+/// knows what the clipboard holds while nothing else has been copied.
 @MainActor
 final class ClipboardWriter {
     static let shared = ClipboardWriter()
@@ -31,11 +45,6 @@ final class ClipboardWriter {
         return true
     }
 
-    /// The text of the latest write while it is still on the clipboard, otherwise nil.
-    var ownText: String? {
-        HistoryRotation.ownClipboard(changeCount: pasteboard.changeCount, lastWrite: lastWrite)
-    }
-
     /// What Append mode would add to.
     func existingForAppend() -> ExistingClipboard {
         ExistingClipboard.read(from: pasteboard, lastWrite: lastWrite)
@@ -51,7 +60,7 @@ extension ExistingClipboard {
     /// its owner marked it concealed or transient, and then its text is not even read.
     @MainActor
     static func read(from pasteboard: NSPasteboard, lastWrite: ClipboardWrite?) -> ExistingClipboard {
-        if let own = HistoryRotation.ownClipboard(changeCount: pasteboard.changeCount, lastWrite: lastWrite) {
+        if let own = ClipboardWrite.ownText(changeCount: pasteboard.changeCount, lastWrite: lastWrite) {
             return ExistingClipboard(text: own, isPrivate: false)
         }
         let isPrivate = pasteboard.types.map { types in privateTypes.contains(where: types.contains) } ?? false
