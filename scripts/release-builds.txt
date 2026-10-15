@@ -2,3 +2,4 @@
 # here, and only when that build is higher than the builds listed above it, so a build number cannot repeat or regress.
 1.0.0-beta.1 21
 1.0.0-beta.2 22
+1.0.0-beta.3 23
