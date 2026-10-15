@@ -1108,6 +1108,96 @@ do {
     historyFiles.append(folder.appendingPathExtension("plist"))
 }
 
+// MARK: Recent Captures picker: it follows its list, the capture shortcuts leave it alone, and its shortcut works with the popover open
+/// A stand-in for the menu bar icon: a button in a borderless window just under the top edge of the main screen.
+@MainActor
+func makeIconStandIn() -> (anchor: NSWindow, button: NSButton) {
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    let anchor = NSWindow(contentRect: NSRect(x: screen.frame.midX, y: screen.frame.maxY - 60, width: 40, height: 40),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+    let button = NSButton(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+    anchor.contentView?.addSubview(button)
+    anchor.orderFrontRegardless()
+    return (anchor, button)
+}
+@MainActor
+func pickerPanel(animates: Bool = false, saved: [String] = ["one"], loadsNow: Bool = true) -> StatusPanel {
+    let file = scratchHistoryFile("nictate-ui-picker-panel-")
+    let seed = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true })
+    for text in saved.reversed() { seed.add(text) }
+    History.flushWrites()
+    let history = History(store: JSONHistoryStore(fileURL: file), isEnabled: { true }, loadsNow: loadsNow)
+    let model = StatusPanelModel(capture: CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator()),
+                                 windows: WindowCoordinator(), history: history)
+    return StatusPanel(model: model, animates: animates)
+}
+/// Finding 2: the list is read after the panel has opened, and the panel then holds all of it.
+do {
+    let panel = pickerPanel(saved: (1...6).map { "capture number \($0)" }, loadsNow: false)
+    let (anchor, button) = makeIconStandIn()
+    panel.showRecentCaptures(relativeTo: button)
+    let opened = panel.floating?.frame ?? .zero
+    let grew = waitUntil(6) { (panel.floating?.frame.height ?? 0) > opened.height + 100 }
+    let now = panel.floating?.frame ?? .zero
+    check(opened.height > 0 && grew, "picker size: the panel grows when the saved captures arrive after it opened",
+          "opened \(opened.height) pt, now \(now.height) pt")
+    check(abs(now.maxY - opened.maxY) < 1 && abs(now.minX - opened.minX) < 1,
+          "picker size: it grows downward, its top and left edges where they were", "opened \(opened), now \(now)")
+    waitPast(0.3)
+    check(panel.floating?.frame == now, "picker size: it then stays at that size", "was \(now), now \(String(describing: panel.floating?.frame))")
+    panel.close()
+    anchor.orderOut(nil)
+}
+/// Finding 3: while the picker is on screen the panel says so, which is what makes the capture shortcuts wait.
+do {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn()
+    check(!panel.isPickerShown, "picker shown: not before the shortcut")
+    panel.showRecentCaptures(relativeTo: button)
+    check(panel.isPickerShown && panel.isShown, "picker shown: the shortcut puts the picker on screen")
+    panel.close()
+    check(!panel.isPickerShown, "picker shown: closing it takes it off the screen")
+    anchor.orderOut(nil)
+}
+/// Finding 4: the icon pressed over the picker opens the popover in its place, and the picker is gone.
+do {
+    let panel = pickerPanel()
+    let (anchor, button) = makeIconStandIn()
+    panel.showRecentCaptures(relativeTo: button)
+    panel.toggle(relativeTo: button)
+    check(waitUntil(6) { panel.window?.isVisible == true } && !panel.isPickerShown,
+          "picker to popover: the icon opens the popover and the picker is gone")
+    panel.close()
+    waitUntil { !panel.isShown }
+    anchor.orderOut(nil)
+}
+/// Finding 5: the shortcut with the popover open closes the popover and then shows the picker. With and without the close animation.
+for animates in [true, false] {
+    let panel = pickerPanel(animates: animates)
+    let (anchor, button) = makeIconStandIn()
+    panel.toggle(relativeTo: button)
+    check(waitUntil(6) { panel.window?.isVisible == true }, "popover then shortcut (animates \(animates)): the popover is open")
+    let popoverWindow = panel.window
+    panel.showRecentCaptures(relativeTo: button)
+    panel.showRecentCaptures(relativeTo: button) // A second press while the popover closes must not open a second picker.
+    var popoverDrawnAtShow = true
+    let shown = waitUntil(6) {
+        guard panel.isPickerShown else { return false }
+        popoverDrawnAtShow = isDrawn(popoverWindow)
+        return true
+    }
+    check(shown, "popover then shortcut (animates \(animates)): the picker opens")
+    check(popoverWindow?.isVisible != true && !(animates && popoverDrawnAtShow),
+          "popover then shortcut (animates \(animates)): the popover has closed by the time the picker shows",
+          "visible \(popoverWindow?.isVisible == true), drawn \(popoverDrawnAtShow)")
+    waitPast(0.2)
+    let pickers = NSApp.windows.filter { $0 is FloatingPanel && $0.isVisible }.count
+    check(pickers == 1, "popover then shortcut (animates \(animates)): one picker, however many presses", "\(pickers) pickers")
+    panel.close()
+    waitUntil { !panel.isShown }
+    anchor.orderOut(nil)
+}
+
 // Flush pending writes first, so a write cannot recreate a file after it is removed.
 History.flushWrites()
 for file in historyFiles { try? FileManager.default.removeItem(at: file) }

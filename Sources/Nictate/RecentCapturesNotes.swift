@@ -3,6 +3,18 @@
 
 import SwiftUI
 
+/// What the Recent Captures list says above, or instead of, its entries. Kept apart from the view so the rules are tested.
+enum RecentCapturesNotice: Equatable {
+    case nothing, loading, unavailable, savingOff, savingOffWithCaptures, noCaptures
+
+    static func of(state: HistoryState, count: Int, historyEnabled: Bool) -> RecentCapturesNotice {
+        if state == .loading { return .loading }
+        if state == .unavailable { return .unavailable }
+        if !historyEnabled { return count == 0 ? .savingOff : .savingOffWithCaptures }
+        return count == 0 ? .noCaptures : .nothing
+    }
+}
+
 /// Says why the Recent Captures list is not a plain list: loading, unreadable, or saving off with captures kept.
 /// Saving off with nothing kept is said by `RecentCapturesSavingOff` instead, where the empty list would be.
 struct RecentCapturesNote: View {

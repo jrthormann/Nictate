@@ -3279,6 +3279,71 @@ check(StatusPanelModel.escape(screen: .history, query: "", isPicker: false) == .
 check(StatusPanelModel.escape(screen: .main, query: "", isPicker: false) == .close,
       "panel: Escape closes the main screen")
 
+// Recent Captures picker, finding 3: a capture's stills would include the picker, so while it is on screen the capture
+// shortcuts do nothing. The shortcut that opens the picker is not one of them, and with no picker nothing is ignored.
+check(RecentCapturesPicker.ignores(.capture, pickerShown: true),
+      "picker: the Capture Text shortcut does nothing while the picker is on screen")
+check(RecentCapturesPicker.ignores(.captureCode, pickerShown: true),
+      "picker: the Capture Code shortcut does nothing while the picker is on screen")
+check(!RecentCapturesPicker.ignores(.rotateHistory, pickerShown: true),
+      "picker: the Recent Captures shortcut is not a capture, so it is not ignored")
+check(!RecentCapturesPicker.ignores(.capture, pickerShown: false) && !RecentCapturesPicker.ignores(.captureCode, pickerShown: false),
+      "picker: with no picker on screen the capture shortcuts work")
+// Finding 5: the shortcut with the popover open closes the popover and then opens the picker, instead of doing nothing.
+check(RecentCapturesPicker.opening(popoverShown: true, closePending: false, pickerShown: false) == .closePopoverFirst,
+      "picker: with the popover open the shortcut closes it first, then opens the picker")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: false, pickerShown: false) == .openNow,
+      "picker: with nothing open the shortcut opens the picker at once")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: false, pickerShown: true) == .ignore,
+      "picker: the shortcut does nothing more while the picker is already open")
+check(RecentCapturesPicker.opening(popoverShown: false, closePending: true, pickerShown: false) == .ignore
+          && RecentCapturesPicker.opening(popoverShown: true, closePending: true, pickerShown: false) == .ignore,
+      "picker: a popover already closing for another choice is not closed again, nor does a second picker open")
+// Finding 4: the icon's popover replacing the picker keeps the app remembered when the picker opened.
+check(!RecentCapturesPicker.remembersOrigin(replacingPicker: true),
+      "picker: the popover that replaces the picker keeps the app to return to")
+check(RecentCapturesPicker.remembersOrigin(replacingPicker: false),
+      "picker: the popover opened from another app remembers that app")
+// Finding 2: the picker follows its content when the saved captures arrive, with its top edge where it was.
+do {
+    let loading = NSRect(x: 100, y: 500, width: 260, height: 80)
+    let grown = RecentCapturesPicker.resizedFrame(loading, to: NSSize(width: 260, height: 300))
+    check(grown == NSRect(x: 100, y: 280, width: 260, height: 300) && grown?.maxY == loading.maxY,
+          "picker: a taller list grows the panel downward, its top edge unchanged", "\(String(describing: grown))")
+    let shrunk = RecentCapturesPicker.resizedFrame(NSRect(x: 100, y: 280, width: 260, height: 300), to: NSSize(width: 260, height: 120))
+    check(shrunk == NSRect(x: 100, y: 460, width: 260, height: 120),
+          "picker: a shorter list shrinks the panel, its top edge unchanged", "\(String(describing: shrunk))")
+    check(RecentCapturesPicker.resizedFrame(loading, to: loading.size) == nil,
+          "picker: a size that has not changed leaves the panel alone")
+    check(RecentCapturesPicker.resizedFrame(loading, to: .zero) == nil
+              && RecentCapturesPicker.resizedFrame(loading, to: NSSize(width: 260, height: 0)) == nil,
+          "picker: an empty size, from a view that has not been laid out, never collapses the panel")
+}
+
+// The picker's rules are used where they matter, since a rule that nothing calls proves nothing. Checked in the source: the unit
+// runner cannot build the panel or the app delegate.
+do {
+    if let root = repoRoot {
+        func code(_ name: String) -> String {
+            let text = (try? String(contentsOf: root.appendingPathComponent("Sources/Nictate/\(name)"), encoding: .utf8)) ?? ""
+            return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        }
+        let delegate = code("AppDelegate.swift")
+        let ignoring = delegate.range(of: "RecentCapturesPicker.ignores(slot")
+        let capturing = delegate.range(of: ".capture(mode:")
+        check(ignoring != nil && capturing != nil && ignoring!.lowerBound < capturing!.lowerBound,
+              "picker: the capture shortcuts are ignored before any capture starts")
+        let panel = code("StatusPanel.swift")
+        for (fragment, name) in [("RecentCapturesPicker.opening(", "the shortcut asks what to do with the popover open"),
+                                 ("RecentCapturesPicker.remembersOrigin(", "the icon over the picker keeps the saved app"),
+                                 (".fit(to: size)", "the picker follows its list")] {
+            check(panel.contains(fragment), "picker: \(name)")
+        }
+    } else {
+        check(false, "picker: its rules are used by the panel and the app delegate", "repository root not found")
+    }
+}
+
 // Motion: the list's changes are brief and vanish under Reduce Motion, so no motion ever holds up an action.
 check(RecentCapturesMotion.duration(.selection, reduceMotion: false) <= 0.2,
       "motion: the selection moves in 0.2 s or less")

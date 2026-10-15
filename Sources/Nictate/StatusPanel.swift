@@ -5,18 +5,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// What the Recent Captures list says above, or instead of, its entries. Kept apart from the view so the rules are tested.
-enum RecentCapturesNotice: Equatable {
-    case nothing, loading, unavailable, savingOff, savingOffWithCaptures, noCaptures
-
-    static func of(state: HistoryState, count: Int, historyEnabled: Bool) -> RecentCapturesNotice {
-        if state == .loading { return .loading }
-        if state == .unavailable { return .unavailable }
-        if !historyEnabled { return count == 0 ? .savingOff : .savingOffWithCaptures }
-        return count == 0 ? .noCaptures : .nothing
-    }
-}
-
 /// What the menu bar panel shows and does. The history is a second screen of the same panel, never a window.
 @MainActor
 final class StatusPanelModel: ObservableObject {
@@ -252,10 +240,16 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         popover.contentViewController = host
     }
 
-    var isShown: Bool { popover.isShown || (floating?.isVisible ?? false) }
+    var isShown: Bool { popover.isShown || isPickerShown }
+    /// Whether the Recent Captures panel is on screen. A capture started now would take its picture with it.
+    var isPickerShown: Bool { floating?.isVisible ?? false }
     /// The Recent Captures panel, used by the shortcut. It can show over full-screen apps, where the menu bar is hidden.
-    private var floating: FloatingPanel?
+    private(set) var floating: FloatingPanel?
     private var floatingHost: NSHostingController<StatusPanelView>?
+    /// Keeps the panel as tall as its list: the saved captures can arrive after it has opened.
+    private var floatingSize: AnyCancellable?
+    /// A press on the menu bar icon took key status from the picker, and the icon's action follows.
+    private var pickerLeftForIcon = false
     /// The window that draws the panel, once it is shown.
     var window: NSWindow? { popover.contentViewController?.view.window }
 
@@ -263,10 +257,13 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
+            // The icon pressed over the picker replaces it. Nictate is in front then, and the app saved when the picker opened stays.
+            let replacingPicker = floating != nil || (pickerLeftForIcon && NSApp.isActive)
+            pickerLeftForIcon = false
             dismissFloating()
             model.reset()
             // Remembered first: opening the panel makes Nictate active, and the app to return to is the one before.
-            FocusReturn.shared.remember()
+            if RecentCapturesPicker.remembersOrigin(replacingPicker: replacingPicker) { FocusReturn.shared.remember() }
             // Activating first makes the first click land in the panel, so History opens on one click.
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -286,6 +283,7 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         let host = floatingHost
         floating = nil
         floatingHost = nil
+        floatingSize = nil
         panel.orderOut(nil)
         DispatchQueue.main.async {
             panel.contentView = nil
@@ -315,8 +313,18 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
     /// The shortcut's action: the Recent Captures list in a panel that also shows over full-screen apps. Nothing is copied
     /// on open. The app the user is in is remembered first, so focus can return to it after a copy or Escape.
     func showRecentCaptures(relativeTo button: NSView) {
-        guard !isShown else { return }
-        FocusReturn.shared.remember()
+        switch RecentCapturesPicker.opening(popoverShown: popover.isShown, closePending: afterClose != nil, pickerShown: isPickerShown) {
+        case .ignore: return
+        case .openNow:
+            FocusReturn.shared.remember()
+            presentPicker(below: button)
+        case .closePopoverFirst:
+            // Nothing is captured, so only the popover's own fade-out is waited for. The app saved when it opened stays.
+            close { [weak self] in self?.presentPicker(below: button) }
+        }
+    }
+
+    private func presentPicker(below button: NSView) {
         let picker = model.makePickerModel()
         picker.dismiss = { [weak self] in self?.dismissFloating() }
         presentFloating(model: picker, below: button)
@@ -324,6 +332,8 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
 
     private func presentFloating(model: StatusPanelModel, below button: NSView) {
         let host = NSHostingController(rootView: StatusPanelView(model: model))
+        // As in the popover, the content reports the size it wants, and the panel follows it below.
+        host.sizingOptions = [.preferredContentSize]
         host.view.layoutSubtreeIfNeeded()
         let size = host.view.fittingSize
         let backdrop = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
@@ -347,12 +357,19 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.setFrameTopLeftPoint(origin(for: size, below: button))
-        panel.onResignKey = { [weak self, weak panel] in
+        panel.onResignKey = { [weak self, weak panel, weak button] in
             guard let self, let panel, self.floating === panel else { return }
+            // A press on the menu bar icon ends the picker's key status first, and the icon's action then opens the popover.
+            self.pickerLeftForIcon = button?.window != nil && NSApp.currentEvent?.window === button?.window
             self.dismissFloating()
         }
         floatingHost = host
         floating = panel
+        pickerLeftForIcon = false
+        // One turn later: the size changes while SwiftUI lays the view out.
+        floatingSize = (host as NSViewController).publisher(for: \.preferredContentSize)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak panel] size in if self?.floating === panel { panel?.fit(to: size) } }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
     }
@@ -365,21 +382,6 @@ final class StatusPanel: NSObject, NSPopoverDelegate {
         }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return .zero }
         return NSPoint(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.maxY)
-    }
-}
-
-/// The Recent Captures panel. It takes keyboard focus, so the arrow keys and Escape reach the list, and it closes when the
-/// user clicks elsewhere, as the popover does.
-final class FloatingPanel: NSPanel {
-    /// Called when the panel stops being key, after it has left the screen.
-    var onResignKey: (() -> Void)?
-
-    override var canBecomeKey: Bool { true }
-
-    override func resignKey() {
-        super.resignKey()
-        orderOut(nil)
-        onResignKey?()
     }
 }
 

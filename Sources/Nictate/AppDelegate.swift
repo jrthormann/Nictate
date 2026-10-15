@@ -105,6 +105,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !running.capture.isCapturing { running.status.showRecentCaptures() }
             return
         }
+        // A capture takes its stills at once, and with the picker on screen they would show it.
+        if RecentCapturesPicker.ignores(slot, pickerShown: running.panel.isPickerShown) { return }
         if FocusReturn.shouldRemember(captureInFlight: running.capture.isCapturing, panelShown: running.panel.isShown) {
             FocusReturn.shared.remember()
         }
