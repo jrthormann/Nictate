@@ -2,7 +2,7 @@
 
 [English](../INSTALL.md) · Español · [Volver al README](../../docs/i18n/README.es.md)
 
-Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión actual es la 1.0.0-beta.2, así que esa es la que toca descargar.
+Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión actual es la 1.0.0-beta.3, así que esa es la que toca descargar.
 
 **Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas desactivar Gatekeeper ni ninguna otra protección de seguridad del sistema para abrir Nictate. Aprobar Nictate una vez solo afecta a Nictate.
 
@@ -23,4 +23,4 @@ Descarga la imagen de disco solo desde la [página de versiones](https://github.
 
 ## Actualizar desde la beta.1
 
-La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no ve las versiones nuevas. Si tienes la beta.1, descarga la beta.2 desde la [página de versiones](https://github.com/jrthormann/Nictate/releases) y reemplaza la app en Aplicaciones.
+La beta.1 se identifica como versión 1.0.0, así que su comprobación de actualizaciones no ve las versiones nuevas. Si tienes la beta.1, descarga la versión actual desde la [página de versiones](https://github.com/jrthormann/Nictate/releases) y reemplaza la app en Aplicaciones.

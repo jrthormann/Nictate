@@ -3,6 +3,63 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-beta.3] - 2026-10-15
+
+The third public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
+
+**Two things to know before you install:**
+
+- **Nictate isn't notarized by Apple.** macOS asks you to approve it once, on first launch. The Install steps in the
+  README show how. You don't need to turn off Gatekeeper or any other system-wide security protection.
+- **It is signed with the same local certificate as beta.2**, so macOS should keep the Screen Recording permission you
+  granted. If it asks again, grant it once.
+
+### Added
+- **Recent Captures.** The Recent Captures shortcut (⌥⇧⌘2) opens your saved captures in a picker over the screen, including
+  over full-screen apps. Arrow keys choose, Return copies, Escape closes, and Command-F jumps to the search field. It
+  replaces the Cycle History rotation.
+- **A clearer selection.** The selection has rounded corner brackets and a two-tone outline, so it stands out on light
+  and dark content.
+- **Clearer results.** Each capture says what happened: copied, no text found, the area couldn't be read, or the copy
+  failed. Each has its own symbol, and a scan line sweeps the selection while the text is read.
+- **VoiceOver.** The selection has an accessibility role and keyboard help.
+
+### Changed
+- **Escape cancels from the first moment.** Escape pressed right after the shortcut cancels the capture, before the
+  selection appears, and no longer reaches the app you were using.
+- **Focus returns after every capture.** After a copy, a miss, a failed read, or Escape, focus goes back to the app you
+  came from, unless you have moved on. A retry keeps that app.
+- **A selection cancels when focus leaves.** If another app or a system dialog takes focus while the selection is up,
+  the selection is cancelled instead of staying on the screen.
+- **Menu-bar capture.** Capture Text and Capture Code from the menu bar wait for the popover to close, so the popover is
+  not in the captured image.
+- **Link question.** A result pill no longer covers the Ask Before Opening question, and Escape cancels it in every
+  language.
+- **Open in Browser** leaves the browser in front.
+
+### Tested
+- Automated: CI passed on the merged code of this release (PR #30, merged as `0e3feec` on `main`): build-and-test,
+  intel-tests, macos-14 and ui-smoke. `make check` and `make build` pass on the release commit.
+- Manual QA on the NictateTest build of this code, not the final disk image: menu-bar capture from the popover, Recent
+  Captures opening, navigation and copying, Find in Recent Captures, Escape, clipboard contents after copies and cancels,
+  and focus returning to the app you came from.
+- Earlier builds, not this release: VoiceOver speech and keyboard guidance, Reduce Motion, and Increase Contrast on the
+  capture overlay, verified by the maintainer.
+
+### Not yet tested
+- A clean install of this disk image on macOS 14, and on macOS 15 or later, on a Mac where Nictate was never installed.
+- The Screen Recording consent prompt on a fresh permission state. It was not reproduced on this build.
+- VoiceOver speech of "No text found" and "Couldn't copy text. Try again." on this build.
+- Recent Captures while a link question is showing.
+- macOS 26 beyond the CI runs ([#2](https://github.com/jrthormann/Nictate/issues/2)).
+
+### Known limitations
+- Signed with a local certificate, not an Apple Developer ID certificate, and not notarized. macOS asks you to approve the
+  first launch.
+- Built for macOS 14 and later. The maintainer has tested it on macOS 27 only.
+- History is a plain file of the 15 most recent captures. It is not encrypted separately.
+- Users with an earlier encrypted History can import it once from Settings > General > History.
+
 ## [1.0.0-beta.2] - 2026-10-11
 
 The second public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
