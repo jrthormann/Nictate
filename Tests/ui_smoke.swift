@@ -117,6 +117,25 @@ func scanState(_ line: ScanLine, _ baseline: Set<ObjectIdentifier>) -> String {
 /// Whether a window a check watches is on screen, off it, or already released, for a failed check to print.
 @MainActor
 func windowState(_ window: NSWindow?) -> String { window.map { $0.isVisible ? "visible" : "hidden" } ?? "released" }
+/// Whether the window server still draws `window`, however faintly. A popover's `isVisible` turns false the moment it starts
+/// to close, while its fade-out is still on screen for a quarter of a second: the stills of a capture would include it.
+@MainActor
+func isDrawn(_ window: NSWindow?) -> Bool {
+    guard let window,
+          let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
+    return list.contains {
+        ($0[kCGWindowNumber as String] as? Int) == window.windowNumber && (($0[kCGWindowAlpha as String] as? Double) ?? 1) > 0
+    }
+}
+/// What a capture saw when its stills were requested: whether the status panel's window was still drawn, and whether the popover still counted as shown.
+final class PanelAtStills: @unchecked Sendable {
+    var window: NSWindow?
+    var panel: StatusPanel?
+    var requested = false
+    var drawn = false
+    var popoverShown = false
+    var count = 0
+}
 /// Holds an object without keeping it alive, so a check can see that it was released.
 final class WeakRef<Object: AnyObject> {
     weak var object: Object?
@@ -865,6 +884,97 @@ do {
           "panel top \(frame.maxY), button bottom \(buttonBottom), height \(frame.height)")
     panel.close()
     anchor.orderOut(nil)
+}
+
+// MARK: Capture from the panel: the panel is off the screen before the stills are taken, or its fade-out is in the capture
+/// Opens a real status panel on a stand-in for the menu bar button, with a capture that records what it saw when its stills were
+/// requested, then hands it to `act`. The panel is closed and everything released afterwards.
+@MainActor
+func withOpenPanel(animates: Bool, closeTimeout: TimeInterval? = nil, shown: Bool = true,
+                   _ act: (StatusPanelModel, StatusPanel, PanelAtStills, CaptureCoordinator) -> Void) {
+    let probe = PanelAtStills()
+    var source = CaptureSource()
+    source.permitted = { true }
+    source.otherAppInFront = { false } // Started from Nictate's own panel, so no key panel.
+    source.stills = {
+        probe.count += 1
+        probe.requested = true
+        probe.drawn = isDrawn(probe.window)
+        probe.popoverShown = probe.panel?.isShown ?? false
+        return nil // The unreadable-screen path ends the capture without a selection.
+    }
+    let board = NSPasteboard(name: NSPasteboard.Name("nictate-ui-panel-capture-\(UUID().uuidString)"))
+    let history = History(store: JSONHistoryStore(fileURL: scratchHistoryFile("nictate-ui-panel-capture-")), isEnabled: { true })
+    let coordinator = CaptureCoordinator(status: StatusItemController(), windows: WindowCoordinator(),
+                                         clipboard: ClipboardWriter(pasteboard: board), source: source)
+    let model = StatusPanelModel(capture: coordinator, windows: WindowCoordinator(), history: history)
+    let panel = StatusPanel(model: model, animates: animates)
+    if let closeTimeout { panel.closeTimeout = closeTimeout }
+    probe.panel = panel
+    let screen = NSScreen.main ?? NSScreen.screens[0]
+    let anchor = NSWindow(contentRect: NSRect(x: screen.frame.midX, y: screen.frame.maxY - 60, width: 40, height: 40),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+    let button = NSButton(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+    anchor.contentView?.addSubview(button)
+    anchor.orderFrontRegardless()
+    let shownMarker = Marker()
+    let observer = NotificationCenter.default.addObserver(forName: NSPopover.didShowNotification, object: nil, queue: .main) { _ in shownMarker.fired = true }
+    if shown {
+        panel.toggle(relativeTo: button)
+        check(waitUntil(6) { shownMarker.fired && panel.isShown }, "panel capture (animates \(animates)): the panel is open and finished opening")
+        // Kept before the capture: once the popover has closed, its content view may no longer reach the window.
+        probe.window = panel.window
+        check(waitUntil(6) { isDrawn(probe.window) }, "panel capture (animates \(animates)): the panel's window is drawn before the choice")
+    }
+    act(model, panel, probe, coordinator)
+    waitUntil { !coordinator.isCapturing }
+    if panel.isShown { panel.close() }
+    waitUntil { !panel.isShown }
+    check(!panel.isShown && !isDrawn(probe.window), "panel capture (animates \(animates)): the panel is closed afterwards",
+          "shown \(panel.isShown), drawn \(isDrawn(probe.window))")
+    NotificationCenter.default.removeObserver(observer)
+    anchor.orderOut(nil)
+    board.releaseGlobally()
+}
+
+// With and without the close animation: without it the popover can report its close from inside performClose. The window
+// server drops a closed window a frame or two after the close is reported, so only the animated panel, whose fade-out is
+// what the stills caught, is checked against what the server draws; both must have reported the close.
+for animates in [true, false] {
+    withOpenPanel(animates: animates) { model, _, probe, _ in
+        model.captureText()
+        check(waitUntil(6) { probe.requested }, "panel capture (animates \(animates)): Capture Text asks for the stills")
+        check(probe.requested && !probe.popoverShown && !(animates && probe.drawn),
+              "panel capture (animates \(animates)): the panel has closed when the stills are taken",
+              "window drawn \(probe.drawn), popover shown \(probe.popoverShown), stills asked \(probe.count) time(s)")
+    }
+    withOpenPanel(animates: animates) { model, _, probe, _ in
+        model.captureCode()
+        check(waitUntil(6) { probe.requested }, "panel capture (animates \(animates)): Capture Code asks for the stills")
+        check(probe.requested && !probe.popoverShown && !(animates && probe.drawn),
+              "panel capture (animates \(animates)): the panel has closed for Capture Code too",
+              "window drawn \(probe.drawn), popover shown \(probe.popoverShown), stills asked \(probe.count) time(s)")
+    }
+}
+// A close that never reports: the choice is not lost. The capture starts anyway, once, and the late close does not start another.
+withOpenPanel(animates: true, closeTimeout: 0.05) { model, panel, probe, _ in
+    model.captureText()
+    check(waitUntil(6) { probe.requested }, "panel capture, no close reported: the capture starts anyway")
+    waitUntil { !panel.isShown }
+    waitPast(0.2)
+    check(probe.count == 1, "panel capture, no close reported: the close that comes later starts nothing more", "stills asked \(probe.count) time(s)")
+}
+// With no panel open there is nothing to wait for: the capture starts at once.
+withOpenPanel(animates: true, shown: false) { model, panel, probe, _ in
+    model.captureText()
+    check(waitUntil(6) { probe.requested } && !panel.isShown, "panel capture, panel not open: the capture starts without waiting")
+}
+// A panel closed with no choice made starts no capture.
+withOpenPanel(animates: true) { _, panel, probe, _ in
+    panel.close()
+    waitUntil { !panel.isShown }
+    waitPast(0.2)
+    check(probe.count == 0, "panel capture: closing the panel without a choice captures nothing", "stills asked \(probe.count) time(s)")
 }
 
 // MARK: Keyboard selection: the text field reports its text on every key, so a repeated search must not reset the highlight

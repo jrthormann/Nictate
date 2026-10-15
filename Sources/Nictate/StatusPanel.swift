@@ -24,6 +24,8 @@ final class StatusPanelModel: ObservableObject {
     private let windows: WindowCoordinator
     /// Closes the panel once an action has done its job.
     var dismiss: () -> Void = {}
+    /// Closes the panel and runs the action once it is off the screen. With no panel to wait for, it runs at once.
+    var dismissThen: (@escaping () -> Void) -> Void = { $0() }
 
     /// The history the panel shows. The app passes its shared history; tests pass a disposable one.
     private let history: History
@@ -77,8 +79,9 @@ final class StatusPanelModel: ObservableObject {
     var codeHotKeyLabel: String? { settings.shortcutLabel(for: .captureCode) }
     var codeMode: Bool { settings.codeMode }
 
-    func captureText() { dismiss(); capture.capture(mode: .text) }
-    func captureCode() { dismiss(); capture.capture(mode: .code) }
+    /// A capture takes its stills straight away, so it starts only once the panel is gone: its fade-out would be in the picture.
+    func captureText() { dismissThen { [capture] in capture.capture(mode: .text) } }
+    func captureCode() { dismissThen { [capture] in capture.capture(mode: .code) } }
     func cycleHistory() { dismiss(); capture.rotateHistory(); FocusReturn.shared.returnIfStillActive() }
     /// Escape closes the panel and gives focus back to the app the user came from.
     func closeReturningFocus() { dismiss(); FocusReturn.shared.returnIfStillActive() }
@@ -183,15 +186,28 @@ final class StatusPanelModel: ObservableObject {
 
 /// The menu bar popover that holds the panel. It closes on a click outside, which is the expected behaviour here.
 @MainActor
-final class StatusPanel {
+final class StatusPanel: NSObject, NSPopoverDelegate {
     let model: StatusPanelModel
     private let popover = NSPopover()
+    /// What waits for the popover to finish closing. Its fade-out takes about half a second, and the window server draws it
+    /// until then, though the window already reports itself as not visible.
+    private var afterClose: (() -> Void)?
+    /// Runs `afterClose` if the popover never reports that it closed, so a choice made in the panel is never lost.
+    private var closeDeadline: DispatchWorkItem?
+    /// How long to wait for the close before capturing anyway, about twice the fade-out.
+    var closeTimeout: TimeInterval = 1.0
 
-    init(model: StatusPanelModel) {
+    init(model: StatusPanelModel, animates: Bool = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
         self.model = model
+        super.init()
+        popover.delegate = self
         model.dismiss = { [weak self] in self?.close() }
+        model.dismissThen = { [weak self] action in
+            guard let self else { return action() }
+            self.close(then: action)
+        }
         popover.behavior = .transient
-        popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        popover.animates = animates
         // The popover places itself from the content size it knows when it opens. Without this, SwiftUI's later
         // growth moves the bottom edge and the panel rises over the menu bar.
         let host = NSHostingController(rootView: StatusPanelView(model: model))
@@ -219,6 +235,31 @@ final class StatusPanel {
 
     func close() {
         popover.performClose(nil)
+    }
+
+    /// Closes the popover and runs `action` once it has closed, or at once when it is not shown. One action waits at a time.
+    func close(then action: @escaping () -> Void) {
+        guard popover.isShown else { return action() }
+        guard afterClose == nil else { return } // Already closing for another choice: this one finds the panel gone.
+        // Stored before the close: without animation the popover can report its close from inside `performClose`.
+        afterClose = action
+        popover.performClose(nil)
+        guard afterClose != nil else { return }
+        let deadline = DispatchWorkItem { [weak self] in self?.runAfterClose() }
+        closeDeadline = deadline
+        DispatchQueue.main.asyncAfter(deadline: .now() + closeTimeout, execute: deadline)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        runAfterClose()
+    }
+
+    private func runAfterClose() {
+        closeDeadline?.cancel()
+        closeDeadline = nil
+        guard let action = afterClose else { return }
+        afterClose = nil
+        action()
     }
 }
 
