@@ -18,7 +18,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # These job names are the required status checks on main. Renaming one needs the branch protection rule
+  # changed first, or merges wait for a check that never reports.
+  changes:
+    # Documentation-only changes skip the code jobs. GitHub counts a skipped required check as passed. A failure
+    # here, or a result the script cannot read, runs the code jobs instead.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      # The full history is needed to diff against the base commit of a push or a pull request.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Change detector tests
+        run: scripts/test_ci_code_changed.sh
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: scripts/ci_code_changed.sh
+
   build-and-test:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     # macos-26 is what macos-latest points at today (runner-images README); pinned so a
     # migration of the alias does not change the compiler under the builds unannounced.
     runs-on: macos-26
@@ -66,6 +90,8 @@ jobs:
           retention-days: 1
 
   intel-tests:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     # The unit tests as an Intel binary, under Rosetta. Separate from build-and-test so the two run side by side.
     runs-on: macos-26
     timeout-minutes: 30
@@ -77,6 +103,8 @@ jobs:
           TEST_ARCH=x86_64 Tests/run_tests.sh
 
   ui-smoke:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     # Real AppKit objects, so this job needs a window server. It builds its own binary, so it runs side by side with build-and-test.
     runs-on: macos-26
     timeout-minutes: 20
@@ -89,7 +117,9 @@ jobs:
     # The oldest macOS Nictate supports. It compiles nothing: the macos-14
     # image ships an SDK too old for the macOS 26 APIs the code guards with
     # #available, so it runs what build-and-test built on the newest macOS.
-    needs: build-and-test
+    # Runs after build-and-test passed, and only when the code jobs ran (not for documentation-only changes).
+    needs: [changes, build-and-test]
+    if: ${{ !cancelled() && needs.build-and-test.result != 'failure' && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: macos-14
     timeout-minutes: 20
     steps:
@@ -114,6 +144,8 @@ jobs:
         run: |
           set +e; build/run_tests | tee test-output.txt; status=${PIPESTATUS[0]}; set -e
           unexpected=$(grep '^FAIL' test-output.txt | grep -v -e 'ocr: a QR code is read as its payload' -e 'ocr: a code-only capture reads the QR code' || true)
+          # The runner prints its summary last. Without one it stopped early, most likely a crash, which no QR warning covers.
+          if ! grep -q '^[0-9][0-9]* passed' test-output.txt; then echo "::error::The test runner stopped before its summary (exit $status)"; exit 1; fi
           if [ -n "$unexpected" ]; then echo "$unexpected"; exit 1; fi
           if [ "$status" -ne 0 ]; then echo "::warning::QR checks skipped on the macOS 14 VM (paravirtual GPU)"; fi
       - name: App signature
