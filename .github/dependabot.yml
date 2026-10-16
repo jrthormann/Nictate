@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # The actions in ci.yml are pinned to commit SHAs. Dependabot opens a weekly pull request when a pin is behind,
+  # so the pins stay current without anyone checking by hand.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
