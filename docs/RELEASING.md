@@ -11,7 +11,7 @@ block its first launch; `docs/INSTALL.md` explains how to open it with the syste
 
 ## Release environment
 
-The official beta.2 image is produced in the verified release environment: macOS 27 with Xcode 27, on the maintainer's Mac
+The official image for each release is produced in the verified release environment: macOS 27 with Xcode 27, on the maintainer's Mac
 (macOS 27.0.1, Xcode 27.0, build 27A266a). This constrains how the image is built, not what it runs on. Nictate's minimum
 deployment target is still macOS 14 (`LSMinimumSystemVersion` in `Sources/Nictate/Resources/Info.plist`). The CI runners,
 macOS 26 and macOS 14, test the release commit, and they do not produce the image.
@@ -162,7 +162,7 @@ Four separate things are involved. Keep them apart when writing release notes or
   fetched by Gatekeeper. Notarization also needs the paid program. Nictate is not notarized.
 - **Gatekeeper's normal distribution requirement.** For software downloaded from the internet and distributed outside the
   Mac App Store, Gatekeeper's standard policy generally requires both Developer ID signing and notarization. An app that
-  meets both opens without an approval step. Nictate beta.2 meets neither, so macOS blocks its first launch until the user
+  meets both opens without an approval step. Nictate meets neither, so macOS blocks its first launch until the user
   approves it in System Settings, Privacy & Security ("Open Anyway"). That manual step is expected for this beta. See
   [Apple's notarization guidance](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
