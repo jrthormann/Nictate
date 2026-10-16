@@ -8,14 +8,16 @@ decide() {
     echo "code=$1" >> "${GITHUB_OUTPUT:-/dev/null}"
 }
 
-base="${BASE:-}"
-head="${HEAD:-}"
+base="${BASE_SHA:-}"
+head="${HEAD_SHA:-}"
 if [[ -z "$base" || -z "$head" || "$base" =~ ^0+$ ]]; then
     decide true "no base commit to compare"
     exit 0
 fi
-if ! changed=$(git diff --name-only "$base" "$head"); then
-    decide true "could not diff $base..$head"
+# Diffs from the merge base, so a branch behind main sees only its own changes. Renames are off, so a file moved
+# out of code shows its old path too.
+if ! changed=$(git diff --name-only --no-renames "$base...$head"); then
+    decide true "could not diff $base...$head"
     exit 0
 fi
 if [[ -z "$changed" ]]; then

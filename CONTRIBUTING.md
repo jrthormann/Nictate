@@ -46,6 +46,8 @@ make check        # unit tests, UI tests, string and source checks
 
 Keep changes small enough to review in one sitting. Tell us when something is untested.
 
+A change that touches only documentation (files under `docs/`, plus the README, CHANGELOG, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT and LICENSE) skips the build and test jobs in CI. Their checks report as skipped, which GitHub counts as passed. Any other change runs every job, so a change to code, scripts or the workflow is always tested.
+
 ## Manual checks
 
 Focus and the desktop cannot be tested headlessly, so `make check` does not cover them. Before a release, check these
