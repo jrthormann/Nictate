@@ -34,7 +34,7 @@ body:
       options:
         - Yes, without help
         - Yes, after following the steps in docs/INSTALL.md
-        - No
+        - "No"
     validations:
       required: true
   - type: checkboxes
@@ -60,5 +60,4 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I checked that Screen Recording is granted for Nictate.
-          required: true
+        - label: If Nictate opens, I checked that Screen Recording is granted for it.
