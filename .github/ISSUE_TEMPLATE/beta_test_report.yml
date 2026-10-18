@@ -1,0 +1,63 @@
+name: Beta test report
+description: Tell us how Nictate works on your Mac. A report that says it worked is useful too.
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for testing. Please do not include text you captured if it is private.
+  - type: input
+    id: version
+    attributes:
+      label: Nictate version
+      description: Shown in About Nictate.
+      placeholder: "1.0.0-beta.3"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 14.7"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and chip
+      description: For example, MacBook Air (M2) or Mac mini (Intel, 2018).
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Did the install work?
+      options:
+        - Yes, without help
+        - Yes, after following the steps in docs/INSTALL.md
+        - "No"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Which checks did you run?
+      description: Optional. Tick what you tried.
+      options:
+        - label: Capture with ⇧⌘2 in a web browser
+        - label: Recent Captures with ⌥⇧⌘2
+        - label: Escape cancels a selection
+        - label: The Settings window stays in front
+        - label: VoiceOver (not audited yet, so tell us what you hear)
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you tried, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: checkboxes
+    id: screen_recording
+    attributes:
+      label: Before submitting
+      options:
+        - label: If Nictate opens, I checked that Screen Recording is granted for it.
