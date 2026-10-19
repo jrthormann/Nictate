@@ -29,11 +29,16 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 - [ ] `make check` and `make build` pass on the release commit, with no warnings.
 - [ ] The six manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build (`make test-app`).
 - [ ] The new tag points at the release commit. No existing tag was moved.
+- [ ] The `Nictate Local Signing` identity is backed up encrypted on two separate offline media, with the passphrase
+      stored apart from both. The private key's exportability has been checked, and at least one backup has been
+      validated.
 - [ ] `BUILD_NUMBER=<n> make dmg` built the image in a new `build/release/<version>/` folder with the local identity, and
       the artifact checks in step 6 pass.
 - [ ] The draft release has the image and `SHA256SUMS`, and its notes are the CHANGELOG section.
 - [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
       untested in the release notes.
+- [ ] The release notes say what CI does not check: CI runs builds, unit, OCR, UI smoke and app-signature checks. It does not install the DMG, complete the Gatekeeper flow, or grant Screen Recording permission. A person checks those, plus the restart, capture, clipboard and History, and the notes list the versions they were run on.
+- [ ] The release notes say Save Captures is off by default, and that users who already have a saved history file keep their setting.
 - [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
 - [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and users of
       beta.1 must install the current release by hand.

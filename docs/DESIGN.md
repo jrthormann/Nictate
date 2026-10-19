@@ -72,7 +72,7 @@ menu bar blink; it does not appear in ordinary UI. The capture scan line is whit
 ## 6. Motion & Interaction
 
 - Menu bar feedback: one blink for success, two for failure. Reduce Motion tints the icon for one second, without the blink.
-- Overlay: no animation when it appears; it must be on screen within one frame of the shortcut.
+- Overlay: no animation when it appears; it should appear immediately after the shortcut.
 - Scan line: 1.2 s sweep, ease in-out, fading in and out over the first and last 15 %; removed the moment
   recognition ends.
 - Result pill: 200 ms fade in and out. No slide, no bounce.
