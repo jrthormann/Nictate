@@ -9,6 +9,9 @@ Apple Developer Program. A fixed local identity gives every release the same sig
 permission across updates (an ad-hoc signature differs on every build). Because the image is not notarized, macOS may
 block its first launch; `docs/INSTALL.md` explains how to open it with the system's own controls.
 
+This checklist covers `1.0.0-beta.N` releases. A `1.0.0` stable release uses the Developer ID signing and notarization
+procedure instead, which is written when that path exists. Do not use this checklist to publish a stable release.
+
 ## Release environment
 
 The official image for each release is produced in the verified release environment: macOS 27 with Xcode 27, on the maintainer's Mac
