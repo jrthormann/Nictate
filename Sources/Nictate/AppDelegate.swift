@@ -17,6 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The history loads in the background: a slow file read must never hold up the menu bar. Clearing on quit
         // is skipped by a crash or a forced quit, so the launch after one clears instead, once the history is read.
         let loading = History.shared.refresh()
+        // Save Captures is decided once per install. The history file is read off the main actor, and the result applied here.
+        Task { @MainActor in
+            let store = AppHistoryStore.make()
+            let readable = await Task.detached(priority: .utility) { Settings.hasReadableHistory(store) }.value
+            settings.applyHistoryChoice(readable: readable)
+        }
         Task { @MainActor in
             await loading?.value
             if HistoryDeletion.clearsAtLaunch(clearOnQuit: settings.clearHistoryOnQuit, savedCount: History.shared.items.count) {

@@ -2086,14 +2086,14 @@ do {
     }
 
     let noFile = betaInstall("no-file", historyOn: true)
-    _ = Settings(defaults: noFile, historyStore: sealedStore("choice-no-file"))
+    Settings(defaults: noFile).applyHistoryChoice(readable: Settings.hasReadableHistory(sealedStore("choice-no-file")))
     check(noFile.bool(forKey: StorageKeys.historyEnabled) == false,
           "choice: a beta user with no history file is switched off once, even if they turned it on before saving a capture")
 
     let readableStore = sealedStore("choice-readable")
     _ = readableStore.save(HistorySnapshot(texts: ["kept"], dates: [1]))
     let readable = betaInstall("readable", historyOn: true)
-    _ = Settings(defaults: readable, historyStore: readableStore)
+    Settings(defaults: readable).applyHistoryChoice(readable: Settings.hasReadableHistory(readableStore))
     check(readable.bool(forKey: StorageKeys.historyEnabled) == true,
           "choice: a readable history file keeps Save Captures as it was")
 
@@ -2101,24 +2101,25 @@ do {
     _ = corruptStore.save(HistorySnapshot(texts: ["kept"], dates: [1]))
     _ = try? Data("not json".utf8).write(to: corruptStore.fileURL)
     let corrupt = betaInstall("corrupt", historyOn: true)
-    _ = Settings(defaults: corrupt, historyStore: corruptStore)
+    Settings(defaults: corrupt).applyHistoryChoice(readable: Settings.hasReadableHistory(corruptStore))
     check(corrupt.bool(forKey: StorageKeys.historyEnabled) == false,
           "choice: an unreadable history file leaves Save Captures off")
+    check(!Settings.hasReadableHistory(sealedStore("choice-missing")), "choice: a missing history file counts as none")
 
     let chosen = betaInstall("chosen", historyOn: true)
-    let chosenStore = sealedStore("choice-chosen")
-    let chosenSettings = Settings(defaults: chosen, historyStore: chosenStore)
+    let chosenSettings = Settings(defaults: chosen)
+    chosenSettings.applyHistoryChoice(readable: false)
     chosenSettings.historyEnabled = true
-    _ = Settings(defaults: chosen, historyStore: chosenStore)
+    Settings(defaults: chosen).applyHistoryChoice(readable: false)
     check(chosen.bool(forKey: StorageKeys.historyEnabled) == true,
           "choice: a choice made after the update survives a restart")
 
     let resetStore = sealedStore("choice-reset")
     _ = resetStore.save(HistorySnapshot(texts: ["kept"], dates: [1]))
     let reset = betaInstall("reset", historyOn: true)
-    _ = Settings(defaults: reset, historyStore: resetStore)
+    Settings(defaults: reset).applyHistoryChoice(readable: Settings.hasReadableHistory(resetStore))
     Settings.resetToDefaults(in: reset)
-    _ = Settings(defaults: reset, historyStore: resetStore)
+    Settings(defaults: reset).applyHistoryChoice(readable: Settings.hasReadableHistory(resetStore))
     check(reset.bool(forKey: StorageKeys.historyEnabled) == false,
           "choice: after Reset Nictate, Save Captures stays off at the next launch, even with a readable history file")
 }
@@ -2132,7 +2133,7 @@ do {
 
     let existing = UserDefaults(suiteName: "nictate-tests-existing-\(UUID().uuidString)")!
     existing.set(true, forKey: StorageKeys.didOnboard)
-    _ = Settings(defaults: existing, historyStore: sealedStore("existing-no-file"))
+    Settings(defaults: existing).applyHistoryChoice(readable: Settings.hasReadableHistory(sealedStore("existing-no-file")))
     check(existing.bool(forKey: StorageKeys.historyEnabled) == false,
           "keep history: an existing install with no history file starts with it off",
           "value \(String(describing: existing.object(forKey: StorageKeys.historyEnabled))), applied \(existing.bool(forKey: StorageKeys.historyDefaultApplied)), onboarded \(existing.bool(forKey: StorageKeys.didOnboard))")
