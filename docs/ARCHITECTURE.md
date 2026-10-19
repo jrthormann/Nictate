@@ -114,7 +114,7 @@ global shortcut (HotKeyManager, Carbon)
 
 ## Known limits
 
-- An Esc that reaches the window server before the key panel is key still goes to the app the user is in. In a probe with a panel made on the shortcut, an Esc 0 ms after the shortcut reached that app 10 of 10 times, 5 ms after 7 of 10, and 10 ms or later 0 of 10. The shipped panel is made at launch, so it is key sooner; the shipped build was not measured at these delays. A keystroke after the shortcut takes far longer than that.
+- **Esc right after the shortcut.** If Esc reaches the window server before `EscapeKeyPanel` is key, it goes to the app you were using instead of cancelling the capture. The window is the short time after the shortcut before the panel is key. Probe results, which are context and not shipped-build results: with a panel made on the shortcut, an Esc 0 ms after the shortcut reached that app 10 of 10 times, 5 ms after 7 of 10, and 10 ms or later 0 of 10. The shipped panel is made at launch, so it is key sooner. The shipped build has not been measured at these delays; Nictate does not promise a timing window. If the previous app receives the Esc, press Esc again once the selection is visible, and that Esc cancels the capture.
 - Vision can misread isolated symbols in very large or dark-theme text.
 - Trailing whitespace on a line is not detectable.
 - Side-by-side blocks of long lines are treated as columns; a table of long cells could be split.
