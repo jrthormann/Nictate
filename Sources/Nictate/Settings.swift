@@ -15,7 +15,8 @@ final class Settings: ObservableObject {
 
     /// The app uses `shared`, over the standard defaults. Tests pass a suite of their own, so they never
     /// read or write the user's preferences and parallel runs cannot see each other's values.
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         historyStore: any HistoryStore = JSONHistoryStore(fileURL: JSONHistoryStore.standardURL)) {
         self.defaults = defaults
         // Keep History is off for new installs. An install that already had the app set up keeps the behaviour it had
         // (on), unless the user has chosen otherwise. The marker records that this rule has been applied.
@@ -24,6 +25,14 @@ final class Settings: ObservableObject {
                 defaults.set(true, forKey: StorageKeys.historyEnabled)
             }
             defaults.set(true, forKey: StorageKeys.historyDefaultApplied)
+        }
+        // The rule above cannot tell its switch-on from a choice, so Save Captures is decided once more: off unless a
+        // readable history file shows the user kept it on. The marker keeps this from running again, Reset included.
+        if !defaults.bool(forKey: StorageKeys.historyChoiceApplied) {
+            if !Settings.hasReadableHistory(historyStore) {
+                defaults.set(false, forKey: StorageKeys.historyEnabled)
+            }
+            defaults.set(true, forKey: StorageKeys.historyChoiceApplied)
         }
         defaults.register(defaults: [
             StorageKeys.hotKeyCode: kVK_ANSI_2, StorageKeys.hotKeyMods: cmdKey | shiftKey, StorageKeys.hotKeyLabel: "⇧⌘2",
@@ -153,6 +162,12 @@ final class Settings: ObservableObject {
         set { store(newValue, StorageKeys.historyEnabled) }
     }
     var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
+    /// Whether the saved history file exists and decodes. A missing, unreadable or corrupt file counts as none.
+    private static func hasReadableHistory(_ store: any HistoryStore) -> Bool {
+        if case .loaded = store.load() { return true }
+        return false
+    }
+
     /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
     /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {
