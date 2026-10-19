@@ -12,11 +12,35 @@ Open an issue with the [bug report form](https://github.com/jrthormann/Nictate/i
 
 Please don't paste captured text you want to keep private. A short description is enough.
 
+Bug reports and questions are handled on a best-effort basis. There is no promised response time.
+
 ## Propose a change
 
 For a new feature or a larger change, open an issue first and describe the problem it solves. Small fixes, documentation and translations can go straight to a pull request.
 
 [docs/PRODUCT.md](docs/PRODUCT.md) says what Nictate is for and what it already does. A proposal that fits its principles and needs is easier to decide on.
+
+## Outside pull requests before 1.0
+
+Before 1.0.0 stable, outside pull requests are limited to:
+
+- Accessibility work linked to [#1](https://github.com/jrthormann/Nictate/issues/1).
+- macOS compatibility work or test evidence linked to [#2](https://github.com/jrthormann/Nictate/issues/2).
+- Documentation and translation fixes.
+
+Each pull request must:
+
+- Link the issue it addresses.
+- Explain what changed and why.
+- Include manual-test notes where CI cannot fully check the change.
+- Pass `make check` when code, scripts, workflows or localized strings change.
+- Be reviewed and approved by the maintainer before it is merged.
+
+Documentation-only pull requests skip the build and test jobs in CI, so the review checks accuracy and consistency with
+[docs/PRODUCT.md](docs/PRODUCT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the release documentation.
+
+Features, refactors, capture pipeline changes, settings changes, release tooling, signing, updates and security-sensitive
+code wait until after 1.0.0 stable, unless the maintainer opens an issue and invites the change.
 
 ## Build from source
 

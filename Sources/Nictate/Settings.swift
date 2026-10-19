@@ -14,7 +14,8 @@ final class Settings: ObservableObject {
     private let defaults: UserDefaults
 
     /// The app uses `shared`, over the standard defaults. Tests pass a suite of their own, so they never
-    /// read or write the user's preferences and parallel runs cannot see each other's values.
+    /// read or write the user's preferences and parallel runs cannot see each other's values. Init reads no files:
+    /// the Save Captures decision waits for `applyHistoryChoice`, which the launch path calls with the file already checked.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // Keep History is off for new installs. An install that already had the app set up keeps the behaviour it had
@@ -153,6 +154,21 @@ final class Settings: ObservableObject {
         set { store(newValue, StorageKeys.historyEnabled) }
     }
     var clearHistoryOnQuit: Bool { get { flag(StorageKeys.clearHistoryOnQuit) } set { store(newValue, StorageKeys.clearHistoryOnQuit) } }
+    /// Whether the saved history file exists and decodes. A missing, unreadable or corrupt file counts as none.
+    /// Reads the file, so callers run it off the main actor.
+    nonisolated static func hasReadableHistory(_ store: any HistoryStore) -> Bool {
+        if case .loaded = store.load() { return true }
+        return false
+    }
+
+    /// Save Captures after an update: off unless the saved history was readable. Runs once per install, from the launch
+    /// path, with the file already checked off the main actor. The marker keeps it from running again, Reset included.
+    func applyHistoryChoice(readable: Bool) {
+        guard !defaults.bool(forKey: StorageKeys.historyChoiceApplied) else { return }
+        if !readable { historyEnabled = false }
+        defaults.set(true, forKey: StorageKeys.historyChoiceApplied)
+    }
+
     /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
     /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {

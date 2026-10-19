@@ -13,7 +13,7 @@
   <br><br>
   <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=Descargar&style=for-the-badge&color=545CFA" alt="Descargar la última versión"></a>
   <br><br>
-  macOS 14 o posterior &nbsp;·&nbsp; Apple silicon e Intel &nbsp;·&nbsp; Gratis, licencia MIT
+  macOS 14 o posterior &nbsp;·&nbsp; Apple silicon e Intel (Intel: solo CI con Rosetta) &nbsp;·&nbsp; Gratis, licencia MIT
   <br><br>
   <a href="#compilar-desde-el-código">Compilarla tú mismo&nbsp;&rsaquo;</a>
   <br><br>
@@ -113,7 +113,7 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 
 | | |
 |:--|:--|
-| **Compatibilidad** | Hecha para macOS. Versión mínima de despliegue: macOS 14 Sonoma, en Apple silicon e Intel. Probada por el autor en macOS 27. |
+| **Compatibilidad** | Hecha para macOS. Versión mínima de despliegue: macOS 14 Sonoma, en Apple silicon; Intel, verificado solo con Rosetta en CI. Probada por el autor en macOS 27. |
 | **Tamaño** | Unos 4 MB |
 | **Idiomas** | Inglés y español. El texto se reconoce en cualquier idioma que Vision admita. |
 | **Hecha con** | Swift, AppKit, SwiftUI, Vision y ScreenCaptureKit |

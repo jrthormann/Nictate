@@ -98,8 +98,8 @@ check in [CONTRIBUTING.md](../CONTRIBUTING.md) that covers it.
 |:--|:--|:--|
 | NFR-1 | No account, no analytics, and no network request except Check for Updates. | Implemented; `SECURITY.md` states the scope |
 | NFR-2 | History is a plain file. Nictate does not encrypt it. | Implemented; stated in the README |
-| NFR-3 | macOS 14 or later, as a universal app for Apple silicon and Intel. | Implemented; CI tests both architectures |
-| NFR-4 | The selection appears within one frame of the shortcut, and recognition is warmed up at launch. | Design target; not measured in CI |
+| NFR-3 | macOS 14 or later, as a universal app for Apple silicon and Intel. | Implemented; CI verifies the Intel test binary only under Rosetta. No Intel-hardware run has been recorded. |
+| NFR-4 | The selection appears immediately after the shortcut, and recognition is warmed up at launch. | Design goal; no latency target is measured or promised |
 | NFR-5 | Light and Dark appearance, Increase Contrast, Reduce Motion, and Reduce Transparency are respected. | Partly implemented; VoiceOver not audited ([#1](https://github.com/jrthormann/Nictate/issues/1)) |
 | NFR-6 | Every release is built from source with warnings treated as errors. | Implemented; `.github/workflows/ci.yml` |
 
@@ -116,6 +116,12 @@ A release is ready when all of these hold for the release commit:
 Individual needs have their own checks. For example, "get the text in one step" holds when a two-line sample is
 recognized exactly and copied after one shortcut and one drag. The 1.0.0-beta.1 CHANGELOG records that check as done.
 
+## Distribution
+
+1.0.0 stable will be Developer ID signed and notarized by Apple, so it can open without a Gatekeeper workaround.
+Until then, public releases are 1.0.0-beta.N test releases: they are locally signed, not notarized, and require
+the first-launch approval steps in [docs/INSTALL.md](INSTALL.md). They are not Apple-verified.
+
 ## Roadmap
 
 **Now: 1.0.0-beta.3, the current public test release.** The
@@ -125,12 +131,13 @@ scope is frozen. Only fixes go in, and the feedback decides what follows.
 
 - Compatibility tests on macOS 14, 15 and 26 ([#2](https://github.com/jrthormann/Nictate/issues/2)).
 - A VoiceOver audit ([#1](https://github.com/jrthormann/Nictate/issues/1)).
+- #23 (Reset dialog checkbox) resolved through a documented beta.3 DMG run.
+- Every beta report labelled `blocker` has a triage decision: fixed, non-blocker, or deferred past 1.0.
 - Fixes for the problems beta users report.
+- Developer ID signing and Apple notarization.
 
 **Later (1.1 at the earliest, not committed).**
 
-- Developer ID signing and notarization, once adoption, contributor interest, or demonstrated demand justifies the Apple
-  Developer Program membership.
 - Changes that come from the first reports.
 - Evaluating Swift Package Manager, only if it brings a concrete benefit.
 - More automation for the release process.

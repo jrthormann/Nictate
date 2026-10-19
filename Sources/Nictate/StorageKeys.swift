@@ -51,6 +51,8 @@ enum StorageKeys {
     static let didOnboard = "didOnboard"
     /// Set once the Keep History default has been applied (see Settings.init).
     static let historyDefaultApplied = "historyDefaultApplied"
+    /// Set once Save Captures has been decided for this update: off unless a readable history file exists (see Settings.init).
+    static let historyChoiceApplied = "historyChoiceApplied"
     /// Whether Recognition’s Advanced section is open (a UI state, not a recognition setting).
     static let advancedRecognitionExpanded = "advancedRecognitionExpanded"
     /// Set once the earlier encrypted history has been imported and read back. Hides the import action.

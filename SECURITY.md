@@ -19,7 +19,8 @@ Include as much of the following as you can:
 - The Nictate version, shown in About Nictate, and your macOS version.
 - Anything you tried, and what happened.
 
-I review reports as time allows. Please keep the details private until a fix is released or the report has been
+I review reports as time allows, and I aim to acknowledge new private security reports within 10 business days.
+I cannot guarantee a response time. Please keep the details private until a fix is released or the report has been
 reviewed.
 
 ## Supported versions
