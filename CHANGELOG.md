@@ -3,6 +3,34 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-beta.4] - 2026-10-20
+
+The fourth public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
+
+**Two things to know before you install:**
+
+- **Nictate isn't notarized by Apple.** macOS asks you to approve it once, on first launch. The Install steps in the README show how.
+- **If you have 1.0.0-beta.1, install beta.4 by hand.** Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. Download beta.4 from the [releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
+
+### Changed
+- **Reset Settings asks about saved captures in a second dialog.** The hidden checkbox is gone: the first dialog confirms the reset, and a second one offers Keep Captures or Delete Captures. Cancel on either does nothing.
+- **Save Captures is off by default for new installs.** Existing users who already have a readable saved history file keep their current setting.
+
+### Fixed
+- The Reset dialog's "Also delete saved captures" checkbox could stay hidden on first open ([#23](https://github.com/jrthormann/Nictate/issues/23)).
+
+### Tested
+- Automated: `make check` and `make build` pass on the release commit.
+- Manual, on the QA build: both Reset dialogs show the expected text and buttons, and Keep Captures and Delete Captures behave as described.
+
+### Not yet tested
+- The manual checks in CONTRIBUTING.md on this build (copy from the panel, capture, Escape, settings window, switch away, unreadable history, nothing found then retry, link question). They must pass before this release is published.
+- A clean install of this disk image, and the Gatekeeper and Screen Recording first-launch steps, on macOS 14, 15 and 26.
+- Intel hardware: Intel is verified only under Rosetta in CI.
+
+### Known limitations
+- Signed with a local certificate, not an Apple Developer ID certificate, and not notarized. macOS asks you to approve the first launch.
+
 ## [1.0.0-beta.3] - 2026-10-15
 
 The third public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues

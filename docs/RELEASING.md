@@ -75,7 +75,7 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 5. **Build the image.**
 
    ```bash
-   BUILD_NUMBER=23 make dmg
+   BUILD_NUMBER=24 make dmg
    ```
 
    `make dmg` builds one committed revision: `HEAD` by default, or `COMMIT=<sha>`. It never builds the working tree.
