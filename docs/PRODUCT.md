@@ -125,12 +125,12 @@ the first-launch approval steps in [docs/INSTALL.md](INSTALL.md). They are not A
 ## Roadmap
 
 **Now: 1.0.0-beta.4, the current public test release.** The
-scope is frozen. Only fixes go in, and the feedback decides what follows.
+scope is frozen. Only fixes go in, and the feedback decides what follows. The reset-checkbox issue was resolved in
+1.0.0-beta.4 by replacing the checkbox with a second dialog; see [#23](https://github.com/jrthormann/Nictate/issues/23) and the [CHANGELOG](../CHANGELOG.md).
 
 **Before 1.0.0 stable.** These are the plan, not promises:
 
 - Compatibility tests on macOS 14, 15 and 26 ([#2](https://github.com/jrthormann/Nictate/issues/2)).
-- #23 (Reset dialog checkbox) fixed in 1.0.0-beta.4 and confirmed on the released build.
 - Every beta report labelled `blocker` has a triage decision: fixed, non-blocker, or deferred past 1.0.
 - Fixes for the problems beta users report.
 - Developer ID signing and Apple notarization.
