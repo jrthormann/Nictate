@@ -3539,6 +3539,30 @@ check(captureHighlight(selected: true, hovered: false) == .selected, "highlight:
 check(captureHighlight(selected: false, hovered: true) == .hovered, "highlight: a row under the pointer gets only a tint")
 check(captureHighlight(selected: false, hovered: false) == .none, "highlight: other rows are plain")
 
+// Reset dialog: the first answer confirms the reset, the second decides the saved captures. Cancel anywhere does nothing.
+do {
+    check(ResetNictate.plan(resetResponse: .alertFirstButtonReturn, captureResponse: nil) == .cancel,
+          "reset: Cancel on the first dialog cancels the reset")
+    check(ResetNictate.plan(resetResponse: .alertSecondButtonReturn, captureResponse: .alertFirstButtonReturn) == .cancel,
+          "reset: Cancel on the second dialog cancels the reset")
+    check(ResetNictate.plan(resetResponse: .alertSecondButtonReturn, captureResponse: .alertSecondButtonReturn) == .resetKeepingCaptures,
+          "reset: Keep Captures resets and keeps the saved captures")
+    check(ResetNictate.plan(resetResponse: .alertSecondButtonReturn, captureResponse: .alertThirdButtonReturn) == .resetDeletingCaptures,
+          "reset: Delete Captures resets and deletes the saved captures")
+    check(ResetNictate.plan(resetResponse: .alertFirstButtonReturn, captureResponse: .alertThirdButtonReturn) == .cancel,
+          "reset: an answer on the second dialog alone does nothing")
+}
+
+// Reset dialog: Return keeps the captures, and Escape cancels. Only one button answers Return.
+do {
+    let buttons = ResetNictate.capturesDialog().buttons
+    check(buttons.count == 3, "reset: the second dialog has three buttons", "count \(buttons.count)")
+    check(buttons.count == 3 && buttons[0].keyEquivalent == "\u{1b}", "reset: Cancel answers Escape, not Return",
+          "key \(buttons.first?.keyEquivalent ?? "nil")")
+    check(buttons.count == 3 && buttons[1].keyEquivalent == "\r", "reset: Keep Captures answers Return")
+    check(buttons.filter { $0.keyEquivalent == "\r" }.count == 1, "reset: only Keep Captures answers Return")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {

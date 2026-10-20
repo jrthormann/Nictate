@@ -124,7 +124,6 @@
 "History is unavailable right now. New captures are still copied but won't be saved." = "History is unavailable right now. New captures are still copied but won't be saved.";
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Add new captures to the text already copied.";
-"Also delete saved captures" = "Also delete saved captures";
 "Append to Clipboard" = "Append to Clipboard";
 "Ask Before Opening" = "Ask Before Opening";
 "Automatically detect languages, or choose the ones you use." = "Automatically detect languages, or choose the ones you use.";
@@ -181,7 +180,7 @@
 "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again.";
 "Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again." = "Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again.";
 "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment.";
-"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below.";
+"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts." = "Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts.";
 "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them.";
 "Your saved captures can't be loaded from this file." = "Your saved captures can't be loaded from this file.";
 "Discard Unreadable History…" = "Discard Unreadable History…";
@@ -197,3 +196,5 @@
 "Import didn't start" = "Import didn't start";
 "Saved captures can't be imported right now. Restart Nictate, then try again." = "Saved captures can't be imported right now. Restart Nictate, then try again.";
 "Saved captures are being imported. Try again when the import finishes." = "Saved captures are being imported. Try again when the import finishes.";
+"Also delete saved captures?" = "Also delete saved captures?";
+"Saved captures are kept unless you delete them. Deleting them cannot be undone." = "Saved captures are kept unless you delete them. Deleting them cannot be undone.";
