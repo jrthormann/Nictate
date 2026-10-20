@@ -198,5 +198,3 @@
 "Saved captures are being imported. Try again when the import finishes." = "Se están importando las capturas guardadas. Inténtalo de nuevo cuando termine la importación.";
 "Also delete saved captures?" = "¿Eliminar también las capturas guardadas?";
 "Saved captures are kept unless you delete them. Deleting them cannot be undone." = "Las capturas guardadas se conservan, salvo que las elimines. Eliminarlas no se puede deshacer.";
-"Keep Captures" = "Conservar capturas";
-"Delete Captures" = "Eliminar capturas";
