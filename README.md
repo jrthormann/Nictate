@@ -122,7 +122,7 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 ## Status
 
-Nictate 1.0.0-beta.3 is the current public test release: an experimental public beta. The builds in this release were
+Nictate 1.0.0-beta.4 is the current public test release: an experimental public beta. The builds in this release were
 tested on macOS 27. I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited. Reports are welcome.
 The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't.
 

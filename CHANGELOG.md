@@ -3,6 +3,27 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-beta.4] - 2026-10-20
+
+The fourth public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
+
+### Changed
+- **Reset Settings asks about saved captures in a second dialog.** The hidden checkbox is gone: the first dialog confirms the reset, and a second one offers Keep Captures or Delete Captures. Cancel on either does nothing.
+
+### Fixed
+- The Reset dialog's "Also delete saved captures" checkbox could stay hidden on first open ([#23](https://github.com/jrthormann/Nictate/issues/23)).
+
+### Tested
+- Automated: `make check` passes on the release commit (unit checks, UI smoke, strings, source rules, release packaging).
+- Manual, on the QA build: both Reset dialogs show the expected text and buttons, and Keep Captures and Delete Captures behave as described.
+
+### Not yet tested
+- A clean install of this disk image, and the Gatekeeper and Screen Recording first-launch steps, on macOS 14, 15 and 26.
+- Intel hardware: Intel is verified only under Rosetta in CI.
+
+### Known limitations
+- Signed with a local certificate, not an Apple Developer ID certificate, and not notarized. macOS asks you to approve the first launch.
+
 ## [1.0.0-beta.3] - 2026-10-15
 
 The third public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues
