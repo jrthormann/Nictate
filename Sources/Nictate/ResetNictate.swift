@@ -81,12 +81,13 @@ enum ResetNictate {
         return alert
     }
 
-    private static func capturesDialog() -> NSAlert {
+    static func capturesDialog() -> NSAlert {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = tr("Also delete saved captures?")
         alert.informativeText = tr("Saved captures are kept unless you delete them. Deleting them cannot be undone.")
-        alert.addButton(withTitle: tr("Cancel"))
+        let cancel = alert.addButton(withTitle: tr("Cancel"))
+        cancel.keyEquivalent = "\u{1b}"
         let keep = alert.addButton(withTitle: tr("Keep Captures"))
         keep.keyEquivalent = "\r"
         let delete = alert.addButton(withTitle: tr("Delete Captures"))

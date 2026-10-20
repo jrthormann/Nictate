@@ -3553,6 +3553,16 @@ do {
           "reset: an answer on the second dialog alone does nothing")
 }
 
+// Reset dialog: Return keeps the captures, and Escape cancels. Only one button answers Return.
+do {
+    let buttons = ResetNictate.capturesDialog().buttons
+    check(buttons.count == 3, "reset: the second dialog has three buttons", "count \(buttons.count)")
+    check(buttons.count == 3 && buttons[0].keyEquivalent == "\u{1b}", "reset: Cancel answers Escape, not Return",
+          "key \(buttons.first?.keyEquivalent ?? "nil")")
+    check(buttons.count == 3 && buttons[1].keyEquivalent == "\r", "reset: Keep Captures answers Return")
+    check(buttons.filter { $0.keyEquivalent == "\r" }.count == 1, "reset: only Keep Captures answers Return")
+}
+
 for suite in testSuites { suite.wipe() }
 try? FileManager.default.removeItem(at: testPreferences)
 if nameFilters.isEmpty == false && passes + failedChecks.count == 0 {
