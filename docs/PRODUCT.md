@@ -130,8 +130,7 @@ scope is frozen. Only fixes go in, and the feedback decides what follows.
 **Before 1.0.0 stable.** These are the plan, not promises:
 
 - Compatibility tests on macOS 14, 15 and 26 ([#2](https://github.com/jrthormann/Nictate/issues/2)).
-- A VoiceOver audit ([#1](https://github.com/jrthormann/Nictate/issues/1)).
-- #23 (Reset dialog checkbox) resolved through a documented beta.3 DMG run.
+- #23 (Reset dialog checkbox) fixed in 1.0.0-beta.4 and confirmed on the released build.
 - Every beta report labelled `blocker` has a triage decision: fixed, non-blocker, or deferred past 1.0.
 - Fixes for the problems beta users report.
 - Developer ID signing and Apple notarization.
