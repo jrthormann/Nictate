@@ -128,7 +128,7 @@ Nictate 1.0.0-beta.4 es la versión de prueba pública actual: una beta pública
 se probaron en macOS 27. Todavía no la he probado en macOS 14, 15 ni 26, y VoiceOver no ha pasado por una auditoría. Los reportes son
 bienvenidos. El [CHANGELOG](../../CHANGELOG.md) dice qué se ejecutó y qué no.
 
-La 1.0.0-beta.2 es el prelanzamiento público anterior y sigue disponible en la [página de Releases](https://github.com/jrthormann/Nictate/releases).
+La 1.0.0-beta.3 es el prelanzamiento público anterior y sigue disponible en la [página de Releases](https://github.com/jrthormann/Nictate/releases).
 
 ## Instalación
 

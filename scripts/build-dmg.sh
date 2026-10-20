@@ -5,8 +5,8 @@
 # The release disk image, and the only packaging path (make dmg). It packs one committed revision, never the working
 # tree, into OUT_DIR/<version>/: Nictate-<version>.dmg and SHA256SUMS. The defaults are COMMIT=HEAD, OUT_DIR=build/release.
 #
-#   BUILD_NUMBER=23 make dmg
-#   BUILD_NUMBER=23 make dmg COMMIT=<sha> OUT_DIR=<dir>
+#   BUILD_NUMBER=24 make dmg
+#   BUILD_NUMBER=24 make dmg COMMIT=<sha> OUT_DIR=<dir>
 #
 # These checks run before anything is built or written:
 #   - BUILD_NUMBER is the build approved for the version in scripts/release-builds.txt, read from the commit, and no build
@@ -31,7 +31,7 @@ COMMIT="${COMMIT:-HEAD}"
 OUT_DIR="${OUT_DIR:-build/release}"
 VOLUME="Nictate"
 
-[[ -n "${BUILD_NUMBER:-}" ]] || fail "set BUILD_NUMBER to the build approved for this version in scripts/release-builds.txt (1.0.0-beta.3 is 23), e.g. BUILD_NUMBER=23 make dmg"
+[[ -n "${BUILD_NUMBER:-}" ]] || fail "set BUILD_NUMBER to the build approved for this version in scripts/release-builds.txt (1.0.0-beta.4 is 24), e.g. BUILD_NUMBER=23 make dmg"
 case "$BUILD_NUMBER" in
     *[!0-9]*|0*) fail "BUILD_NUMBER must be a whole number without leading zeros, not '$BUILD_NUMBER'" ;;
 esac
