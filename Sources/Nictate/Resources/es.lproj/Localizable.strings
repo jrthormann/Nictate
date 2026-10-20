@@ -124,7 +124,6 @@
 "History is unavailable right now. New captures are still copied but won't be saved." = "El historial no está disponible ahora. Puedes seguir copiando texto, pero las nuevas capturas no se guardarán.";
 "%@, %@ +%d" = "%@, %@ +%d";
 "Add new captures to the text already copied." = "Añade las nuevas capturas al texto que ya está copiado.";
-"Also delete saved captures" = "Eliminar también las capturas guardadas";
 "Append to Clipboard" = "Añadir al portapapeles";
 "Ask Before Opening" = "Preguntar antes de abrir";
 "Automatically detect languages, or choose the ones you use." = "Detectar el idioma automáticamente o elegir los que usas.";
@@ -181,7 +180,7 @@
 "Saved captures could not be deleted, so nothing was reset. Restart Nictate, then try again." = "No se pudieron borrar las capturas guardadas, así que no se restableció nada. Reinicia Nictate e inténtalo de nuevo.";
 "Nictate couldn't confirm that saved captures were deleted, so nothing was reset. Restart Nictate, then try again." = "Nictate no pudo confirmar que se borraran las capturas guardadas, así que no se restableció nada. Reinicia Nictate e inténtalo de nuevo.";
 "Recent changes to saved captures could not be written yet, so nothing was reset. Try again in a moment." = "Todavía no se pudieron guardar los cambios recientes de tus capturas, así que no se restableció nada. Inténtalo de nuevo en un momento.";
-"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts. Saved captures are kept unless you tick the box below." = "Cada ajuste vuelve a su valor predeterminado, excepto Abrir al iniciar sesión, que se queda como está. Nictate se reinicia. Las capturas guardadas se conservan, salvo que marques la casilla de abajo.";
+"Every setting goes back to its default, except Launch at Login, which stays as it is. Nictate restarts." = "Cada ajuste vuelve a su valor predeterminado, excepto Abrir al iniciar sesión, que se queda como está. Nictate se reinicia.";
 "Restores every setting to its default, except Launch at Login. Saved captures are kept unless you also delete them." = "Restaura todos los ajustes a su valor predeterminado, excepto Abrir al iniciar sesión. Las capturas guardadas se conservan, salvo que también las borres.";
 "Your saved captures can't be loaded from this file." = "Las capturas guardadas no se pueden cargar desde este archivo.";
 "Discard Unreadable History…" = "Descartar historial ilegible…";
@@ -197,3 +196,7 @@
 "Import didn't start" = "La importación no empezó";
 "Saved captures can't be imported right now. Restart Nictate, then try again." = "Las capturas guardadas no se pueden importar ahora. Reinicia Nictate e inténtalo de nuevo.";
 "Saved captures are being imported. Try again when the import finishes." = "Se están importando las capturas guardadas. Inténtalo de nuevo cuando termine la importación.";
+"Also delete saved captures?" = "¿Eliminar también las capturas guardadas?";
+"Saved captures are kept unless you delete them. Deleting them cannot be undone." = "Las capturas guardadas se conservan, salvo que las elimines. Eliminarlas no se puede deshacer.";
+"Keep Captures" = "Conservar capturas";
+"Delete Captures" = "Eliminar capturas";
