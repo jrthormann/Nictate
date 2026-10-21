@@ -11,12 +11,20 @@ The fifth public test release. Please report what you find: https://github.com/j
 
 Updating a beta asks you to grant Screen Recording again. This beta is ad hoc signed, so macOS treats each update as a new app. After you update, turn on Nictate in System Settings > Privacy & Security > Screen & System Audio Recording (Screen Recording on macOS 14), then restart Nictate.
 
+**Two things to know before you install:**
+
+- **Nictate isn't notarized by Apple.** macOS asks you to approve Nictate on first launch, and it may ask again after an update. The Install steps in the README show how.
+- **If you have 1.0.0-beta.1, install beta.5 by hand.** Beta.1 reports itself as version 1.0.0, so its Check for Updates can't see newer releases. Download beta.5 from the [releases page](https://github.com/jrthormann/Nictate/releases) and replace the app in Applications.
+
 ### Added
 - **Welcome explains the Screen Recording request after a beta update.** Welcome opens at the Screen Recording step and shows "Nictate was updated. macOS asks for Screen Recording again." A stable update does not show this text.
 - The beta disk image holds `READ ME FIRST.txt`, with the note above.
 
 ### Changed
 - **Beta builds are signed ad hoc.** Nictate no longer signs betas with its local certificate, so the signature changes with every build. macOS asks you to grant Screen Recording again after each beta update. Grant it in Welcome, or in System Settings under Privacy & Security, then restart Nictate.
+
+### Tested
+- Automated checks pass: `make check` and `make build`. The disk image is not yet checked by hand.
 
 ### Not yet tested
 - A clean install of this disk image, with the Gatekeeper and Screen Recording first-launch steps, on macOS 14, 15 and 26.

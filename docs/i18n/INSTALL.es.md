@@ -2,9 +2,9 @@
 
 [English](../INSTALL.md) · Español · [Volver al README](../../docs/i18n/README.es.md)
 
-Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión actual es la 1.0.0-beta.4, así que esa es la que toca descargar.
+Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases). Ábrela y arrastra Nictate a Aplicaciones. La versión actual es la 1.0.0-beta.5, así que esa es la que toca descargar.
 
-**Nictate no está notarizada por Apple.** Está firmada con un certificado local, así que macOS te pide aprobarla una vez, antes de la primera apertura. Es una limitación conocida de esta beta. No necesitas desactivar Gatekeeper ni ninguna otra protección de seguridad del sistema para abrir Nictate. Aprobar Nictate una vez solo afecta a Nictate.
+**Nictate no está notarizada por Apple.** Una beta está firmada ad hoc, sin certificado, así que macOS te pide aprobarla antes de la primera apertura. Es posible que macOS vuelva a pedirlo después de una actualización de la beta. Es una limitación conocida de esta beta. No necesitas desactivar Gatekeeper ni ninguna otra protección de seguridad del sistema para abrir Nictate. Aprobar Nictate solo afecta a Nictate.
 
 1. Abre **Aplicaciones** y haz doble clic en **Nictate**.
 2. macOS muestra un aviso de que Apple no pudo verificar Nictate. Ciérralo con su botón de descartar, y no elijas la opción de mover la app a la papelera. El texto exacto depende de tu versión de macOS.
@@ -15,7 +15,7 @@ Descarga la imagen de disco solo desde la [página de versiones](https://github.
 
 **En macOS 14 Sonoma**, usa esto en lugar de los pasos 2 a 4: haz clic con Control en Nictate en Aplicaciones, elige **Abrir** y luego pulsa **Abrir** otra vez. Después sigue con el paso 5.
 
-**Sobre la firma.** Una firma de código válida permite a macOS confirmar que la app es la misma que se compiló, y que la firmó el certificado local de Nictate. No es una firma Apple Developer ID, y Apple no ha notarizado ni verificado Nictate. Por eso macOS te pide aprobarla.
+**Sobre la firma.** Una firma de código válida permite a macOS confirmar que la app es la misma que se compiló. Una beta está firmada ad hoc, es decir, sin certificado, así que cada build tiene una firma nueva. No es una firma Apple Developer ID, y Apple no ha notarizado ni verificado Nictate. Por eso macOS te pide aprobarla. Como macOS trata cada actualización de la beta como una app nueva, concede de nuevo el permiso de Grabación de pantalla después de cada actualización (paso 5).
 
 **Permisos.** Nictate necesita la Grabación de pantalla para leer el texto de tu pantalla. No usa acceso de Accesibilidad. La primera vez que Nictate tenga algo que avisarte, macOS puede preguntarte si quieres permitir notificaciones. Es opcional, y Nictate funciona sin ellas.
 
