@@ -45,6 +45,7 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 - [ ] The release notes say what CI does not check: CI runs builds, unit, OCR, UI smoke and app-signature checks. It does not install the DMG, complete the Gatekeeper flow, or grant Screen Recording permission. A person checks those, plus the restart, capture, clipboard and History, and the notes list the versions they were run on.
 - [ ] The release notes say Save Captures is off by default, and that users who already have a saved history file keep their setting.
 - [ ] The release notes say the app is not notarized and not Apple-verified. A beta says it is signed ad hoc, and that each update asks for Screen Recording again. A stable release names its signing identity.
+- [ ] For a beta release: the release notes start with this note. "Updating a beta asks you to grant Screen Recording again. This beta is ad hoc signed, so macOS treats each update as a new app. After you update, turn on Nictate in System Settings > Privacy & Security > Screen & System Audio Recording (Screen Recording on macOS 14), then restart Nictate."
 - [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and users of
       beta.1 must install the current release by hand.
 - [ ] `codesign --verify --strict` passes. A beta shows `Signature=adhoc` and no `Authority`. A stable app is signed with the certificate pinned in `scripts/release-signing.txt`, and `spctl` reports it as rejected, which is expected for this distribution.
@@ -93,10 +94,10 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 
    The first run may ask to let Terminal control Finder, so the window can be styled. Answer that prompt yourself.
 
-   The build signs with the certificate pinned in `scripts/release-signing.txt`, from the dedicated keychain. If the
-   keychain is locked, the build asks for its password in the terminal; enter it. The build never falls back to another
-   certificate. If the pinned certificate cannot be used, the build stops before anything is packaged, and the message
-   says what to do.
+   A beta build is signed ad hoc and does not use the keychain. A stable build signs with the certificate pinned in
+   `scripts/release-signing.txt`, from the dedicated keychain. If the keychain is locked, the build asks for its
+   password in the terminal. Enter the password. The build never falls back to another certificate. If the pinned
+   certificate cannot be used, the build stops before anything is packaged, and the message says what to do.
 
 6. **Check the image.**
 

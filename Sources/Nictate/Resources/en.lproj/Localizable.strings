@@ -86,6 +86,7 @@
 "Zoom" = "Zoom";
 "Paste the text anywhere." = "Paste the text anywhere.";
 "Nictate can't see Screen Recording yet. If you turned it on, restart Nictate to apply it." = "Nictate can't see Screen Recording yet. If you turned it on, restart Nictate to apply it.";
+"Nictate was updated. macOS asks for Screen Recording again." = "Nictate was updated. macOS asks for Screen Recording again.";
 "Keep Captures" = "Keep Captures";
 "Delete Captures" = "Delete Captures";
 "No captures yet" = "No captures yet";

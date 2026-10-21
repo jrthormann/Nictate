@@ -23,4 +23,14 @@ enum ScreenRecordingStep: Equatable {
         if granted { return .granted }
         return returnedFromSettings ? .notActiveYet : .pending
     }
+
+    /// Whether the step says that Nictate was updated and that macOS asks for Screen Recording again.
+    /// A beta is signed ad hoc, so macOS treats each beta update as a new app. A stable version never shows the note.
+    /// A version that differs from the last launch is an update. Versions before this record stored no version: there,
+    /// an install that finished Welcome is an update, and a new install is not.
+    static func showsUpdateNote(current: String, lastLaunched: String?, onboarded: Bool) -> Bool {
+        guard UpdateCheck.offersPrereleases(to: current) else { return false }
+        guard let lastLaunched else { return onboarded }
+        return lastLaunched != current
+    }
 }

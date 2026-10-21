@@ -169,6 +169,14 @@ final class Settings: ObservableObject {
         defaults.set(true, forKey: StorageKeys.historyChoiceApplied)
     }
 
+    /// Records the app version of this launch, and returns the version of the launch before it. Returns nil when no
+    /// launch recorded a version. This is not a setting, so it sends no change notice, and Reset keeps it.
+    func recordLaunch(version: String) -> String? {
+        let last = defaults.string(forKey: StorageKeys.lastLaunchedVersion)
+        defaults.set(version, forKey: StorageKeys.lastLaunchedVersion)
+        return last
+    }
+
     /// Reset Nictate: every stored setting goes, so each returns to its registered default. Saved captures are
     /// not touched here; deleting them is a separate, explicit choice in the reset dialog.
     static func resetToDefaults(in defaults: UserDefaults = .standard) {

@@ -57,6 +57,8 @@ enum StorageKeys {
     static let advancedRecognitionExpanded = "advancedRecognitionExpanded"
     /// Set once the earlier encrypted history has been imported and read back. Hides the import action.
     static let legacyHistoryImported = "legacyHistoryImported"
+    /// The app version of the last launch. Welcome compares it with the running version. Reset keeps it.
+    static let lastLaunchedVersion = "lastLaunchedVersion"
 
     /// Every key of `Settings`.
     static let settings = [
