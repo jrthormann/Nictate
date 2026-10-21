@@ -647,6 +647,14 @@ prerelease_dmg() {
     else failure "make dmg wrote the prerelease image" "no image in $out/1.0.0-beta.9"; fi
 }
 
+# --drift-check runs only the release-doc version check. The release-docs CI job runs it, so documentation-only pull
+# requests are checked too.
+if [[ "${1:-}" == --drift-check ]]; then
+    version_anchors
+    ! grep -q '^FAIL$' "$RESULTS"
+    exit
+fi
+
 release_refusals
 development_fallbacks
 build_numbers
