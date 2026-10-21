@@ -103,6 +103,11 @@ struct WelcomeView: View {
         showsUpdateNote ? Text("Nictate was updated. macOS asks for Screen Recording again.") : nil
     }
 
+    /// A neutral fill behind the update note. Solid under Reduce Transparency, so the box stays readable.
+    private var noteFill: Color {
+        look.reduceTransparency ? Color(nsColor: .controlBackgroundColor) : Color.primary.opacity(0.06)
+    }
+
     /// The warning glyph keeps its colour while the permission is not confirmed, whatever the user's accent.
     @ViewBuilder private var screenRecordingStep: some View {
         switch ScreenRecordingStep.state(granted: monitor.granted, returnedFromSettings: monitor.returnedFromSettings) {
@@ -146,7 +151,15 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: Design.Space.tight) {
                 Text(title).font(.headline)
                 if let note {
-                    note.foregroundStyle(Design.Ink.text(look.contrast)).fixedSize(horizontal: false, vertical: true)
+                    note
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Design.Ink.text(look.contrast))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(Design.Space.compact)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: Design.Radius.card).fill(noteFill))
+                        .overlay(RoundedRectangle(cornerRadius: Design.Radius.card)
+                            .stroke(Design.Stroke.color(look.contrast), lineWidth: Design.Stroke.width(look.contrast)))
                 }
                 if let detail {
                     Text(detail).foregroundStyle(Design.Ink.text(look.contrast)).fixedSize(horizontal: false, vertical: true)
