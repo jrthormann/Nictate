@@ -23,7 +23,9 @@
 </p>
 
 > [!IMPORTANT]
-> Esta beta no está notarizada por Apple, así que macOS te pide aprobar Nictate una vez, al abrirla por primera vez. Los pasos están en [Instalación](#instalación) y en la [guía de instalación](INSTALL.es.md). No necesitas desactivar Gatekeeper.
+> Esta beta no está notarizada por Apple. macOS te pide aprobar Nictate al abrirla por primera vez. Una actualización de la
+> beta te pide aprobar Nictate otra vez y volver a conceder el permiso de Grabación de pantalla. Los pasos están en
+> [Instalación](#instalación) y en la [guía de instalación](INSTALL.es.md). No necesitas desactivar Gatekeeper.
 
 <br>
 
@@ -133,9 +135,9 @@ La 1.0.0-beta.3 es el prelanzamiento público anterior y sigue disponible en la 
 ## Instalación
 
 Descarga la imagen de disco solo desde la [página de versiones](https://github.com/jrthormann/Nictate/releases), ábrela y
-arrastra Nictate a Aplicaciones. Como esta beta no está notarizada, macOS te pide aprobar Nictate una vez. Los pasos
-completos, el permiso de Grabación de pantalla, la comprobación de la suma y la actualización desde la beta.1 están en la
-[guía de instalación](INSTALL.es.md).
+arrastra Nictate a Aplicaciones. macOS te pide aprobar Nictate. Después de actualizar la beta, vuelve a conceder el permiso de
+Grabación de pantalla y reinicia Nictate. Los pasos completos, la comprobación de la suma y la actualización desde la beta.1
+están en la [guía de instalación](INSTALL.es.md).
 
 <br>
 
