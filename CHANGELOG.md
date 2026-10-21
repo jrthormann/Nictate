@@ -25,12 +25,17 @@ Updating a beta asks you to grant Screen Recording again. This beta is ad hoc si
 - **Save Captures is off by default for new installs.** Existing users who already have a readable saved history file keep their current setting.
 
 ### Tested
-- Automated checks pass: `make check` and `make build`. The disk image is not yet checked by hand.
+- Automated checks pass: `make check` and `make build`.
+- The disk image contains `READ ME FIRST.txt` with the update note. Checked by mounting the image.
+- On a MacBook Air 13-inch (M5, 16 GB) with macOS 27.0.1, after an update from beta.4: the Welcome note appeared. Screen Recording had to be granted again, and Nictate had to be restarted. A capture copied its text.
+- Welcome Screen Recording re-grant check on the installed beta.5 app: after a relaunch, Screen Recording was turned off and then turned on again, the app asked to quit and reopen, and a capture copied text. The update note shows only on the first launch after an update, so it did not show on this relaunch.
+- Gatekeeper on a copy with a download quarantine flag: macOS rejects the app until you approve it. The approval steps were not run.
 
 ### Not yet tested
-- A clean install of this disk image, with the Gatekeeper and Screen Recording first-launch steps, on macOS 14, 15 and 26.
-- The manual checks in CONTRIBUTING.md on this build. They must pass before this release is published.
-- The re-grant flow on a real Mac: the Welcome note, the Screen Recording grant, the restart, and `READ ME FIRST.txt` in the image.
+- A download from the Releases page, with the first-launch approval steps, on a real Mac.
+- A clean install on macOS 14, 15 and 26.
+- Saved history from before this update. The history file was not checked against earlier captures.
+- The manual checks in CONTRIBUTING.md, other than the capture check above. The Welcome Screen Recording re-grant check is not on that list.
 - Intel hardware: Intel is verified only under Rosetta in CI.
 
 ## [1.0.0-beta.4] - 2026-10-20
