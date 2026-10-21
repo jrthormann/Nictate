@@ -52,6 +52,8 @@ struct WelcomeView: View {
     @ObservedObject private var settings = Settings.shared
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    /// True after a beta update (see ScreenRecordingStep.showsUpdateNote).
+    let showsUpdateNote: Bool
     let onDone: () -> Void
 
     private var look: AccessibilityLook {
@@ -96,12 +98,17 @@ struct WelcomeView: View {
         .frame(width: Design.Size.welcomeWidth)
     }
 
+    /// After a beta update, the step says why macOS asks for Screen Recording again. Nil otherwise.
+    private var updateNote: Text? {
+        showsUpdateNote ? Text("Nictate was updated. macOS asks for Screen Recording again.") : nil
+    }
+
     /// The warning glyph keeps its colour while the permission is not confirmed, whatever the user's accent.
     @ViewBuilder private var screenRecordingStep: some View {
         switch ScreenRecordingStep.state(granted: monitor.granted, returnedFromSettings: monitor.returnedFromSettings) {
         case .pending:
             step(symbol: "exclamationmark.circle.fill", tint: ColorTokens.warningIcon,
-                 title: "Allow screen recording",
+                 title: "Allow screen recording", note: updateNote,
                  detail: "Turn it on for Nictate in System Settings.") {
                 Button("Open System Settings") {
                     monitor.settingsOpened()
@@ -110,7 +117,7 @@ struct WelcomeView: View {
             }
         case .notActiveYet:
             step(symbol: "exclamationmark.circle.fill", tint: ColorTokens.warningIcon,
-                 title: "Allow screen recording",
+                 title: "Allow screen recording", note: updateNote,
                  detail: "Nictate can't see Screen Recording yet. If you turned it on, restart Nictate to apply it.") {
                 HStack {
                     Button("Restart Nictate") { AppRestart.now() }
@@ -128,7 +135,7 @@ struct WelcomeView: View {
     }
 
     private func step<Trailing: View>(symbol: String, tint: Color, title: LocalizedStringKey,
-                                      detail: LocalizedStringKey?,
+                                      note: Text? = nil, detail: LocalizedStringKey?,
                                       @ViewBuilder trailing: () -> Trailing = { EmptyView() }) -> some View {
         HStack(alignment: .top, spacing: Design.Space.cardGap) {
             Image(systemName: symbol)
@@ -138,6 +145,9 @@ struct WelcomeView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Design.Space.tight) {
                 Text(title).font(.headline)
+                if let note {
+                    note.foregroundStyle(Design.Ink.text(look.contrast)).fixedSize(horizontal: false, vertical: true)
+                }
                 if let detail {
                     Text(detail).foregroundStyle(Design.Ink.text(look.contrast)).fixedSize(horizontal: false, vertical: true)
                 }

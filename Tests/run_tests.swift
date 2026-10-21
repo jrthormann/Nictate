@@ -568,6 +568,34 @@ check(ScreenRecordingStep.state(granted: true, returnedFromSettings: true) == .g
 check(ScreenRecordingStep.state(granted: false, returnedFromSettings: false) == .pending, "welcome: not yet granted, never left -> pending")
 check(ScreenRecordingStep.state(granted: false, returnedFromSettings: true) == .notActiveYet, "welcome: back from Settings without the permission applying -> Restart")
 
+// Welcome after an update: a beta is signed ad hoc, so macOS asks for Screen Recording again, and Welcome says why.
+// A stable version never shows the note.
+check(ScreenRecordingStep.showsUpdateNote(current: "1.0.0-beta.6", lastLaunched: "1.0.0-beta.5", onboarded: true),
+      "welcome update: a beta that differs from the last launch shows the note")
+check(!ScreenRecordingStep.showsUpdateNote(current: "1.0.0-beta.5", lastLaunched: "1.0.0-beta.5", onboarded: true),
+      "welcome update: the same beta as the last launch shows no note")
+check(!ScreenRecordingStep.showsUpdateNote(current: "1.0.1", lastLaunched: "1.0.0", onboarded: true),
+      "welcome update: a stable update shows no note")
+check(!ScreenRecordingStep.showsUpdateNote(current: "1.0.0", lastLaunched: "1.0.0-beta.5", onboarded: true),
+      "welcome update: a stable version after a beta shows no note")
+check(!ScreenRecordingStep.showsUpdateNote(current: "1.0.0", lastLaunched: nil, onboarded: true),
+      "welcome update: a stable version with no recorded launch shows no note")
+check(ScreenRecordingStep.showsUpdateNote(current: "1.0.0-beta.5", lastLaunched: nil, onboarded: true),
+      "welcome update: a beta after a version that recorded no launch shows the note")
+check(!ScreenRecordingStep.showsUpdateNote(current: "1.0.0-beta.5", lastLaunched: nil, onboarded: false),
+      "welcome update: a new beta install shows no note")
+do {
+    let suite = freshSuite("launch")
+    let prefs = Settings(defaults: suite.defaults)
+    check(prefs.recordLaunch(version: "1.0.0-beta.5") == nil, "welcome update: the first recorded launch has no earlier version")
+    check(prefs.recordLaunch(version: "1.0.0-beta.6") == "1.0.0-beta.5", "welcome update: a launch returns the version of the launch before it")
+    Settings.resetToDefaults(in: suite.defaults)
+    check(suite.defaults.string(forKey: StorageKeys.lastLaunchedVersion) == "1.0.0-beta.6",
+          "welcome update: Reset keeps the last launched version, so it shows no false note")
+}
+check(StorageKeys.lastLaunchedVersion == "lastLaunchedVersion" && !StorageKeys.settings.contains(StorageKeys.lastLaunchedVersion),
+      "welcome update: the last launched version has its own key, outside the settings")
+
 // History dates: each capture keeps its time beside its text.
 do {
     let store = sealedStore("dates")

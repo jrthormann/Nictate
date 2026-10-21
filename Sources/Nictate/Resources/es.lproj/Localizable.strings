@@ -85,6 +85,7 @@
 "Zoom" = "Zoom";
 "Paste the text anywhere." = "Pega el texto donde quieras.";
 "Nictate can't see Screen Recording yet. If you turned it on, restart Nictate to apply it." = "Nictate todavía no ve la grabación de pantalla. Si la activaste, reinicia Nictate para aplicarla.";
+"Nictate was updated. macOS asks for Screen Recording again." = "Nictate se actualizó. macOS vuelve a pedir la grabación de pantalla.";
 "Keep Captures" = "Mantener capturas";
 "Delete Captures" = "Borrar capturas";
 "No captures yet" = "Todavía no hay capturas";

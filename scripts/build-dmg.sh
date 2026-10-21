@@ -15,11 +15,13 @@
 #   - CHANGELOG.md at that commit has a section for the version in its Info.plist.
 #   - OUT_DIR/<version> does not exist yet. The folder is claimed with mkdir and never reused, so no image or checksum
 #     from an earlier release is overwritten.
-# The app is signed only with the certificate pinned in scripts/release-signing.txt, from the dedicated keychain
-# (scripts/release_signing.zsh). Before packaging, the built app and the app inside the image must pass strict
-# verification, carry that certificate, and carry the requested version and build number. The build refuses to run
-# while any volume named Nictate is present, so no volume the user has mounted is touched. Cleanup detaches only the
-# image this build attached, found by its path, and removes the private folder only once that image is detached.
+# A stable app is signed only with the certificate pinned in scripts/release-signing.txt, from the dedicated keychain
+# (scripts/release_signing.zsh). A prerelease app is signed ad hoc, and its image also holds READ ME FIRST.txt. That file
+# says that the update asks for Screen Recording again. A stable image does not hold it. Before packaging, the built app
+# and the app inside the image must pass strict verification, carry the signature that the version calls for, and carry
+# the requested version and build number. The build refuses to run while any volume named Nictate is present, so no
+# volume the user has mounted is touched. Cleanup detaches only the image this build attached, found by its path, and
+# removes the private folder only once that image is detached.
 # Styling the window drives Finder, so macOS may ask to let this terminal control Finder the first time.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -113,13 +115,30 @@ PLIST="$APP/Contents/Info.plist"
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")" == "$BUILD_NUMBER" ]] \
     || fail "the built app's build number is not $BUILD_NUMBER"
 
-# The staged app must pass strict verification and be signed with the pinned certificate before it is packaged.
-release_verify_app "$APP" || exit 1
+# The staged app must pass strict verification, and carry the signature its version calls for, before it is packaged:
+# the pinned certificate for a stable release, ad hoc for a prerelease.
+if release_is_prerelease "$VERSION"; then
+    release_verify_adhoc "$APP" || exit 1
+else
+    release_verify_app "$APP" || exit 1
+fi
 
 STAGING="$WORK/staging"
 mkdir "$STAGING"
 cp -R "$APP" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
+
+# A prerelease image holds a short note. The note says that the update asks for Screen Recording again. The window
+# styling below puts the note at the top, in the middle. A stable image holds no note, and its styling does not name one.
+README_NAME="READ ME FIRST.txt"
+README_POSITION=""
+if release_is_prerelease "$VERSION"; then
+    print -r -- "Updating a beta asks you to grant Screen Recording again.
+This beta is ad hoc signed, so macOS treats each update as a new app.
+After you update, turn on Nictate in System Settings > Privacy & Security > Screen & System Audio Recording (Screen Recording on macOS 14), then restart Nictate." \
+        > "$STAGING/$README_NAME"
+    README_POSITION="set position of item \"$README_NAME\" of win to {270, 72}"
+fi
 
 # The window background, drawn in code at 1x and 2x and joined into one TIFF for Retina screens.
 swiftc -O scripts/make_dmg_background.swift -o "$WORK/make_dmg_background"
@@ -156,6 +175,7 @@ tell application "Finder"
         set background picture of opts to file ".background:background.tiff"
         set position of item "Nictate.app" of win to {140, 180}
         set position of item "Applications" of win to {400, 180}
+        $README_POSITION
         update without registering applications
         delay 1
         close win
@@ -169,9 +189,15 @@ else
     echo "warning: Finder could not style the window; the image will open with default placement" >&2
 fi
 
-# The app inside the image is the one released: it must carry the pinned certificate, the requested version, and the
-# requested build number. A failure here detaches this build's image through the cleanup and releases nothing.
-release_verify_app "$MNT/Nictate.app" || exit 1
+# The app inside the image is the one released: a stable release must carry the pinned certificate, and a prerelease must
+# be ad hoc. It must also carry the requested version and build number. A failure here detaches this build's image
+# through the cleanup and releases nothing.
+if release_is_prerelease "$VERSION"; then
+    release_verify_adhoc "$MNT/Nictate.app" || exit 1
+    [[ -f "$MNT/$README_NAME" ]] || fail "the prerelease image has no $README_NAME"
+else
+    release_verify_app "$MNT/Nictate.app" || exit 1
+fi
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$MNT/Nictate.app/Contents/Info.plist")" == "$VERSION" ]] \
     || fail "the app in the image does not carry version $VERSION"
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$MNT/Nictate.app/Contents/Info.plist")" == "$BUILD_NUMBER" ]] \

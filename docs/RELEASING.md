@@ -3,14 +3,16 @@
 The disk image people download is built and signed on the maintainer's Mac. CI tests the release commit, and it never
 publishes anything: it does not create releases, upload images, or move tags.
 
-The image is signed with the local identity `Nictate Local Signing`. That is local code signing, not Apple Developer ID
-signing, and the image is not notarized. Nictate is an independent open-source project, and it does not use the paid
-Apple Developer Program. A fixed local identity gives every release the same signature, which keeps the Screen Recording
-permission across updates (an ad-hoc signature differs on every build). Because the image is not notarized, macOS may
-block its first launch; `docs/INSTALL.md` explains how to open it with the system's own controls.
+Beta images are signed ad hoc, with no certificate, so building one needs no keychain. An ad-hoc signature differs on every
+build, so each beta update asks users to grant Screen Recording again. A version without a suffix is signed with the pinned
+local identity `Nictate Local Signing`, which keeps that permission across updates, until Developer ID signing exists; see
+[Signing identity](#signing-identity).
+None of these images is Apple Developer ID signed or notarized. Nictate is an independent open-source project, and it does
+not use the paid Apple Developer Program. Because the image is not notarized, macOS may block its first launch;
+`docs/INSTALL.md` explains how to open it with the system's own controls.
 
-This checklist covers `1.0.0-beta.N` releases. A `1.0.0` stable release uses the Developer ID signing and notarization
-procedure instead, which is written when that path exists. Do not use this checklist to publish a stable release.
+This checklist covers `1.0.0-beta.N` releases. The `1.0.0` stable release will use Developer ID signing and notarization,
+which this checklist does not cover and which is not written up yet. Do not use this checklist to publish a stable release.
 
 ## Release environment
 
@@ -32,21 +34,21 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 - [ ] `make check` and `make build` pass on the release commit, with no warnings.
 - [ ] The six manual checks in [CONTRIBUTING.md](../CONTRIBUTING.md) pass on the QA build (`make test-app`).
 - [ ] The new tag points at the release commit. No existing tag was moved.
-- [ ] The `Nictate Local Signing` identity is backed up encrypted on two separate offline media, with the passphrase
+- [ ] For a stable release only: the `Nictate Local Signing` identity is backed up encrypted on two separate offline media, with the passphrase
       stored apart from both. The private key's exportability has been checked, and at least one backup has been
       validated.
-- [ ] `BUILD_NUMBER=<n> make dmg` built the image in a new `build/release/<version>/` folder with the local identity, and
+- [ ] `BUILD_NUMBER=<n> make dmg` built the image in a new `build/release/<version>/` folder with the signature its version calls for (ad hoc for a beta, the pinned identity for stable), and
       the artifact checks in step 6 pass.
 - [ ] The draft release has the image and `SHA256SUMS`, and its notes are the CHANGELOG section.
 - [ ] The About window shows the new version. Clean installs on macOS 14 and on macOS 15 or later are run, or listed as
       untested in the release notes.
 - [ ] The release notes say what CI does not check: CI runs builds, unit, OCR, UI smoke and app-signature checks. It does not install the DMG, complete the Gatekeeper flow, or grant Screen Recording permission. A person checks those, plus the restart, capture, clipboard and History, and the notes list the versions they were run on.
 - [ ] The release notes say Save Captures is off by default, and that users who already have a saved history file keep their setting.
-- [ ] The release notes say the app is locally signed and not notarized, and they do not call it Apple-verified.
+- [ ] The release notes say the app is not notarized and not Apple-verified. A beta says it is signed ad hoc, and that each update asks for Screen Recording again. A stable release names its signing identity.
+- [ ] For a beta release: the release notes start with this note. "Updating a beta asks you to grant Screen Recording again. This beta is ad hoc signed, so macOS treats each update as a new app. After you update, turn on Nictate in System Settings > Privacy & Security > Screen & System Audio Recording (Screen Recording on macOS 14), then restart Nictate."
 - [ ] The release notes give both notices: the app is not notarized and needs approval on first launch, and users of
       beta.1 must install the current release by hand.
-- [ ] `codesign --verify --strict` passes, the app is signed with the certificate pinned in `scripts/release-signing.txt`,
-      and `spctl` reports the app as rejected, which is expected for this distribution.
+- [ ] `codesign --verify --strict` passes. A beta shows `Signature=adhoc` and no `Authority`. A stable app is signed with the certificate pinned in `scripts/release-signing.txt`, and `spctl` reports it as rejected, which is expected for this distribution.
 - [ ] The Install steps in `docs/INSTALL.md` and `docs/i18n/INSTALL.es.md` match the dialogs seen on macOS 14 and on macOS 15 or
       later, or the release notes list the versions that were not checked.
 
@@ -92,10 +94,10 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 
    The first run may ask to let Terminal control Finder, so the window can be styled. Answer that prompt yourself.
 
-   The build signs with the certificate pinned in `scripts/release-signing.txt`, from the dedicated keychain. If the
-   keychain is locked, the build asks for its password in the terminal; enter it. The build never falls back to another
-   certificate. If the pinned certificate cannot be used, the build stops before anything is packaged, and the message
-   says what to do.
+   A beta build is signed ad hoc and does not use the keychain. A stable build signs with the certificate pinned in
+   `scripts/release-signing.txt`, from the dedicated keychain. If the keychain is locked, the build asks for its
+   password in the terminal. Enter the password. The build never falls back to another certificate. If the pinned
+   certificate cannot be used, the build stops before anything is packaged, and the message says what to do.
 
 6. **Check the image.**
 
@@ -108,8 +110,8 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
    hdiutil detach /Volumes/Nictate
    ```
 
-   The version must equal the tag without the `v`. The signature must list `Authority=Nictate Local Signing`, and
-   must not show `Signature=adhoc`.
+   The version must equal the tag without the `v`. A beta's signature must show `Signature=adhoc` and no `Authority`. A
+   stable signature must list `Authority=Nictate Local Signing`, and must not show `Signature=adhoc`.
 
 7. **Verify the checksum.** `make dmg` wrote `SHA256SUMS` next to the image. Check that it matches the image.
 
@@ -161,7 +163,7 @@ them, and that limit is stated in the README and the release notes.
 
 Four separate things are involved. Keep them apart when writing release notes or answering users:
 
-- **Local code signing** (what Nictate uses). The app is signed with `Nictate Local Signing`, a certificate the maintainer
+- **Local code signing** (what stable releases use). The app is signed with `Nictate Local Signing`, a certificate the maintainer
   created. A valid signature shows that the app is unchanged since it was signed, and that this certificate signed it.
   macOS does not trust that certificate for distribution, so Gatekeeper does not accept the app on its own.
 - **Apple Developer ID signing.** The app is signed with a certificate that Apple issues to a registered developer
@@ -182,8 +184,13 @@ The keychain locks when the Mac sleeps, and it is not in the search list, so onl
 unlocked, any program running as you can still sign with the key, so lock it when you are done:
 `security lock-keychain ~/Library/Keychains/nictate-signing.keychain-db`.
 
-`scripts/release-signing.txt` pins the SHA-1 of the release certificate. `make dmg` signs only with that certificate,
-from the dedicated keychain, and checks the signed app against the pin before it packages anything. It never falls
+Beta releases (a version with a suffix, such as `1.0.0-beta.5`) are signed ad hoc by `make dmg`, with no keychain and no
+certificate. An ad-hoc signature differs on every build, so each beta update asks users to grant Screen Recording again.
+`release_is_prerelease` in `scripts/release_signing.zsh` picks the path from the version. A version without a suffix always
+takes the pinned path, so a stable build cannot ship ad hoc by accident.
+
+`scripts/release-signing.txt` pins the SHA-1 of the stable release certificate. `make dmg` signs a stable release only with
+that certificate, from the dedicated keychain, and checks the signed app against the pin before it packages anything. It never falls
 back to another certificate. If the pinned certificate is missing from the keychain, the keychain holds a different
 certificate with the same name, or the keychain stays locked, the build stops with a message that says what to do.
 Change the pin only on purpose, in a commit: a different certificate makes macOS ask every user to grant Screen
@@ -193,7 +200,7 @@ Development and QA builds (`make build`, `make install`, `make test-app`) keep t
 then the login-keychain certificate with the same name, then ad hoc. Each one prints a warning that names the identity
 it used.
 
-To release with the pinned certificate, that certificate must be in the dedicated keychain. Either move the existing
+To release a stable build with the pinned certificate, that certificate must be in the dedicated keychain. Either move the existing
 certificate there, if its private key can be exported, or create a new identity with `make setup`, pin its SHA-1, and
 tell users that Screen Recording must be granted once more. Then remove the old identity and its trust setting by hand
 (this script never does):

@@ -54,6 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         registerShortcuts()
 
+        // Read the version of the last launch before this launch records its own. Welcome uses the result.
+        let version = UpdateCheck.currentVersion
+        let lastLaunched = settings.recordLaunch(version: version)
+        windows.showsUpdateNote = ScreenRecordingStep.showsUpdateNote(
+            current: version, lastLaunched: lastLaunched,
+            onboarded: UserDefaults.standard.bool(forKey: StorageKeys.didOnboard))
+
         if !Permissions.isGranted || !UserDefaults.standard.bool(forKey: StorageKeys.didOnboard) {
             Permissions.request()
             windows.showWelcome()

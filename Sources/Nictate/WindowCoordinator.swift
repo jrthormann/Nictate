@@ -12,6 +12,8 @@ import SwiftUI
 final class WindowCoordinator: NSObject {
     private var prefsWindow: NSWindow?
     private var welcomeWindow: NSWindow?
+    /// True after a beta update. Welcome then says why macOS asks for Screen Recording again. Set once, at launch.
+    var showsUpdateNote = false
 
     override init() {
         super.init()
@@ -55,7 +57,7 @@ final class WindowCoordinator: NSObject {
 
     func showWelcome() {
         show(&welcomeWindow, title: tr("Welcome to Nictate"), style: [.titled, .closable]) {
-            WelcomeView { [weak self] in
+            WelcomeView(showsUpdateNote: showsUpdateNote) { [weak self] in
                 UserDefaults.standard.set(true, forKey: StorageKeys.didOnboard)
                 self?.welcomeWindow?.close()
             }
