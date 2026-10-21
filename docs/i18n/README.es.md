@@ -127,7 +127,7 @@ que decides abrir pasa a tu navegador, que se conecta como siempre. Para reporta
 ## Estado
 
 Nictate 1.0.0-beta.5 es la versión de prueba pública actual: una beta pública experimental. Los builds anteriores se probaron
-en macOS 27. La imagen de beta.5 solo tiene pruebas automáticas por ahora. Todavía no la he probado en macOS 14, 15 ni 26, y
+en macOS 27. La imagen de beta.5 tiene pruebas automáticas y algunas pruebas manuales en un MacBook Air (M5, macOS 27.0.1). Todavía no la he probado en macOS 14, 15 ni 26, y
 VoiceOver no ha pasado por una auditoría. Los reportes son
 bienvenidos. El [CHANGELOG](../../CHANGELOG.md) dice qué se ejecutó y qué no.
 
