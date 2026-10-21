@@ -274,6 +274,48 @@ pin_file() {
     )
 }
 
+# anchor_names FILE PATTERN VERSION: the first line matching PATTERN must contain VERSION.
+anchor_names() {
+    local line
+    line="$(grep -E -m1 -- "$2" "$1" || true)"
+    if [[ -z "$line" ]]; then
+        failure "$1 has a line matching '$2'" "not found; if the phrase was reworded, update this check with it"
+    elif [[ "$line" == *"$3"* ]]; then
+        pass "$1 names $3"
+    else
+        failure "$1 names $3" "$line"
+    fi
+}
+
+# build_examples FILE BUILD: every "BUILD_NUMBER=N make dmg" in FILE must use BUILD.
+build_examples() {
+    local bad
+    bad="$(grep -n -E 'BUILD_NUMBER=[0-9]+ make dmg' "$1" | grep -v -F "BUILD_NUMBER=$2 make dmg" || true)"
+    if [[ -z "$bad" ]]; then pass "$1 uses BUILD_NUMBER=$2 in its examples"
+    else failure "$1 uses BUILD_NUMBER=$2 in its examples" "$bad"; fi
+}
+
+# version_anchors: release-facing docs name the version in Info.plist and the newest release-builds.txt line.
+version_anchors() {
+    local newest version build plist_version bad
+    plist_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Sources/Nictate/Resources/Info.plist)"
+    newest="$(grep -v -E '^(#|$)' scripts/release-builds.txt | tail -1)"
+    version="${newest%% *}"
+    build="${newest##* }"
+    if [[ "$plist_version" == "$version" ]]; then pass "Info.plist names the newest release, $version"
+    else failure "Info.plist names the newest release in release-builds.txt" "Info.plist $plist_version, release-builds.txt $version"; fi
+    anchor_names README.md "is the current public test release" "$version"
+    anchor_names docs/i18n/README.es.md "es la versión de prueba pública actual" "$version"
+    anchor_names docs/INSTALL.md "The current release is" "$version"
+    anchor_names docs/i18n/INSTALL.es.md "La versión actual es la" "$version"
+    anchor_names docs/PRODUCT.md "^[*][*]Now: " "$version"
+    build_examples docs/RELEASING.md "$build"
+    build_examples scripts/build-dmg.sh "$build"
+    bad="$(grep -o -E '\([0-9][0-9.a-z-]* is [0-9]+\)' scripts/build-dmg.sh | grep -v -x -F "($version is $build)" || true)"
+    if [[ -z "$bad" ]]; then pass "build-dmg.sh hint names $version is $build"
+    else failure "build-dmg.sh hint names $version is $build" "$bad"; fi
+}
+
 # A throwaway app signed ad hoc: strict verification passes, but it carries no certificate to pin.
 make_app() {
     local app="$1"
@@ -584,10 +626,32 @@ prerelease_signing() {
     )
 }
 
+# A prerelease build is signed ad hoc, so build-dmg.sh packages it without the pinned certificate. The build runs in a
+# scratch clone with a committed prerelease version and no release keychain, so no real identity is touched.
+prerelease_dmg() {
+    local clone="$TMP/prerelease-clone" out="$TMP/prerelease-dmg" none="$TMP/no-release-keychain.keychain-db"
+    if ! git clone -q --no-hardlinks . "$clone" 2>"$TMP/clone.log"; then
+        failure "a clean clone of HEAD for the prerelease make dmg test" "$(cat "$TMP/clone.log")"
+        return 0
+    fi
+    (
+        cd "$clone"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.0.0-beta.9" Sources/Nictate/Resources/Info.plist
+        printf '\n## [1.0.0-beta.9] - 2026-10-21\n\nTest build for the prerelease packaging check.\n' >> CHANGELOG.md
+        print -r -- "1.0.0-beta.9 99" >> scripts/release-builds.txt
+        git -c user.name=test -c user.email=test@example.invalid commit -qam "test: prerelease version"
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=99 OUT_DIR="$out"
+        expect "make dmg packages a prerelease with the ad hoc check" ok "signed ad hoc, as a prerelease" zsh scripts/build-dmg.sh
+    )
+    if [[ -f "$out/1.0.0-beta.9/Nictate-1.0.0-beta.9.dmg" ]]; then pass "make dmg wrote the prerelease image"
+    else failure "make dmg wrote the prerelease image" "no image in $out/1.0.0-beta.9"; fi
+}
+
 release_refusals
 development_fallbacks
 build_numbers
 pin_file
+version_anchors
 make_app "$TMP/adhoc.app"
 (
     export PATH="$ORIG_PATH"
@@ -598,6 +662,7 @@ prerelease_signing
 keychain_cases
 release_folder_claims
 packaging_refusals
+prerelease_dmg
 
 passed="$(grep -c '^PASS$' "$RESULTS" || true)"
 failed="$(grep -c '^FAIL$' "$RESULTS" || true)"
