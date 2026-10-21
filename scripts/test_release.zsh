@@ -584,6 +584,27 @@ prerelease_signing() {
     )
 }
 
+# A prerelease build is signed ad hoc, so build-dmg.sh packages it without the pinned certificate. The build runs in a
+# scratch clone with a committed prerelease version and no release keychain, so no real identity is touched.
+prerelease_dmg() {
+    local clone="$TMP/prerelease-clone" out="$TMP/prerelease-dmg" none="$TMP/no-release-keychain.keychain-db"
+    if ! git clone -q --no-hardlinks . "$clone" 2>"$TMP/clone.log"; then
+        failure "a clean clone of HEAD for the prerelease make dmg test" "$(cat "$TMP/clone.log")"
+        return 0
+    fi
+    (
+        cd "$clone"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.0.0-beta.9" Sources/Nictate/Resources/Info.plist
+        printf '\n## [1.0.0-beta.9] - 2026-10-21\n\nTest build for the prerelease packaging check.\n' >> CHANGELOG.md
+        print -r -- "1.0.0-beta.9 99" >> scripts/release-builds.txt
+        git -c user.name=test -c user.email=test@example.invalid commit -qam "test: prerelease version"
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=99 OUT_DIR="$out"
+        expect "make dmg packages a prerelease with the ad hoc check" ok "signed ad hoc, as a prerelease" zsh scripts/build-dmg.sh
+    )
+    if [[ -f "$out/1.0.0-beta.9/Nictate-1.0.0-beta.9.dmg" ]]; then pass "make dmg wrote the prerelease image"
+    else failure "make dmg wrote the prerelease image" "no image in $out/1.0.0-beta.9"; fi
+}
+
 release_refusals
 development_fallbacks
 build_numbers
@@ -598,6 +619,7 @@ prerelease_signing
 keychain_cases
 release_folder_claims
 packaging_refusals
+prerelease_dmg
 
 passed="$(grep -c '^PASS$' "$RESULTS" || true)"
 failed="$(grep -c '^FAIL$' "$RESULTS" || true)"
