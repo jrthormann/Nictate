@@ -23,7 +23,9 @@
 </p>
 
 > [!IMPORTANT]
-> This beta isn't notarized by Apple, so macOS asks you to approve Nictate once, on first launch. The steps are in [Install](#install) and [docs/INSTALL.md](docs/INSTALL.md). You don't need to turn off Gatekeeper.
+> This beta is not notarized by Apple. macOS asks you to approve Nictate on first launch. A beta update asks you to
+> approve it and grant Screen Recording again. The steps are in [Install](#install) and [docs/INSTALL.md](docs/INSTALL.md).
+> You do not need to turn off Gatekeeper.
 
 <br>
 
@@ -131,8 +133,8 @@ The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't.
 ## Install
 
 Download the disk image only from the [Releases page](https://github.com/jrthormann/Nictate/releases), open it, and drag
-Nictate into Applications. macOS then asks you to approve Nictate once. The full steps, the Screen Recording permission,
-the checksum check and the upgrade from beta.1 are in [docs/INSTALL.md](docs/INSTALL.md).
+Nictate into Applications. macOS asks you to approve Nictate. After a beta update, grant Screen Recording again and
+restart Nictate. The full steps, the checksum check and the upgrade from beta.1 are in [docs/INSTALL.md](docs/INSTALL.md).
 
 <br>
 
