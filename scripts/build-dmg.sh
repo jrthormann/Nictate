@@ -169,9 +169,14 @@ else
     echo "warning: Finder could not style the window; the image will open with default placement" >&2
 fi
 
-# The app inside the image is the one released: it must carry the pinned certificate, the requested version, and the
-# requested build number. A failure here detaches this build's image through the cleanup and releases nothing.
-release_verify_app "$MNT/Nictate.app" || exit 1
+# The app inside the image is the one released: a stable release must carry the pinned certificate, and a prerelease must
+# be ad hoc. It must also carry the requested version and build number. A failure here detaches this build's image
+# through the cleanup and releases nothing.
+if release_is_prerelease "$VERSION"; then
+    release_verify_adhoc "$MNT/Nictate.app" || exit 1
+else
+    release_verify_app "$MNT/Nictate.app" || exit 1
+fi
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$MNT/Nictate.app/Contents/Info.plist")" == "$VERSION" ]] \
     || fail "the app in the image does not carry version $VERSION"
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$MNT/Nictate.app/Contents/Info.plist")" == "$BUILD_NUMBER" ]] \

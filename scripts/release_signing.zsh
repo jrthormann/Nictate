@@ -101,6 +101,38 @@ sign_for_release() {
     release_verify_app "$app"
 }
 
+# Prints success when VERSION is a prerelease: a beta, which has a suffix after the number, as in 1.0.0-beta.5. A version
+# without a suffix is a stable release and always uses the pinned certificate.
+release_is_prerelease() {
+    [[ "$1" == *-* ]]
+}
+
+# Checks APP for an ad-hoc prerelease: strict code-signature verification passes, and the signature names no certificate.
+release_verify_adhoc() {
+    local app="$1" actual
+    if ! codesign --verify --strict "$app" >/dev/null 2>&1; then
+        release_fail "$app does not pass codesign --verify --strict, so nothing was packaged"
+        return 1
+    fi
+    actual="$(release_leaf_sha1 "$app")"
+    if [[ -n "$actual" ]]; then
+        release_fail "$app is signed with a certificate ($actual), not ad hoc, so nothing was packaged"
+        return 1
+    fi
+    print -r -- "signed ad hoc, as a prerelease"
+}
+
+# Signs APP for a prerelease with an ad-hoc signature: no keychain and no certificate. The signature differs on every
+# build, so macOS asks each user to grant Screen Recording again after an update. Stable releases never use this.
+sign_for_prerelease() {
+    local app="$1"
+    if ! codesign "${NICTATE_SIGN_FLAGS[@]}" --sign - "$app"; then
+        release_fail "codesign could not sign $app ad hoc, so nothing was packaged"
+        return 1
+    fi
+    release_verify_adhoc "$app"
+}
+
 # Signs APP for development and QA: SIGN_IDENTITY if set, else the dedicated keychain, else the login-keychain
 # certificate with the same name (with a warning), else ad hoc (with a warning). Never used for releases.
 sign_for_development() {

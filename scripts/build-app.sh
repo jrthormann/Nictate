@@ -70,8 +70,9 @@ if [[ "$VARIANT" == test ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Nictate Test" $APP/Contents/Info.plist
 fi
 
-# Signing: scripts/release_signing.zsh. A release (NICTATE_RELEASE=1, set by make dmg) is signed only with the certificate
-# pinned in scripts/release-signing.txt, from the dedicated keychain, and never falls back. Any other build takes the
+# Signing: scripts/release_signing.zsh. A stable release (NICTATE_RELEASE=1, set by make dmg, with a version that has no
+# suffix) is signed only with the certificate pinned in scripts/release-signing.txt, from the dedicated keychain, and never
+# falls back. A prerelease (such as 1.0.0-beta.5) is signed ad hoc, with no keychain. Any other build takes the
 # development fallbacks (SIGN_IDENTITY, the dedicated keychain, the login-keychain certificate, ad hoc), each named in a
 # warning. The dedicated keychain locks when the Mac sleeps: the first build after a wake asks for its password in the
 # terminal, and pressing Return there, or building without a terminal, skips it.
@@ -79,7 +80,11 @@ source scripts/signing_keychain.zsh
 source scripts/release_signing.zsh
 NICTATE_SIGN_FLAGS=(--force --options runtime --entitlements Sources/Nictate/Resources/Nictate.entitlements)
 if [[ "${NICTATE_RELEASE:-}" == 1 ]]; then
-    sign_for_release "$APP" || exit 1
+    if release_is_prerelease "$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" $APP/Contents/Info.plist)"; then
+        sign_for_prerelease "$APP" || exit 1
+    else
+        sign_for_release "$APP" || exit 1
+    fi
 else
     sign_for_development "$APP"
 fi

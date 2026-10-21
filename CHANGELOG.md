@@ -3,6 +3,11 @@
 All notable changes to Nictate are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- **Beta builds are signed ad hoc.** Nictate no longer signs betas with its local certificate, so the signature changes with every build. macOS asks you to grant Screen Recording again after each beta update. Grant it in Welcome, or in System Settings under Privacy & Security, then restart Nictate.
+
 ## [1.0.0-beta.4] - 2026-10-20
 
 The fourth public test release. Please report what you find: https://github.com/jrthormann/Nictate/issues

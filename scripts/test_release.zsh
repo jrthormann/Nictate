@@ -560,6 +560,30 @@ packaging_refusals() {
     if [[ -e "$TMP/dmg-dirty" ]]; then failure "no output folder for a dirty working tree" "$TMP/dmg-dirty exists"; else pass "no output folder for a dirty working tree"; fi
 }
 
+# Beta and other prerelease builds are signed ad hoc, with no keychain. A version without a suffix is stable and never is.
+prerelease_signing() {
+    if release_is_prerelease "1.0.0-beta.5"; then pass "1.0.0-beta.5 is a prerelease"; else failure "1.0.0-beta.5 is a prerelease" "release_is_prerelease said no"; fi
+    if release_is_prerelease "1.0.0"; then failure "1.0.0 is stable, not a prerelease" "release_is_prerelease said yes"; else pass "1.0.0 is stable, not a prerelease"; fi
+    local log="$FAKE_DIR/prerelease.log"
+    (
+        use_fakes "$log"
+        export FAKE_LOGIN_IDENTITY=1 FAKE_KC_SHA1S="$SHA_PINNED"
+        NICTATE_SIGNING_KEYCHAIN="$KC_PRESENT" NICTATE_SIGNING_NAME="Nictate Local Signing" RELEASE_SIGNING_PIN_FILE="$PIN_PINNED"
+        expect "prerelease signs ad hoc and verifies" ok "signed ad hoc" sign_for_prerelease "$APP"
+    )
+    signed_with "$log" "--sign - " "prerelease signs ad hoc"
+    if grep -q -F -- "--keychain" "$log" || grep -q -F -- "$SHA_PINNED" "$log"; then
+        failure "prerelease never uses the keychain or the pin" "$(tr '\n' ';' < "$log")"
+    else
+        pass "prerelease never uses the keychain or the pin"
+    fi
+    (
+        export PATH="$ORIG_PATH"
+        expect "prerelease verification accepts an ad hoc app" ok "signed ad hoc" release_verify_adhoc "$TMP/adhoc.app"
+        expect "prerelease verification refuses an app that does not verify" refused "does not pass codesign" release_verify_adhoc "$TMP/missing.app"
+    )
+}
+
 release_refusals
 development_fallbacks
 build_numbers
@@ -570,6 +594,7 @@ make_app "$TMP/adhoc.app"
     RELEASE_SIGNING_PIN_FILE="$PIN_PINNED"
     expect "release verification refuses an ad hoc app, which carries no certificate" refused "no certificate (ad hoc)" release_verify_app "$TMP/adhoc.app"
 )
+prerelease_signing
 keychain_cases
 release_folder_claims
 packaging_refusals
