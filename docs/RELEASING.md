@@ -4,14 +4,15 @@ The disk image people download is built and signed on the maintainer's Mac. CI t
 publishes anything: it does not create releases, upload images, or move tags.
 
 Beta images are signed ad hoc, with no certificate, so building one needs no keychain. An ad-hoc signature differs on every
-build, so each beta update asks users to grant Screen Recording again. A stable image is signed with the pinned local
-identity `Nictate Local Signing`, which keeps that permission across updates; see [Signing identity](#signing-identity).
+build, so each beta update asks users to grant Screen Recording again. A version without a suffix is signed with the pinned
+local identity `Nictate Local Signing`, which keeps that permission across updates, until Developer ID signing exists; see
+[Signing identity](#signing-identity).
 None of these images is Apple Developer ID signed or notarized. Nictate is an independent open-source project, and it does
 not use the paid Apple Developer Program. Because the image is not notarized, macOS may block its first launch;
 `docs/INSTALL.md` explains how to open it with the system's own controls.
 
-This checklist covers `1.0.0-beta.N` releases. A `1.0.0` stable release uses the Developer ID signing and notarization
-procedure instead, which is written when that path exists. Do not use this checklist to publish a stable release.
+This checklist covers `1.0.0-beta.N` releases. The `1.0.0` stable release will use Developer ID signing and notarization,
+which this checklist does not cover and which is not written up yet. Do not use this checklist to publish a stable release.
 
 ## Release environment
 

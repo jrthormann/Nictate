@@ -113,8 +113,13 @@ PLIST="$APP/Contents/Info.plist"
 [[ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")" == "$BUILD_NUMBER" ]] \
     || fail "the built app's build number is not $BUILD_NUMBER"
 
-# The staged app must pass strict verification and be signed with the pinned certificate before it is packaged.
-release_verify_app "$APP" || exit 1
+# The staged app must pass strict verification, and carry the signature its version calls for, before it is packaged:
+# the pinned certificate for a stable release, ad hoc for a prerelease.
+if release_is_prerelease "$VERSION"; then
+    release_verify_adhoc "$APP" || exit 1
+else
+    release_verify_app "$APP" || exit 1
+fi
 
 STAGING="$WORK/staging"
 mkdir "$STAGING"
