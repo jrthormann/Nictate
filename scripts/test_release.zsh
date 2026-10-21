@@ -256,7 +256,7 @@ build_numbers() {
     expect "BUILD_NUMBER=abc is refused" refused "whole number" release_check_build_number 1.0.0-beta.2 abc "$real"
     expect "BUILD_NUMBER=-5 is refused" refused "whole number" release_check_build_number 1.0.0-beta.2 -5 "$real"
     expect "BUILD_NUMBER with a trailing space is refused" refused "whole number" release_check_build_number 1.0.0-beta.2 "22 " "$real"
-    expect "a version missing from the list is refused" refused "is not in" release_check_build_number 1.0.0-beta.5 22 "$real"
+    expect "a version missing from the list is refused" refused "is not in" release_check_build_number 1.0.0-beta.6 26 "$real"
     expect "a later release is accepted above the builds listed before it" ok "build 23 for 1.0.0-beta.3 is approved" release_check_build_number 1.0.0-beta.3 23 "$ok"
     expect "a later release that repeats an earlier build is refused" refused "approved for build 23" release_check_build_number 1.0.0-beta.3 22 "$ok"
     expect "a later release that regresses below beta.2 is refused" refused "does not exceed build 22" release_check_build_number 1.0.0-beta.3 21 "$reg"
