@@ -28,6 +28,11 @@ enum Design {
         static let contrast: CGFloat = 2
     }
 
+    enum Radius {
+        /// The corner of a card, such as the update note in Welcome.
+        static let card: CGFloat = 8
+    }
+
     enum Size {
         static let settingsWidth: CGFloat = 560
         /// A settings window never grows past this share of the visible screen height; the page scrolls beyond it.
