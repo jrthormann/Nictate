@@ -26,12 +26,13 @@ Updating a beta asks you to grant Screen Recording again. This beta is ad hoc si
 
 ### Tested
 - Automated checks pass: `make check` and `make build`.
-- On a MacBook Air 13-inch (M5, 16 GB) with macOS 27.0.1, after an update from beta.4: the Welcome note appeared. Screen Recording had to be granted again, and Nictate had to be restarted. A capture copied its text. The saved history file was still present.
+- On a MacBook Air 13-inch (M5, 16 GB) with macOS 27.0.1, after an update from beta.4: the Welcome note appeared. Screen Recording had to be granted again, and Nictate had to be restarted. A capture copied its text.
 - Gatekeeper on a copy with a download quarantine flag: macOS rejects the app until you approve it. The approval steps were not run.
 
 ### Not yet tested
 - A download from the Releases page, with the first-launch approval steps, on a real Mac.
 - A clean install on macOS 14, 15 and 26.
+- Saved history from before this update. The history file was not checked against earlier captures.
 - The manual checks in CONTRIBUTING.md, other than the capture check above.
 - Intel hardware: Intel is verified only under Rosetta in CI.
 
