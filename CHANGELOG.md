@@ -22,6 +22,7 @@ Updating a beta asks you to grant Screen Recording again. This beta is ad hoc si
 
 ### Changed
 - **Beta builds are signed ad hoc.** Nictate no longer signs betas with its local certificate, so the signature changes with every build. macOS asks you to grant Screen Recording again after each beta update. Grant it in Welcome, or in System Settings under Privacy & Security, then restart Nictate.
+- **Save Captures is off by default for new installs.** Existing users who already have a readable saved history file keep their current setting.
 
 ### Tested
 - Automated checks pass: `make check` and `make build`. The disk image is not yet checked by hand.

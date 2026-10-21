@@ -124,7 +124,7 @@ the first-launch approval steps in [docs/INSTALL.md](INSTALL.md). They are not A
 
 ## Roadmap
 
-**Now: 1.0.0-beta.4, the current public test release.** The
+**Now: 1.0.0-beta.5, the current public test release.** The
 scope is frozen. Only fixes go in, and the feedback decides what follows. The reset-checkbox issue was resolved in
 1.0.0-beta.4 by replacing the checkbox with a second dialog; see [#23](https://github.com/jrthormann/Nictate/issues/23) and the [CHANGELOG](../CHANGELOG.md).
 
