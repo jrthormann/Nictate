@@ -25,7 +25,7 @@ macOS 26 and macOS 14, test the release commit, and they do not produce the imag
 
 - [ ] The release commit is on `main`, and CI passes on it (every job: `build-and-test`, `intel-tests`, `ui-smoke`, `macos-14`).
 - [ ] The image is built from that commit: `git status` is clean, and `git rev-parse --short HEAD` matches the tag.
-- [ ] `scripts/release-builds.txt` lists this version with its approved build (beta.3: 23), and that build is higher than
+- [ ] `scripts/release-builds.txt` lists this version with its approved build, and that build is higher than
       the builds listed above it. `BUILD_NUMBER` must equal that approved build. The commit count and the CI run number
       are not release numbers.
 - [ ] `Sources/Nictate/Resources/Info.plist` has the new `CFBundleShortVersionString`.

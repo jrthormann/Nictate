@@ -280,7 +280,7 @@ anchor_names() {
     line="$(grep -E -m1 -- "$2" "$1" || true)"
     if [[ -z "$line" ]]; then
         failure "$1 has a line matching '$2'" "not found; if the phrase was reworded, update this check with it"
-    elif [[ "$line" == *"$3"* ]]; then
+    elif grep -E -q -- "(^|[^0-9A-Za-z.-])${3//./\\.}([^0-9A-Za-z.-]|\$)" <<< "$line"; then
         pass "$1 names $3"
     else
         failure "$1 names $3" "$line"
@@ -297,11 +297,13 @@ build_examples() {
 
 # version_anchors: release-facing docs name the version in Info.plist and the newest release-builds.txt line.
 version_anchors() {
-    local newest version build plist_version bad
+    local version build plist_version bad v b rest
     plist_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Sources/Nictate/Resources/Info.plist)"
-    newest="$(grep -v -E '^(#|$)' scripts/release-builds.txt | tail -1)"
-    version="${newest%% *}"
-    build="${newest##* }"
+    while read -r v b rest; do
+        if [[ -z "$v" || "$v" == \#* ]]; then continue; fi
+        version="$v"
+        build="$b"
+    done < scripts/release-builds.txt
     if [[ "$plist_version" == "$version" ]]; then pass "Info.plist names the newest release, $version"
     else failure "Info.plist names the newest release in release-builds.txt" "Info.plist $plist_version, release-builds.txt $version"; fi
     anchor_names README.md "is the current public test release" "$version"
@@ -630,21 +632,24 @@ prerelease_signing() {
 # scratch clone with a committed prerelease version and no release keychain, so no real identity is touched.
 prerelease_dmg() {
     local clone="$TMP/prerelease-clone" out="$TMP/prerelease-dmg" none="$TMP/no-release-keychain.keychain-db"
+    local version="9.9.9-prerelease-test"
     if ! git clone -q --no-hardlinks . "$clone" 2>"$TMP/clone.log"; then
         failure "a clean clone of HEAD for the prerelease make dmg test" "$(cat "$TMP/clone.log")"
         return 0
     fi
     (
         cd "$clone"
-        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.0.0-beta.9" Sources/Nictate/Resources/Info.plist
-        printf '\n## [1.0.0-beta.9] - 2026-10-21\n\nTest build for the prerelease packaging check.\n' >> CHANGELOG.md
-        print -r -- "1.0.0-beta.9 99" >> scripts/release-builds.txt
-        git -c user.name=test -c user.email=test@example.invalid commit -qam "test: prerelease version"
-        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER=99 OUT_DIR="$out"
+        # A build above every committed build, so the fixture passes the monotonic check whatever the list holds.
+        local build=$(( $(grep -v -E '^(#|$)' scripts/release-builds.txt | awk '{ if ($2 + 0 > max) max = $2 + 0 } END { print max + 0 }') + 1 ))
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" Sources/Nictate/Resources/Info.plist
+        printf '\n## [%s] - 2026-10-21\n\nTest build for the prerelease packaging check.\n' "$version" >> CHANGELOG.md
+        print -r -- "$version $build" >> scripts/release-builds.txt
+        git -c commit.gpgSign=false -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.invalid commit -qam "test: prerelease version"
+        export NICTATE_SIGNING_KEYCHAIN="$none" BUILD_NUMBER="$build" OUT_DIR="$out"
         expect "make dmg packages a prerelease with the ad hoc check" ok "signed ad hoc, as a prerelease" zsh scripts/build-dmg.sh
     )
-    if [[ -f "$out/1.0.0-beta.9/Nictate-1.0.0-beta.9.dmg" ]]; then pass "make dmg wrote the prerelease image"
-    else failure "make dmg wrote the prerelease image" "no image in $out/1.0.0-beta.9"; fi
+    if [[ -f "$out/$version/Nictate-$version.dmg" ]]; then pass "make dmg wrote the prerelease image"
+    else failure "make dmg wrote the prerelease image" "no image in $out/$version"; fi
 }
 
 # --drift-check runs only the release-doc version check. The release-docs CI job runs it, so documentation-only pull
