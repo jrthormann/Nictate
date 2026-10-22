@@ -150,3 +150,13 @@ jobs:
           if [ "$status" -ne 0 ]; then echo "::warning::QR checks skipped on the macOS 14 VM (paravirtual GPU)"; fi
       - name: App signature
         run: codesign --verify --strict build/Nictate.app
+
+  # Runs only the release-doc drift check. It has no needs and is not gated on changes, so it also runs on
+  # documentation-only pull requests, which skip the code jobs.
+  release-docs:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Release-doc drift check
+        run: scripts/test_release.zsh --drift-check
