@@ -13,7 +13,7 @@
   <br><br>
   <a href="https://github.com/jrthormann/Nictate/releases"><img src="https://img.shields.io/github/v/release/jrthormann/Nictate?include_prereleases&label=Download&style=for-the-badge&color=545CFA" alt="Download the latest release"></a>
   <br><br>
-  macOS 14 or later &nbsp;·&nbsp; Apple silicon and Intel (Intel: Rosetta CI only) &nbsp;·&nbsp; Free, MIT licensed
+  macOS 14+ target &nbsp;·&nbsp; Apple silicon and Intel (Intel: Rosetta CI only) &nbsp;·&nbsp; beta.5 tested on macOS 27 &nbsp;·&nbsp; Free, MIT licensed
   <br><br>
   <a href="#build-from-source">Build it yourself&nbsp;&rsaquo;</a>
   <br><br>
@@ -124,7 +124,7 @@ choose to open goes to your browser, which connects the way it normally would. T
 
 ## Status
 
-Nictate 1.0.0-beta.5 is the current public test release: an experimental public beta. The earlier builds were tested on macOS 27.
+Nictate 1.0.0-beta.5 is the current public test release: an experimental public beta. Beta.5 was tested by the maintainer on macOS 27.0.1.
 The beta.5 image has automated checks, and some manual checks on a MacBook Air (M5, macOS 27.0.1). I haven't tried it on macOS 14, 15 or 26 yet, and VoiceOver support hasn't been audited.
 Reports are welcome.
 The [CHANGELOG](CHANGELOG.md) lists what was run, and what wasn't.
