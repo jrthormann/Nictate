@@ -84,6 +84,20 @@ you prefer.
 
 <br>
 
+## More than one copy at a time.
+
+- **Collect as you go.** Turn on Append Mode in the menu and each capture is added after the last one, with the
+  Separator you pick: a new line, a space or a tab. Grab quotes from a paused video or several PDFs, then paste once.
+  Anything else you copy in between joins the pile too.
+- **A table spread over several slides.** Capture each part in turn with Append Mode on and the new line separator.
+  The rows land one under the other and paste into a spreadsheet as columns. A repeated header row comes along too.
+- **Colors from a spec.** A color written on screen, such as `#FF8800` or `rgb(0, 128, 255)`, is offered in the menu
+  as HEX, RGB, HSL, SwiftUI `Color`, `NSColor` or `UIColor`. It reads the written value; it doesn't sample pixels.
+- **A QR code without your phone.** Choose Capture QR Code or Barcode in the menu, or set a Scan QR or Barcode
+  shortcut in Settings, and drag over a code on a shared slide or a video call. Its contents are copied.
+
+<br>
+
 ## Shortcuts
 
 | Shortcut | What it does |
