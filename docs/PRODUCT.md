@@ -39,6 +39,10 @@ study, or adoption measurement has been done.
 | Anyone reading slides, PDFs, or photos | A paragraph, a list, or a table, pasted into a document or spreadsheet |
 | Support and operations staff | An error message or identifier from a remote or virtual screen |
 | Anyone who needs the data, not the picture | A phone number, email, link, or color from an image; a QR code's contents |
+| Researchers and writers | Several quotes from videos or PDFs, collected with Append Mode and pasted once |
+| Anyone rebuilding a table | A table split across slides, captured part by part with Append Mode and pasted into a spreadsheet |
+| Designers and front-end developers | A color value written in a spec, pasted as HEX, RGB, HSL, SwiftUI, AppKit or UIKit code |
+| Anyone on a video call | A QR code on a shared slide, read without a phone |
 
 ## Needs and pain points
 

@@ -86,6 +86,22 @@ como prefieras.
 
 <br>
 
+## Más de una copia a la vez.
+
+- **Recoge mientras avanzas.** Activa Modo añadir en el menú y cada captura se suma después de la anterior, con el
+  Separador que elijas: una línea nueva, un espacio o un tabulador. Toma citas de un video en pausa o de varios PDF y
+  pega una sola vez. Cualquier otra cosa que copies entre medio también se suma.
+- **Una tabla repartida en varias diapositivas.** Captura cada parte por turno con Modo añadir activado y el separador
+  de línea nueva. Las filas quedan una debajo de otra y se pegan en una hoja de cálculo como columnas. Si capturas el
+  encabezado otra vez, también se repite.
+- **Colores de una especificación.** Un color escrito en pantalla, como `#FF8800` o `rgb(0, 128, 255)`, aparece en el
+  menú como HEX, RGB, HSL, `Color` de SwiftUI, `NSColor` o `UIColor`. Lee el valor escrito; no toma muestras de píxeles.
+- **Un código QR sin sacar el teléfono.** Elige Capturar código QR o de barras en el menú, o asigna un atajo a
+  Escanear QR o código de barras en Ajustes, y arrastra sobre un código en una diapositiva o una videollamada. Su
+  contenido se copia.
+
+<br>
+
 ## Atajos
 
 | Atajo | Qué hace |
